@@ -3,6 +3,7 @@ uvicorn
 pandas
 python-dotenv
 requests
+aiohttp
 yfinance
 ccxt
 MetaTrader5

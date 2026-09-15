@@ -6,6 +6,45 @@ import { useSession } from 'next-auth/react';
 export type Vector3Tuple = [number, number, number];
 export type OracleBranch = { id: string; probability: number; color?: string };
 
+export type PortfolioSlot = {
+  symbol: string;
+  phase: string;
+  state: 'ready' | 'pending';
+};
+
+export const MOCK_PORTFOLIO: PortfolioSlot[] = [
+  { symbol: 'BTCUSD', phase: 'FIRE', state: 'ready' },
+  { symbol: 'DOGEUSD', phase: 'WOOD', state: 'ready' },
+  { symbol: 'AAPL', phase: 'METAL', state: 'ready' },
+  { symbol: 'ETHUSD', phase: 'WATER', state: 'ready' },
+  { symbol: 'XAUUSD', phase: 'EARTH', state: 'ready' },
+  { symbol: 'USDJPY', phase: 'METAL', state: 'ready' },
+  { symbol: 'US500', phase: 'FIRE', state: 'ready' },
+];
+
+const MOCK_NEXT_SYMBOLS = ['SOLUSD', 'EURUSD', 'NAS100'];
+
+export function usePortfolioMock() {
+  const [portfolio, setPortfolio] = useState<PortfolioSlot[]>(MOCK_PORTFOLIO);
+  const [pendingSymbol, setPendingSymbol] = useState<string | null>(null);
+
+  const beginAdd = () => {
+    if (pendingSymbol || portfolio.length >= 8) return null;
+    const nextSymbol = MOCK_NEXT_SYMBOLS.find((candidate) => !portfolio.some((slot) => slot.symbol === candidate)) ?? 'NEWUSD';
+    setPendingSymbol(nextSymbol);
+    return nextSymbol;
+  };
+
+  const resolveAdd = (symbol: string) => {
+    setPortfolio((current) => current.some((slot) => slot.symbol === symbol)
+      ? current
+      : [...current, { symbol, phase: 'WATER', state: 'ready' }]);
+    setPendingSymbol(null);
+  };
+
+  return { portfolio, pendingSymbol, beginAdd, resolveAdd };
+}
+
 export interface MarketData {
   symbol: string;
   timestamp?: string;

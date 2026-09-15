@@ -45,7 +45,8 @@ export default function Home() {
       if (sessionResult?.error) throw new Error("Auth.js session could not be created");
       window.sessionStorage.setItem("charttestui-authenticated", "true");
       window.sessionStorage.setItem("charttestui-access-token", token.access_token);
-      router.push("/gallery");
+      const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+      router.push(callbackUrl || "/gallery");
     } catch {
       setError("Authentication service unavailable or credentials rejected.");
       setIsAuthenticating(false);

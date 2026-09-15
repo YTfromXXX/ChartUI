@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Activity, Crown, Radio, ShieldAlert, Sparkles, Wifi, WifiOff } from "lucide-react";
 import { CandlestickSeries, ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
+import { usePortfolioMock } from "@/hooks/useMarketStream";
 
 type Phase = "WATER" | "WOOD" | "FIRE" | "EARTH" | "METAL";
 type Status = { macro: string; meso: string; micro: string };
@@ -28,16 +29,33 @@ const demoSignal: Signal = {
   chart_data: demoChart,
 };
 
+const slotPositions = [
+  "left-1/2 top-0 -translate-x-1/2",
+  "left-[14%] top-[16%]",
+  "right-[14%] top-[16%]",
+  "left-[14%] bottom-[16%]",
+  "right-[14%] bottom-[16%]",
+  "left-1/2 bottom-0 -translate-x-1/2",
+  "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+  "right-[-2%] top-1/2 -translate-y-1/2",
+];
+
+const particleSeeds = Array.from({ length: 22 }, (_, index) => ({
+  angle: (index / 22) * Math.PI * 2,
+  distance: 32 + (index % 5) * 12,
+  delay: (index % 7) * 0.045,
+}));
+
 function archetypeFor(status: Status): Archetype {
   if (status.meso === "BREAKOUT" || status.micro === "BREAKOUT") return "TOWER";
   if (status.macro === "DOWN" && status.meso === "KNOT" && status.micro === "FILLING") return "EMPEROR";
   return "FOOL";
 }
 
-function normalizeSignal(payload: Record<string, unknown>): Signal | null {
+function normalizeSignal(payload: Record<string, unknown>, preferredSymbol?: string): Signal | null {
   const nested = (payload.data ?? payload) as Record<string, unknown>;
   const symbols = nested.symbols as Record<string, Record<string, unknown>> | undefined;
-  const source = symbols?.BTCUSD ?? nested;
+  const source = symbols?.[preferredSymbol ?? ""] ?? symbols?.BTCUSD ?? (symbols ? Object.values(symbols)[0] : undefined) ?? nested;
   const status = (source.status ?? source.tri_layer ?? nested.status ?? nested.tri_layer ?? { macro: "UNKNOWN", meso: "UNKNOWN", micro: "NOISE" }) as Partial<Status>;
   const phase = String(source.wuxing_phase ?? nested.wuxing_phase ?? "WATER").toUpperCase() as Phase;
   if (!(phase in phaseStyle)) return null;
@@ -48,6 +66,63 @@ function normalizeSignal(payload: Record<string, unknown>): Signal | null {
     status: { macro: String(status.macro ?? "UNKNOWN"), meso: String(status.meso ?? "UNKNOWN"), micro: String(status.micro ?? "NOISE") },
     chart_data: (source.chart_data ?? nested.chart_data) as ChartData | undefined,
   };
+}
+
+function mockSignal(symbol: string): Signal {
+  return {
+    symbol,
+    wuxing_phase: "WATER",
+    status: { macro: "UP", meso: "KNOT", micro: "FILLING" },
+    minor_arcana: "1S / KNOT BIRTH",
+    chart_data: { ...demoChart, close: demoChart.close + 240, high: demoChart.high + 260, sma20: demoChart.sma20 + 120 },
+  };
+}
+
+function KnotBirth({ color }: { color: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-visible" aria-hidden="true">
+      <motion.div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_24px_8px_rgba(255,255,255,.9)]" initial={{ scale: 0, opacity: 1 }} animate={{ scale: [0, 1.8, 0.5], opacity: [1, 0.95, 0] }} transition={{ duration: 0.85, ease: "easeOut" }} />
+      {particleSeeds.map((particle, index) => (
+        <motion.i key={index} className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }} initial={{ x: 0, y: 0, scale: 0, opacity: 0 }} animate={{ x: Math.cos(particle.angle) * particle.distance, y: Math.sin(particle.angle) * particle.distance, scale: [0, 1.4, 0], opacity: [0, 1, 0] }} transition={{ duration: 0.9, delay: particle.delay, ease: "easeOut" }} />
+      ))}
+      <motion.div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80" initial={{ scale: 0.2, opacity: 0.9 }} animate={{ scale: 2.6, opacity: 0 }} transition={{ duration: 1.1, ease: "easeOut" }} />
+    </div>
+  );
+}
+
+function PortfolioHex({ portfolio, pendingSymbol, birthSymbol, onAdd }: { portfolio: ReturnType<typeof usePortfolioMock>["portfolio"]; pendingSymbol: string | null; birthSymbol: string | null; onAdd: () => void }) {
+  const slots = pendingSymbol && portfolio.length < 8 ? [...portfolio, { symbol: pendingSymbol, phase: "WATER", state: "pending" as const }] : portfolio;
+  const canAdd = portfolio.length < 8 && !pendingSymbol;
+
+  return (
+    <section className="relative border-t border-white/10 px-5 py-6 sm:px-8" aria-label="Portfolio hexagram">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div><p className="font-mono text-[10px] uppercase tracking-[0.3em] text-stone-500">Portfolio / hexagram field</p><h2 className="mt-1 text-xl font-medium text-stone-100">{portfolio.length} active nodes <span className="font-mono text-xs text-stone-500">/ {pendingSymbol ? "new branch forming" : "authenticated mock"}</span></h2></div>
+        <button type="button" onClick={onAdd} disabled={!canAdd} className="inline-flex items-center gap-2 border border-amber-200/70 bg-amber-100 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-stone-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40">+ 新規銘柄追加</button>
+      </div>
+      <div className="relative mx-auto h-[330px] max-w-[620px] sm:h-[390px]">
+        <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <motion.path d="M50 50 C35 35 25 27 17 22 M50 50 C65 35 75 27 83 22 M50 50 C36 65 26 73 17 78 M50 50 C64 65 74 73 83 78 M50 50 C50 32 50 19 50 8 M50 50 C50 68 50 81 50 92" fill="none" stroke="#f6d365" strokeWidth="0.45" strokeDasharray="2 2" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: pendingSymbol ? 1 : 0.55, opacity: pendingSymbol ? 0.95 : 0.28 }} transition={{ duration: pendingSymbol ? 1.15 : 0.8 }} />
+          <AnimatePresence>{pendingSymbol && <motion.path d="M50 50 C64 47 78 48 96 50" fill="none" stroke="#fff8cf" strokeWidth="0.7" strokeDasharray="1.5 1.5" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0.8] }} exit={{ opacity: 0 }} transition={{ duration: 1.2, ease: "easeOut" }} />}</AnimatePresence>
+        </svg>
+        {slots.map((slot, index) => {
+          const isPending = slot.state === "pending";
+          const isBorn = birthSymbol === slot.symbol;
+          const phase = phaseStyle[slot.phase as Phase] ?? phaseStyle.WATER;
+          return (
+            <motion.div key={slot.symbol} className={`absolute ${slotPositions[index]} z-10 flex h-16 w-16 flex-col items-center justify-center border ${isPending ? "border-dashed border-amber-200/80 bg-amber-100/10" : `${phase.border} bg-black/60`} shadow-[0_0_22px_rgba(255,255,255,.07)] sm:h-20 sm:w-20`} initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: isPending ? [1, 1.08, 1] : 1 }} transition={{ duration: 0.55, delay: index * 0.04, repeat: isPending ? Infinity : 0 }}>
+              {isBorn && <KnotBirth color={phase.accent.includes("cyan") ? "#67e8f9" : "#f6d365"} />}
+              <span className={`relative z-10 font-mono text-[9px] tracking-wider ${isPending ? "text-amber-100" : phase.accent}`}>{isPending ? "WAIT" : slot.symbol.replace("USD", "")}</span>
+              <span className="relative z-10 mt-1 text-[8px] uppercase tracking-[0.18em] text-stone-600">{isPending ? "1s feed" : "online"}</span>
+            </motion.div>
+          );
+        })}
+        <AnimatePresence>{pendingSymbol && <motion.div className="absolute right-[-2%] top-1/2 z-10 flex h-16 w-16 -translate-y-1/2 items-center justify-center border border-dashed border-amber-100/40 text-center font-mono text-[8px] uppercase tracking-widest text-amber-100/70 sm:h-20 sm:w-20" initial={{ opacity: 0, scale: 0.2 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.2 }} transition={{ duration: 0.6 }}>listening</motion.div>}</AnimatePresence>
+      </div>
+      {pendingSymbol && <p className="mt-2 text-center font-mono text-[9px] uppercase tracking-[0.25em] text-amber-100/70">Rhizome route established / awaiting {pendingSymbol} one-second packet</p>}
+      {birthSymbol && <p className="mt-2 text-center font-mono text-[9px] uppercase tracking-[0.25em] text-cyan-200">1s knot born / {birthSymbol} joined the field</p>}
+    </section>
+  );
 }
 
 function MarketChart({ chartData }: { chartData?: ChartData }) {
@@ -89,9 +164,31 @@ export default function TarotCommandCenter() {
   const [signal, setSignal] = useState<Signal>(demoSignal);
   const [connected, setConnected] = useState(false);
   const [firedAt, setFiredAt] = useState(0);
+  const [birthSymbol, setBirthSymbol] = useState<string | null>(null);
+  const { portfolio, pendingSymbol, beginAdd, resolveAdd } = usePortfolioMock();
+  const pendingSymbolRef = useRef<string | null>(null);
+  const arrivalTimerRef = useRef<number | null>(null);
   const style = phaseStyle[signal.wuxing_phase];
   const archetype = archetypeFor(signal.status);
   const isEmperor = archetype === "EMPEROR";
+
+  useEffect(() => {
+    pendingSymbolRef.current = pendingSymbol;
+  }, [pendingSymbol]);
+
+  const handleAdd = () => {
+    const nextSymbol = beginAdd();
+    if (!nextSymbol) return;
+    if (arrivalTimerRef.current) window.clearTimeout(arrivalTimerRef.current);
+    arrivalTimerRef.current = window.setTimeout(() => {
+      if (pendingSymbolRef.current !== nextSymbol) return;
+      resolveAdd(nextSymbol);
+      setSignal(mockSignal(nextSymbol));
+      setBirthSymbol(nextSymbol);
+      setFiredAt(Date.now());
+      window.setTimeout(() => setBirthSymbol(null), 1300);
+    }, 1500);
+  };
 
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws/signals";
@@ -102,13 +199,23 @@ export default function TarotCommandCenter() {
       socket = new WebSocket(url);
       socket.onopen = () => setConnected(true);
       socket.onmessage = (event) => {
-        try { const next = normalizeSignal(JSON.parse(event.data) as Record<string, unknown>); if (next) { setSignal(next); setFiredAt(Date.now()); } } catch { /* ignore malformed packets */ }
+        try {
+          const next = normalizeSignal(JSON.parse(event.data) as Record<string, unknown>, pendingSymbolRef.current ?? undefined);
+          if (!next) return;
+          setSignal(next);
+          setFiredAt(Date.now());
+          if (pendingSymbolRef.current === next.symbol) {
+            resolveAdd(next.symbol);
+            setBirthSymbol(next.symbol);
+            window.setTimeout(() => setBirthSymbol(null), 1300);
+          }
+        } catch { /* ignore malformed packets */ }
       };
       socket.onclose = () => { setConnected(false); if (!stopped) retry = window.setTimeout(connect, 3000); };
       socket.onerror = () => socket?.close();
     };
     connect();
-    return () => { stopped = true; if (retry) window.clearTimeout(retry); socket?.close(); };
+    return () => { stopped = true; if (retry) window.clearTimeout(retry); if (arrivalTimerRef.current) window.clearTimeout(arrivalTimerRef.current); socket?.close(); };
   }, []);
 
   return (
@@ -138,6 +245,7 @@ export default function TarotCommandCenter() {
           {isEmperor && <motion.button className="absolute bottom-5 right-5 border border-amber-200/70 bg-amber-100 px-5 py-3 font-mono text-xs font-bold tracking-[0.25em] text-stone-950 shadow-[0_0_32px_rgba(250,204,21,0.5)]" animate={{ y: [0, -4, 0], boxShadow: ["0 0 20px rgba(250,204,21,.35)", "0 0 45px rgba(250,204,21,.75)", "0 0 20px rgba(250,204,21,.35)"] }} transition={{ duration: 2.2, repeat: Infinity }}>EXECUTE</motion.button>}
           {archetype === "TOWER" && <motion.p className="mt-2 font-mono text-xs text-red-200/70" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 0.8, repeat: Infinity }}>BREAKOUT EVENT / RECALIBRATE VECTOR</motion.p>}
         </motion.div></AnimatePresence>
+        <PortfolioHex portfolio={portfolio} pendingSymbol={pendingSymbol} birthSymbol={birthSymbol} onAdd={handleAdd} />
       </section>
       <p className="relative mx-auto mt-4 max-w-7xl text-right font-mono text-[10px] uppercase tracking-[0.25em] text-stone-700">packet {firedAt ? new Date(firedAt).toISOString() : "awaiting transmission"}</p>
     </main>
