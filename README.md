@@ -1,4 +1,4 @@
-# ChartTestUI
+# ChartUI
 
 ## Local Setup
 
