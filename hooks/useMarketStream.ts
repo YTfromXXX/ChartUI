@@ -22,14 +22,14 @@ export const MOCK_PORTFOLIO: PortfolioSlot[] = [
   { symbol: 'US500', phase: 'FIRE', state: 'ready' },
 ];
 
-const MOCK_NEXT_SYMBOLS = ['SOLUSD', 'EURUSD', 'NAS100'];
+const MOCK_NEXT_SYMBOLS = ['SOLUSD', 'EURUSD', 'NAS100', 'US30', 'GBPUSD', 'AUDUSD', 'XAGUSD', 'LTCUSD', 'USDCHF', 'XRPUSD', 'BTCXAU', 'NZDUSD', 'USDCAD', 'DAX40', 'ADAUSD'];
 
 export function usePortfolioMock() {
   const [portfolio, setPortfolio] = useState<PortfolioSlot[]>(MOCK_PORTFOLIO);
   const [pendingSymbol, setPendingSymbol] = useState<string | null>(null);
 
   const beginAdd = () => {
-    if (pendingSymbol || portfolio.length >= 8) return null;
+    if (pendingSymbol || portfolio.length >= 22) return null;
     const nextSymbol = MOCK_NEXT_SYMBOLS.find((candidate) => !portfolio.some((slot) => slot.symbol === candidate)) ?? 'NEWUSD';
     setPendingSymbol(nextSymbol);
     return nextSymbol;

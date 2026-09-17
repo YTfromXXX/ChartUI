@@ -3,8 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Activity, Crown, Radio, ShieldAlert, Sparkles, Wifi, WifiOff } from "lucide-react";
 import { CandlestickSeries, ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from "lightweight-charts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePortfolioMock } from "@/hooks/useMarketStream";
+import SingularityOverload from "@/components/SingularityOverload";
 
 type Phase = "WATER" | "WOOD" | "FIRE" | "EARTH" | "METAL";
 type Status = { macro: string; meso: string; micro: string };
@@ -90,6 +91,52 @@ function KnotBirth({ color }: { color: string }) {
   );
 }
 
+type PositionSnapshot = { symbol: string; phase: Phase; delta: number; state: string };
+
+function PositionField({ positions }: { positions: PositionSnapshot[] }) {
+  const isTensionField = positions.length <= 3;
+  const radius = positions.length <= 1 ? 0 : 31;
+  const points = positions.map((_, index) => {
+    if (positions.length === 1) return { x: 50, y: 50 };
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / positions.length;
+    return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius };
+  });
+  const links = isTensionField
+    ? positions.flatMap((_, source) => positions.slice(source + 1).map((__, offset) => [source, source + offset + 1] as const))
+    : positions.length >= 4 && positions.length <= 7
+      ? Array.from({ length: positions.length }, (_, index) => [index, (index + 2) % positions.length] as const)
+      : [];
+
+  return (
+    <div className="relative mx-auto h-[330px] max-w-[620px] perspective-[900px] sm:h-[390px]">
+      <div className="absolute inset-[15%] rounded-full border border-cyan-200/10 bg-black/20 shadow-[inset_0_0_80px_rgba(34,211,238,.08)] [transform:rotateX(58deg)]" />
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true">
+        {links.map(([source, target]) => <motion.line key={`${source}-${target}`} x1={points[source].x} y1={points[source].y} x2={points[target].x} y2={points[target].y} stroke={isTensionField ? '#f6d365' : '#67e8f9'} strokeWidth={isTensionField ? 1.2 : 0.65} strokeDasharray={isTensionField ? '2 1' : '1 2'} initial={{ pathLength: 0 }} animate={{ pathLength: 1, opacity: isTensionField ? [0.35, 1, 0.35] : [0.35, 0.7, 0.35] }} transition={{ duration: isTensionField ? 1.1 : 2.4, repeat: Infinity }} />)}
+      </svg>
+      {positions.map((position, index) => {
+        const point = points[index];
+        const positive = position.delta >= 0;
+        return <motion.div
+          key={position.symbol}
+          className={`absolute z-10 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none flex-col items-center justify-center border bg-black/75 text-center shadow-[0_0_32px_rgba(34,211,238,.2)] active:cursor-grabbing ${positive ? 'border-teal-200/65' : 'border-rose-300/75'}`}
+          style={{ left: `${point.x}%`, top: `${point.y}%`, perspective: 600 }}
+          drag
+          dragConstraints={{ left: -120, right: 120, top: -100, bottom: 100 }}
+          dragElastic={0.22}
+          whileHover={{ scale: 1.12, rotateX: -12, boxShadow: positive ? '0 0 42px rgba(45,212,191,.55)' : '0 0 42px rgba(251,113,133,.55)' }}
+          animate={{ y: positive ? [0, -3, 0] : [0, 3, -2, 0], rotateZ: positive ? 0 : [0, -2, 2, 0] }}
+          transition={{ duration: positive ? 2.4 : 0.55, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <span className={`font-mono text-[10px] font-bold tracking-[0.12em] ${phaseStyle[position.phase].accent}`}>{position.symbol.replace('USD', '')}</span>
+          <span className={`mt-1 font-mono text-[10px] ${positive ? 'text-teal-200' : 'text-rose-200'}`}>{positive ? '+' : ''}{position.delta.toFixed(1)}</span>
+          <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">{position.state}</span>
+        </motion.div>;
+      })}
+      <p className="absolute bottom-2 left-1/2 -translate-x-1/2 font-mono text-[9px] uppercase tracking-[0.24em] text-stone-500">{isTensionField ? 'direct knot manipulation / drag nodes' : 'hexagram geometry / balance field'}</p>
+    </div>
+  );
+}
+
 function PortfolioHex({ portfolio, pendingSymbol, birthSymbol, onAdd }: { portfolio: ReturnType<typeof usePortfolioMock>["portfolio"]; pendingSymbol: string | null; birthSymbol: string | null; onAdd: () => void }) {
   const slots = pendingSymbol && portfolio.length < 8 ? [...portfolio, { symbol: pendingSymbol, phase: "WATER", state: "pending" as const }] : portfolio;
   const canAdd = portfolio.length < 8 && !pendingSymbol;
@@ -166,11 +213,22 @@ export default function TarotCommandCenter() {
   const [firedAt, setFiredAt] = useState(0);
   const [birthSymbol, setBirthSymbol] = useState<string | null>(null);
   const { portfolio, pendingSymbol, beginAdd, resolveAdd } = usePortfolioMock();
+  const [overdrive, setOverdrive] = useState(false);
   const pendingSymbolRef = useRef<string | null>(null);
   const arrivalTimerRef = useRef<number | null>(null);
   const style = phaseStyle[signal.wuxing_phase];
   const archetype = archetypeFor(signal.status);
   const isEmperor = archetype === "EMPEROR";
+  const activePositions = useMemo<PositionSnapshot[]>(() => portfolio.map((slot, index) => ({
+    symbol: slot.symbol,
+    phase: (slot.phase in phaseStyle ? slot.phase : "WATER") as Phase,
+    delta: slot.symbol === signal.symbol ? signal.chart_data ? signal.chart_data.close - signal.chart_data.open : 4.2 : (index % 3 === 0 ? 6.4 : index % 3 === 1 ? -3.1 : 2.2),
+    state: slot.state === "pending" ? "forming" : slot.symbol === signal.symbol ? signal.status.micro : "ready",
+  })), [portfolio, signal]);
+
+  useEffect(() => {
+    setOverdrive(portfolio.length >= 11);
+  }, [portfolio.length]);
 
   useEffect(() => {
     pendingSymbolRef.current = pendingSymbol;
@@ -227,7 +285,7 @@ export default function TarotCommandCenter() {
       <section className={`relative mx-auto max-w-7xl overflow-hidden rounded-sm border bg-gradient-to-br ${style.panel} ${style.border} shadow-2xl transition-colors duration-1000 ${isEmperor ? "shadow-[0_0_80px_rgba(222,174,74,0.42)]" : ""}`}>
         <motion.div className="absolute inset-0 pointer-events-none" animate={isEmperor ? { opacity: [0.2, 0.7, 0.25], boxShadow: ["inset 0 0 30px rgba(234,179,8,.15)", "inset 0 0 100px rgba(234,179,8,.4)", "inset 0 0 30px rgba(234,179,8,.15)"] } : { opacity: 0.15 }} transition={{ duration: 2.8, repeat: Infinity }} />
         <header className="relative flex items-center justify-between border-b border-white/10 px-5 py-5 sm:px-8">
-          <div><p className="font-mono text-[10px] uppercase tracking-[0.4em] text-stone-500">Signal doctrine / 07</p><h1 className="mt-1 text-2xl font-medium tracking-tight sm:text-3xl">TAROT COMMAND CENTER</h1></div>
+          <div><p className="font-mono text-[10px] uppercase tracking-[0.4em] text-stone-500">Signal doctrine / 07</p><h1 className="mt-1 text-2xl font-medium tracking-tight sm:text-3xl">CHARTUI COMMAND CENTER</h1></div>
           <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-stone-400">{connected ? <Wifi className="h-4 w-4 text-emerald-400" /> : <WifiOff className="h-4 w-4 text-stone-600" />} {connected ? "Live feed" : "Demo relay"}</div>
         </header>
 
@@ -245,9 +303,17 @@ export default function TarotCommandCenter() {
           {isEmperor && <motion.button className="absolute bottom-5 right-5 border border-amber-200/70 bg-amber-100 px-5 py-3 font-mono text-xs font-bold tracking-[0.25em] text-stone-950 shadow-[0_0_32px_rgba(250,204,21,0.5)]" animate={{ y: [0, -4, 0], boxShadow: ["0 0 20px rgba(250,204,21,.35)", "0 0 45px rgba(250,204,21,.75)", "0 0 20px rgba(250,204,21,.35)"] }} transition={{ duration: 2.2, repeat: Infinity }}>EXECUTE</motion.button>}
           {archetype === "TOWER" && <motion.p className="mt-2 font-mono text-xs text-red-200/70" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 0.8, repeat: Infinity }}>BREAKOUT EVENT / RECALIBRATE VECTOR</motion.p>}
         </motion.div></AnimatePresence>
-        <PortfolioHex portfolio={portfolio} pendingSymbol={pendingSymbol} birthSymbol={birthSymbol} onAdd={handleAdd} />
+          <PortfolioHex portfolio={portfolio} pendingSymbol={pendingSymbol} birthSymbol={birthSymbol} onAdd={handleAdd} />
+          <section className="border-t border-white/10 px-5 py-6 sm:px-8" aria-label="Active position physics field">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div><p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-200/55">Position physics / {activePositions.length} knots</p><h2 className="mt-1 text-xl text-stone-100">{activePositions.length <= 3 ? "KNOT SELECTION" : activePositions.length <= 7 ? "ARCANA FORMATION" : "FIELD SATURATION"}</h2></div>
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-500">hover / drag / observe tension</p>
+            </div>
+            <PositionField positions={activePositions} />
+          </section>
       </section>
       <p className="relative mx-auto mt-4 max-w-7xl text-right font-mono text-[10px] uppercase tracking-[0.25em] text-stone-700">packet {firedAt ? new Date(firedAt).toISOString() : "awaiting transmission"}</p>
+      <AnimatePresence>{overdrive && <SingularityOverload positionCount={activePositions.length} onDismiss={() => setOverdrive(false)} />}</AnimatePresence>
     </main>
   );
 }

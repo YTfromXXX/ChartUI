@@ -1,10 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CircleDot, Radio, ScanSearch, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import TarotCard, { type TarotCardProps, type TriLayerStatus, type WuxingPhase } from "@/components/TarotCard";
+import SingularityOverload from "@/components/SingularityOverload";
 import { useMarketStream } from "@/hooks/useMarketStream";
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from "@/lib/portfolio";
 import { Canvas, useFrame } from "@react-three/fiber";
@@ -200,9 +201,14 @@ export default function GalleryPage() {
   const [genesisSymbol, setGenesisSymbol] = useState<string | null>(null);
   const [genesisPhase, setGenesisPhase] = useState<"focus" | "birth">("focus");
   const [hasGenesis, setHasGenesis] = useState<boolean | null>(null);
+  const [overdrive, setOverdrive] = useState(false);
 
   useEffect(() => {
-    setHasGenesis(Boolean(window.localStorage.getItem("charttestui-genesis-symbol")));
+    setOverdrive(activeCount >= 11);
+  }, [activeCount]);
+
+  useEffect(() => {
+    setHasGenesis(Boolean(window.localStorage.getItem("chartui-genesis-symbol") || window.localStorage.getItem("charttestui-genesis-symbol")));
   }, []);
 
   function openSymbol(symbol: string) {
@@ -211,7 +217,7 @@ export default function GalleryPage() {
   }
 
   function selectGenesis(symbol: string) {
-    window.localStorage.setItem("charttestui-genesis-symbol", symbol);
+    window.localStorage.setItem("chartui-genesis-symbol", symbol);
     setGenesisSymbol(symbol);
     window.setTimeout(() => setGenesisPhase("birth"), 620);
     window.setTimeout(() => { window.location.href = `/live/${encodeURIComponent(symbol)}?transition=lens`; }, 1450);
@@ -265,7 +271,7 @@ export default function GalleryPage() {
               whileHover={{ scale: 1.045, zIndex: 30, transition: { duration: 0.2 } }}
             >
               <button type="button" onClick={() => openSymbol(card.symbol)} className="block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                {card.isLive ? <TarotCard {...card} /> : <PendingCard card={card} />}
+                <TarotCard {...card} active={card.isLive && card.tri_layer.meso !== "SCANNING"} />
               </button>
             </motion.div>
           ))}
@@ -277,6 +283,7 @@ export default function GalleryPage() {
         </footer>
       </div>
       {transition && <div className="fixed inset-0 z-50 bg-[#030712]" aria-label={`${transition.route} transition`}><GalleryTransition route={transition.route} /></div>}
+      <AnimatePresence>{overdrive && <SingularityOverload positionCount={activeCount} onDismiss={() => setOverdrive(false)} />}</AnimatePresence>
     </main>
   );
 }

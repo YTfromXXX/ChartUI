@@ -22,6 +22,7 @@ export type TarotCardProps = {
   wuxing_phase: WuxingPhase;
   tri_layer: TriLayerStatus;
   hexagramBinary?: string;
+  active?: boolean;
 };
 
 type PhaseTheme = {
@@ -107,12 +108,12 @@ const arcanaIcons: Record<number, LucideIcon> = {
   21: Globe2,
 };
 
-function Silhouette({ theme, knotFormed, microActive, cardName }: { theme: PhaseTheme; knotFormed: boolean; microActive: boolean; cardName: string }) {
+function Silhouette({ theme, knotFormed, microActive, cardName, active }: { theme: PhaseTheme; knotFormed: boolean; microActive: boolean; cardName: string; active: boolean }) {
   const arcanaIndex = Number.parseInt(cardName, 10);
   const ArcanaIcon = arcanaIcons[arcanaIndex] ?? Activity;
 
   return (
-    <div className="relative flex h-40 items-center justify-center overflow-hidden rounded-sm border border-white/10 bg-black/20 sm:h-44">
+    <motion.div className="relative flex h-40 items-center justify-center overflow-hidden rounded-sm border border-white/10 bg-black/20 sm:h-44" whileHover="revealed">
       <div className="pointer-events-none absolute inset-x-4 top-1/2 h-px bg-white/10 shadow-[0_-18px_0_rgba(255,255,255,0.06),0_18px_0_rgba(255,255,255,0.06)]" />
       <div className="pointer-events-none absolute inset-x-8 bottom-5 h-12 opacity-25 [clip-path:polygon(0_75%,14%_56%,26%_64%,39%_24%,53%_48%,66%_36%,80%_58%,100%_8%,100%_100%,0_100%)] bg-current" />
       <motion.div
@@ -122,10 +123,11 @@ function Silhouette({ theme, knotFormed, microActive, cardName }: { theme: Phase
       />
       <motion.div
         className={`relative z-10 flex h-28 w-28 items-center justify-center rounded-full border border-current/30 bg-black/20 ${theme.accent}`}
-        animate={microActive ? { y: [0, -3, 2, 0], rotate: [0, 1, -1, 0] } : { y: 0, rotate: 0 }}
+        variants={{ revealed: { scale: 1.12, rotate: -2, filter: "drop-shadow(0 0 16px currentColor)" } }}
+        animate={microActive || active ? { y: [0, -3, 2, 0], rotate: [0, 1, -1, 0] } : { y: 0, rotate: 0 }}
         transition={{ duration: 1.6, repeat: microActive ? Infinity : 0, ease: "easeInOut" }}
       >
-        <ArcanaIcon className="h-14 w-14 opacity-25" strokeWidth={1.25} aria-hidden="true" />
+        <motion.div variants={{ revealed: { scale: 1.25, opacity: 0.9 } }} initial={{ opacity: active ? 0.6 : 0.25 }} transition={{ duration: 0.35 }}><ArcanaIcon className="h-14 w-14" strokeWidth={1.25} aria-hidden="true" /></motion.div>
         <div className="absolute inset-3 rounded-full border border-current/20" />
         <motion.div className="absolute left-1/2 top-1/2 h-px w-16 -translate-x-1/2 -translate-y-1/2 bg-current/70" animate={microActive ? { opacity: [0.1, 0.8, 0.1], scaleX: [0.7, 1, 0.7] } : { opacity: 0.25 }} transition={{ duration: 0.8, repeat: Infinity }} />
       </motion.div>
@@ -144,7 +146,7 @@ function Silhouette({ theme, knotFormed, microActive, cardName }: { theme: Phase
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
@@ -164,7 +166,7 @@ function EnergyParticles({ color }: { color: string }) {
   );
 }
 
-export default function TarotCard({ symbol, cardName, wuxing_phase, tri_layer, hexagramBinary = "000000" }: TarotCardProps) {
+export default function TarotCard({ symbol, cardName, wuxing_phase, tri_layer, hexagramBinary = "000000", active = false }: TarotCardProps) {
   const theme = phaseThemes[wuxing_phase];
   const macroStrong = strongMacroStates.has(tri_layer.macro);
   const knotFormed = knotStates.has(tri_layer.meso);
@@ -173,7 +175,7 @@ export default function TarotCard({ symbol, cardName, wuxing_phase, tri_layer, h
 
   return (
     <motion.article
-      className={`group relative isolate overflow-hidden rounded-xl border bg-white/[0.07] p-4 backdrop-blur-xl transition-colors duration-700 ${theme.border}`}
+      className={`group relative isolate overflow-hidden rounded-xl border bg-white/[0.07] p-4 backdrop-blur-xl transition-colors duration-700 ${theme.border} ${active ? "ring-1 ring-amber-100/45" : ""}`}
       style={{ boxShadow: `0 0 32px ${glowWithOpacity(theme.glow, glowOpacity)}` }}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
@@ -182,8 +184,8 @@ export default function TarotCard({ symbol, cardName, wuxing_phase, tri_layer, h
     >
       <motion.div
         className="pointer-events-none absolute inset-0 rounded-xl"
-        animate={{ boxShadow: macroStrong ? [`inset 0 0 18px ${glowWithOpacity(theme.glow, 0.35)}`, `inset 0 0 46px ${glowWithOpacity(theme.glow, 0.75)}`, `inset 0 0 18px ${glowWithOpacity(theme.glow, 0.35)}`] : `inset 0 0 20px ${theme.glow}` }}
-        transition={{ duration: 2.4, repeat: macroStrong ? Infinity : 0, ease: "easeInOut" }}
+        animate={{ boxShadow: active || macroStrong ? [`inset 0 0 18px ${glowWithOpacity(theme.glow, 0.35)}`, `inset 0 0 46px ${glowWithOpacity(theme.glow, 0.75)}`, `inset 0 0 18px ${glowWithOpacity(theme.glow, 0.35)}`] : `inset 0 0 20px ${theme.glow}` }}
+        transition={{ duration: 2.4, repeat: active || macroStrong ? Infinity : 0, ease: "easeInOut" }}
       />
       {microActive && <EnergyParticles color={theme.glow} />}
 
@@ -201,7 +203,7 @@ export default function TarotCard({ symbol, cardName, wuxing_phase, tri_layer, h
       </header>
 
       <div className="relative py-3">
-        <Silhouette theme={theme} knotFormed={knotFormed} microActive={microActive} cardName={cardName} />
+        <Silhouette theme={theme} knotFormed={knotFormed} microActive={microActive} cardName={cardName} active={active} />
         {microActive && <motion.div className={`absolute inset-x-3 bottom-2 h-px ${theme.accent} bg-current`} animate={{ opacity: [0.15, 0.8, 0.15], scaleX: [0.65, 1, 0.7] }} transition={{ duration: 0.9, repeat: Infinity }} />}
       </div>
 

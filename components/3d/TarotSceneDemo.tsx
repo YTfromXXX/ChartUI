@@ -22,7 +22,7 @@ export default function TarotSceneDemo() {
     overdriveTimerRef.current = window.setTimeout(() => setIsOverdrive(false), 3000);
 
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-    const token = window.sessionStorage.getItem('charttestui-access-token');
+    const token = window.sessionStorage.getItem('chartui-access-token') ?? window.sessionStorage.getItem('charttestui-access-token');
     await fetch(`${apiBaseUrl}/api/cast_magic`, {
       method: 'POST',
       headers: {

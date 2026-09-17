@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -10,6 +11,7 @@ import random
 import threading
 import time
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 import requests
@@ -37,6 +39,7 @@ from tarot_engine import (
     evaluate_court_promotion,
     evaluate_court_card,
     map_market_archetype,
+    generate_ticket_persona,
 )
 
 try:
@@ -49,7 +52,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ChartTestUI API")
+app = FastAPI(title="ChartUI API")
 matrix_manager = TarotMatrixManager()
 magic_ledger = MagicLedgerDB(os.getenv("MAGIC_LEDGER_DB", "magic_ledger.db"))
 mt5_executor = MT5Executor()
@@ -152,9 +155,49 @@ class MagicCastRequest(BaseModel):
     target_symbol: str = Field(min_length=1)
 
 
+class PackageExecuteRequest(BaseModel):
+    """Request payload for one guarded multi-symbol package entry."""
+
+    symbols: list[str] = Field(min_length=3, max_length=22)
+    total_mana: int = Field(gt=0)
+    lot_size: float = Field(default=0.01, gt=0)
+    action: str = Field(default="LONG", min_length=1)
+
+
+class PackageLimitOrderRequest(BaseModel):
+    """Request payload for a four-node timing lock."""
+
+    symbols: list[str] = Field(min_length=4, max_length=22)
+    limit_price: float = Field(gt=0)
+    lot_size: float = Field(default=0.01, gt=0)
+    action: str = Field(default="LONG", min_length=1)
+    strategy: str = Field(min_length=1)
+
+
 async def execute_trade(symbol: str, action: str) -> None:
     """Placeholder for the asynchronous broker integration."""
     await asyncio.to_thread(mt5_executor.execute, symbol, action)
+
+
+def _package_symbol_data(symbols: list[str]) -> list[dict[str, str]]:
+    """Resolve package symbols to tarot elements and recent I Ching contexts."""
+    symbol_data: list[dict[str, str]] = []
+    for symbol in symbols:
+        mapping = next(
+            (entry for entry in MAJOR_ARCANA_SYMBOLS.values() if entry["symbol"] == symbol),
+            {"element": "EARTH"},
+        )
+        with magic_ledger._connect() as connection:
+            row = connection.execute(
+                "SELECT iching_context FROM settlement_tickets WHERE symbols_json LIKE ? ORDER BY timestamp DESC LIMIT 1",
+                (f'%"{symbol}"%',),
+            ).fetchone()
+        symbol_data.append({
+            "symbol": symbol,
+            "element": mapping["element"],
+            "hexagram_binary": row["iching_context"] if row else format(sum(map(ord, symbol)), "06b")[-6:],
+        })
+    return symbol_data
 
 
 async def post_to_sns(message: str) -> None:
@@ -642,6 +685,139 @@ def _tarot_screener_payload(symbol: str, signal: dict[str, Any]) -> dict[str, An
 def health_check() -> dict[str, str]:
     """Return a lightweight application health response."""
     return {"status": "ok"}
+
+
+@app.get("/api/settlement-tickets")
+def settlement_tickets(limit: int = 80) -> dict[str, Any]:
+    """Return recent settlement constellations for the package-trade assistant."""
+    safe_limit = max(1, min(limit, 200))
+    with magic_ledger._connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT ticket_id, timestamp, shape_type, symbol_count, symbols_json,
+                     total_pnl, mana_consumed, iching_context, persona_name, gravity_type
+            FROM settlement_tickets
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return {
+        "tickets": [
+            {
+                "ticket_id": row["ticket_id"],
+                "timestamp": row["timestamp"],
+                "shape_type": row["shape_type"],
+                "symbol_count": row["symbol_count"],
+                "symbols": json.loads(row["symbols_json"]),
+                "total_pnl": row["total_pnl"],
+                "mana_consumed": row["mana_consumed"],
+                "iching_context": row["iching_context"],
+                "persona_name": row["persona_name"],
+                "gravity_type": row["gravity_type"],
+            }
+            for row in rows
+        ]
+    }
+
+
+@app.post("/api/execute_package")
+async def execute_package(
+    request: PackageExecuteRequest,
+    current_user: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Execute an all-or-nothing guarded package and record its persona ticket."""
+    symbols = [symbol.strip().upper() for symbol in request.symbols]
+    if len(set(symbols)) != len(symbols):
+        raise HTTPException(status_code=400, detail="symbols must be unique")
+    action = request.action.strip().upper()
+    try:
+        for symbol in symbols:
+            mt5_executor.validate_order(symbol, action, request.lot_size)
+    except (RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    symbol_data = _package_symbol_data(symbols)
+    persona = generate_ticket_persona(symbol_data, request.total_mana)
+    primary_element = persona["persona_name"].split("_OF_", 1)[1]
+    message = (
+        f"Package {len(symbols)} symbols as {persona['persona_name']} "
+        f"with {persona['gravity_type']} gravity."
+    )
+    try:
+        cast_result = magic_ledger.begin_cast(primary_element, request.total_mana, symbols[0], message)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if cast_result is None:
+        raise HTTPException(status_code=400, detail="Insufficient mana for this package.")
+
+    submitted: list[str] = []
+    try:
+        for symbol in symbols:
+            await asyncio.to_thread(mt5_executor.execute, symbol, action, request.lot_size)
+            submitted.append(symbol)
+        magic_ledger.record_settlement_ticket({
+            "ticket_id": str(uuid4()),
+            "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
+            "shape_type": "Triangle" if len(symbols) == 3 else "Hexagram" if len(symbols) == 7 else "Overload",
+            "symbol_count": len(symbols),
+            "symbols_json": json.dumps(symbols, separators=(",", ":")),
+            "total_pnl": 0.0,
+            "mana_consumed": request.total_mana,
+            "iching_context": persona["hexagram"],
+            "persona_name": persona["persona_name"],
+            "gravity_type": persona["gravity_type"],
+        })
+    except Exception as error:
+        for symbol in reversed(submitted):
+            try:
+                await asyncio.to_thread(mt5_executor.execute, symbol, "CLOSE", request.lot_size)
+            except Exception:
+                logger.exception("Package compensation failed for %s", symbol)
+        magic_ledger.rollback_cast(cast_result[0])
+        logger.exception("Package execution failed for user %s", current_user)
+        raise HTTPException(status_code=502, detail="Package execution failed; mana returned.") from error
+
+    magic_ledger.complete_cast(cast_result[0], "SUCCESS")
+    return {
+        "status": "success",
+        "symbols": symbols,
+        "ticket_persona": persona,
+        "consumed_mana": request.total_mana,
+        "remaining_mana": cast_result[1],
+        "message": message,
+    }
+
+
+@app.post("/api/execute_limit_package")
+async def execute_limit_package(
+    request: PackageLimitOrderRequest,
+    current_user: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Submit a synchronized limit package after the UI reaches its elastic limit."""
+    symbols = [symbol.strip().upper() for symbol in request.symbols]
+    if len(set(symbols)) != len(symbols):
+        raise HTTPException(status_code=400, detail="symbols must be unique")
+    if request.strategy not in {"THE_CHARIOT", "THE_HERMIT", "THE_HANGED_MAN", "TEMPERANCE"}:
+        raise HTTPException(status_code=400, detail="unknown strategy profile")
+    action = request.action.strip().upper()
+    try:
+        for symbol in symbols:
+            mt5_executor.validate_order(symbol, action, request.lot_size)
+        results = await asyncio.gather(*(
+            asyncio.to_thread(mt5_executor.execute_limit, symbol, action, request.limit_price, request.lot_size)
+            for symbol in symbols
+        ))
+    except (RuntimeError, ValueError) as error:
+        logger.exception("Limit package failed for user %s", current_user)
+        raise HTTPException(status_code=502, detail="Limit package execution failed.") from error
+    return {
+        "status": "success",
+        "strategy": request.strategy,
+        "symbols": symbols,
+        "limit_price": request.limit_price,
+        "orders": results,
+    }
 
 
 @app.post("/api/token")

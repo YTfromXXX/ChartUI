@@ -12,3 +12,5 @@ export default auth((request) => {
 export const config = {
   matcher: ["/gallery/:path*", "/live/:path*", "/profile/:path*", "/matrix/:path*"],
 };
+
+export const runtime = "nodejs";

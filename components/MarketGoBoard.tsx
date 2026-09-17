@@ -1,6 +1,6 @@
 'use client';
 
-import { Html, OrbitControls } from '@react-three/drei';
+import { Html, Line, OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
@@ -20,9 +20,19 @@ export type MarketGoInteraction = 'click' | 'long-press' | 'double-click';
 
 export type MarketGoBoardProps = {
   markets?: MarketData[];
+  activePositions?: ActivePosition[];
   className?: string;
   onNodeInteract?: (node: MarketNode, interaction: MarketGoInteraction) => void;
   onNodeHover?: (node: MarketNode) => void;
+};
+
+export type ActivePosition = {
+  symbol: string;
+  delta: number;
+  magicState: string;
+  mana?: number;
+  cardName?: string;
+  wuxingPhase?: string;
 };
 
 const syntheticSymbols = Array.from({ length: 264 }, (_, index) => `NODE_${String(index + 1).padStart(3, '0')}`);
@@ -93,6 +103,99 @@ function statusFor(node: MarketNode): string {
 function volatilityFor(node: MarketNode): string {
   const tension = node.market?.rsi_tension;
   return typeof tension === 'number' ? `${Math.round(tension * 100)}% tension` : node.kind === 'volatile' ? 'elevated' : 'quiet';
+}
+
+function activePositionLayout(count: number): THREE.Vector3[] {
+  if (count <= 3) {
+    if (count === 1) return [new THREE.Vector3(0, 1.35, 0)];
+    const radius = 3.2;
+    return Array.from({ length: count }, (_, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / count;
+      return new THREE.Vector3(Math.cos(angle) * radius, 1.35, Math.sin(angle) * radius);
+    });
+  }
+
+  const positions = Array.from({ length: Math.min(count, 6) }, (_, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / 6;
+    return new THREE.Vector3(Math.cos(angle) * 4.1, 1.35, Math.sin(angle) * 4.1);
+  });
+  if (count === 7) positions.push(new THREE.Vector3(0, 1.75, 0));
+  if (count > 7) {
+    return Array.from({ length: count }, (_, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / count;
+      const radius = 3.1 + Math.floor(index / 8) * 1.5;
+      return new THREE.Vector3(Math.cos(angle) * radius, 1.35, Math.sin(angle) * radius);
+    });
+  }
+  return positions;
+}
+
+function ActivePositionMap({ activePositions }: { activePositions: ActivePosition[] }) {
+  const groupRefs = useRef<Array<THREE.Group | null>>([]);
+  const layout = useMemo(() => activePositionLayout(activePositions.length), [activePositions.length]);
+  const links = useMemo(() => {
+    if (activePositions.length <= 1) return [];
+    if (activePositions.length <= 3) {
+      return activePositions.flatMap((_, source) => activePositions.slice(source + 1).map((__, target) => [source, source + target + 1] as const));
+    }
+    const ringCount = Math.min(activePositions.length, 6);
+    const starLinks = Array.from({ length: ringCount }, (_, index) => [index, (index + 2) % ringCount] as const);
+    return activePositions.length === 7 ? [...starLinks, ...Array.from({ length: ringCount }, (_, index) => [index, 6] as const)] : starLinks;
+  }, [activePositions.length]);
+
+  useFrame(({ clock }, delta) => {
+    const elapsed = clock.getElapsedTime();
+    activePositions.forEach((position, index) => {
+      const group = groupRefs.current[index];
+      const base = layout[index];
+      if (!group || !base) return;
+      const stress = position.delta < 0 ? Math.min(1, Math.abs(position.delta) / 100) : 0;
+      const stableBreath = position.delta >= 0 ? Math.sin(elapsed * 1.4 + index) * 0.035 : 0;
+      const jitter = stress * 0.11;
+      group.position.set(
+        base.x + Math.sin(elapsed * (10 + index) + index) * jitter,
+        base.y + Math.cos(elapsed * (12 + index) + index) * jitter,
+        base.z + Math.sin(elapsed * (11 + index) + index * 2) * jitter,
+      );
+      const targetScale = 1 + stableBreath + (stress ? Math.sin(elapsed * 18 + index) * stress * 0.035 : 0);
+      group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), Math.min(1, delta * 8));
+      group.rotation.z = stress * Math.sin(elapsed * 16 + index) * 0.08;
+    });
+  });
+
+  if (activePositions.length === 0) return null;
+  const isHexagram = activePositions.length >= 4 && activePositions.length <= 7;
+  const lineColor = activePositions.some((position) => position.delta < 0) ? '#fb7185' : '#f6d365';
+
+  return (
+    <group>
+      {links.map(([source, target]) => <Line key={`${source}-${target}`} points={[layout[source], layout[target]]} color={lineColor} lineWidth={isHexagram ? 1.15 : 2.8} transparent opacity={isHexagram ? 0.48 : 0.82} dashed={!isHexagram} dashSize={0.34} gapSize={0.2} />)}
+      {activePositions.map((position, index) => {
+        const isPositive = position.delta >= 0;
+        const accent = isPositive ? '#5eead4' : '#fb7185';
+        const stress = Math.min(1, Math.abs(position.delta) / 100);
+        return (
+          <group key={`${position.symbol}-${index}`} ref={(instance) => { groupRefs.current[index] = instance; }} position={layout[index]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.84, 0.92, 6]} />
+              <meshBasicMaterial color={accent} transparent opacity={0.38 + stress * 0.28} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
+            <mesh rotation={[0, 0, Math.PI / 6]}>
+              {isHexagram ? <octahedronGeometry args={[0.68, 0]} /> : <boxGeometry args={[1.05, 0.22, 1.05]} />}
+              <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={isPositive ? 0.75 : 1.2} metalness={0.5} roughness={0.3} />
+            </mesh>
+            <Html center distanceFactor={8} position={[0, 0.95, 0]}>
+              <div className={`pointer-events-none min-w-32 border px-2 py-1.5 text-center font-mono shadow-[0_0_22px_rgba(34,211,238,0.16)] ${isPositive ? 'border-teal-200/45 bg-[#031b1c]/90' : 'border-rose-200/55 bg-[#240b16]/90'}`}>
+                <p className="text-[10px] font-bold tracking-[0.16em] text-stone-100">{position.symbol}</p>
+                <p className={`mt-1 text-xs ${isPositive ? 'text-teal-200' : 'text-rose-200'}`}>{isPositive ? '+' : ''}{position.delta.toFixed(2)} Delta</p>
+                <p className="mt-1 text-[8px] uppercase tracking-[0.14em] text-stone-400">{position.magicState}{position.mana === undefined ? '' : ` / mana ${Math.round(position.mana)}%`}</p>
+              </div>
+            </Html>
+          </group>
+        );
+      })}
+    </group>
+  );
 }
 
 function MatrixNodes({ nodes, onSelect, onNodeInteract, onNodeHover }: { nodes: MarketNode[]; onSelect?: (node: MarketNode) => void; onNodeInteract?: (node: MarketNode, interaction: MarketGoInteraction) => void; onNodeHover?: (node: MarketNode) => void }) {
@@ -276,7 +379,7 @@ function MarketGoTransition({ route, symbol }: { route: TransitionRoute; symbol:
   </div>;
 }
 
-export default function MarketGoBoard({ markets = [], className, onNodeInteract, onNodeHover }: MarketGoBoardProps) {
+export default function MarketGoBoard({ markets = [], activePositions = [], className, onNodeInteract, onNodeHover }: MarketGoBoardProps) {
   const router = useRouter();
   const [transition, setTransition] = useState<{ symbol: string; route: TransitionRoute } | null>(null);
   const nodes = useMemo(() => createNodes(markets), [markets]);
@@ -303,10 +406,11 @@ export default function MarketGoBoard({ markets = [], className, onNodeInteract,
         <pointLight position={[-20, 4, -16]} intensity={18} distance={38} color="#3975ff" />
         <gridHelper args={[boardSize, 56, '#0b6370', '#06242d']} position={[0, 0, 0]} />
         <MatrixNodes nodes={nodes} onSelect={onNodeInteract ? undefined : selectMarket} onNodeInteract={onNodeInteract} onNodeHover={onNodeHover} />
+        <ActivePositionMap activePositions={activePositions} />
         <OrbitControls enableDamping dampingFactor={0.08} enablePan enableZoom minDistance={5} maxDistance={74} maxPolarAngle={Math.PI / 2.05} target={[0, 0, 0]} />
       </Canvas>
       <div className="pointer-events-none absolute inset-x-5 top-5 flex items-start justify-between font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-100/50">
-        <span>Market go board / {nodes.length} intersections</span>
+        <span>Market go board / {nodes.length} intersections / {activePositions.length} active positions</span>
         <span className="hidden sm:block">Drag to pan / scroll to zoom</span>
       </div>
       {transition && <MarketGoTransition symbol={transition.symbol} route={transition.route} />}

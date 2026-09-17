@@ -42,6 +42,47 @@ MAJOR_ARCANA_SYMBOLS: Dict[int, MajorArcanaSymbol] = {
 
 WATCHLIST_SYMBOLS: List[str] = [entry["symbol"] for entry in MAJOR_ARCANA_SYMBOLS.values()]
 
+_PERSONA_RANKS = ((50, "PAGE"), (150, "KNIGHT"), (300, "QUEEN"))
+
+
+def generate_ticket_persona(symbols_data: list[dict[str, Any]], total_mana: int) -> dict[str, str]:
+    """Derive a deterministic tarot persona and gravity field for a package ticket."""
+    if not symbols_data:
+        raise ValueError("symbols_data must contain at least one symbol")
+    if total_mana < 0:
+        raise ValueError("total_mana must not be negative")
+
+    elements: list[str] = []
+    hexagrams: list[str] = []
+    for item in symbols_data:
+        symbol = str(item.get("symbol", "")).strip().upper()
+        mapped = next((entry for entry in MAJOR_ARCANA_SYMBOLS.values() if entry["symbol"] == symbol), None)
+        element = str(item.get("element") or (mapped["element"] if mapped else "EARTH")).upper()
+        if element not in {"FIRE", "WATER", "AIR", "EARTH", "METAL"}:
+            element = "EARTH"
+        elements.append(element)
+
+        binary = str(item.get("hexagram_binary") or item.get("hexagram") or "").strip()
+        if len(binary) == 6 and set(binary) <= {"0", "1"}:
+            hexagrams.append(binary)
+
+    element_order = ("FIRE", "WATER", "AIR", "EARTH", "METAL")
+    element_counts = {element: elements.count(element) for element in element_order}
+    primary_element = max(element_order, key=lambda element: (element_counts[element], -element_order.index(element)))
+    representative = "".join(
+        "1" if sum(binary[index] == "1" for binary in hexagrams) * 2 >= len(hexagrams) else "0"
+        for index in range(6)
+    ) if hexagrams else "000000"
+    yang_count = representative.count("1")
+    yin_count = representative.count("0")
+    gravity_type = "EXPANSIVE" if yang_count > yin_count else "CONTRACTIVE" if yin_count > yang_count else "BALANCED"
+    rank = next((rank for threshold, rank in _PERSONA_RANKS if total_mana <= threshold), "KING")
+    return {
+        "persona_name": f"{rank}_OF_{primary_element}",
+        "hexagram": representative,
+        "gravity_type": gravity_type,
+    }
+
 ELEMENT_FIELD_COEFFICIENTS: dict[str, float] = {
     "FIRE": 1.5,
     "AIR": 1.2,

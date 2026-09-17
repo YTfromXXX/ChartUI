@@ -1,12 +1,14 @@
 'use client';
 
-import { ArrowLeft, CircleDot, Radio, Wifi, WifiOff } from 'lucide-react';
+import { ArrowLeft, CircleDot, Flame, Radio, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import LiveChartView from '@/components/LiveChartView';
 import TarotScene from '@/components/3d/TarotScene';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
+import { parseStrategyContract, STRATEGY_CONTRACT_KEY, type StrategyContract } from '@/lib/strategy';
 
 const arcanaBySymbol: Record<string, string> = {
   DOGEUSD: '0_THE_FOOL', BTCUSD: '1_THE_MAGICIAN', EURUSD: '2_THE_HIGH_PRIESTESS', XAUUSD: '3_THE_EMPRESS',
@@ -29,6 +31,23 @@ export default function LiveSymbolPage() {
   const queryRoute = searchParams.get('transition');
   const resonance = calculateResonance(demoPortfolio, data);
   const transitionRoute: TransitionRoute = queryRoute === 'voxel' || queryRoute === 'lens' ? queryRoute : getTransitionRoute(resonance);
+  const [strategy, setStrategy] = useState<StrategyContract | null>(null);
+  const [mana, setMana] = useState(0);
+  const [knotChain, setKnotChain] = useState(0);
+
+  useEffect(() => {
+    const contract = parseStrategyContract(window.sessionStorage.getItem(STRATEGY_CONTRACT_KEY));
+    if (contract?.symbol === symbol) {
+      setStrategy(contract);
+      setMana(contract.manaLimit);
+    }
+  }, [symbol]);
+
+  useEffect(() => {
+    if (!burstEvent || !strategy) return;
+    setMana((current) => Math.max(0, current - Math.max(5, Math.round(strategy.syncLevel / 10))));
+    setKnotChain((current) => current + 1);
+  }, [burstEvent, strategy]);
 
   return (
     <main className="min-h-screen bg-[#080b10] px-4 py-6 font-display text-stone-100 sm:px-8 lg:px-12">
@@ -58,6 +77,13 @@ export default function LiveSymbolPage() {
           ].map(([label, value]) => <div key={label as string}><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{typeof value === 'number' ? value.toFixed(3) : '--'}</p></div>)}
         </section>
         <LiveChartView symbol={symbol} data={data} isConnected={isConnected} />
+        {strategy && <section className="mt-5 border border-amber-200/20 bg-amber-100/[0.035] p-4" aria-label="ChartUI strategy contract">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 text-amber-200" /><div><p className="font-mono text-[9px] uppercase tracking-[0.24em] text-amber-200/65">ChartUI strategy contract</p><p className="mt-1 text-sm text-stone-200">{strategy.courtCard} / hexagram {strategy.hexagramBinary}</p></div></div>
+            <div className="text-right font-mono"><p className="text-[9px] uppercase tracking-[0.2em] text-stone-500">Knot chain</p><p className="mt-1 text-lg text-amber-100">{knotChain} <span className="text-xs text-stone-500">confirmed</span></p></div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3"><div><p className="font-mono text-[9px] uppercase text-stone-500">Mana reserve</p><div className="mt-2 h-2 bg-black/40"><div className="h-full bg-amber-200 transition-[width] duration-700" style={{ width: `${mana}%` }} /></div><p className="mt-1 font-mono text-xs text-amber-100">{mana}%</p></div><div className="border-l border-white/10 pl-3"><p className="font-mono text-[9px] uppercase text-stone-500">Sync field</p><p className="mt-1 font-mono text-sm text-cyan-100">{strategy.syncLevel}%</p></div><div className="border-l border-white/10 pl-3"><p className="font-mono text-[9px] uppercase text-stone-500">Contest rule</p><p className="mt-1 flex items-center gap-1 font-mono text-sm text-red-100"><Flame className="h-3 w-3" /> {mana > 0 ? 'armed / observe' : 'depleted / pause'}</p></div></div>
+        </section>}
         <TarotScene
           className="relative mt-5 h-[620px] w-full overflow-hidden border border-cyan-300/20 bg-[#030712] shadow-[0_0_70px_rgba(34,211,238,0.08)]"
           data={{

@@ -63,6 +63,40 @@ class MagicLedgerDB:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS settlement_tickets (
+                    ticket_id TEXT PRIMARY KEY,
+                    timestamp TEXT NOT NULL,
+                    shape_type TEXT NOT NULL,
+                    symbol_count INTEGER NOT NULL CHECK (symbol_count > 0),
+                    symbols_json TEXT NOT NULL CHECK (json_valid(symbols_json)),
+                    total_pnl REAL NOT NULL,
+                    mana_consumed INTEGER NOT NULL CHECK (mana_consumed >= 0),
+                    iching_context TEXT NOT NULL,
+                    persona_name TEXT NOT NULL DEFAULT 'UNKNOWN',
+                    gravity_type TEXT NOT NULL DEFAULT 'BALANCED'
+                )
+                """
+            )
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(settlement_tickets)").fetchall()
+            }
+            if "persona_name" not in columns:
+                connection.execute(
+                    "ALTER TABLE settlement_tickets ADD COLUMN persona_name TEXT NOT NULL DEFAULT 'UNKNOWN'"
+                )
+            if "gravity_type" not in columns:
+                connection.execute(
+                    "ALTER TABLE settlement_tickets ADD COLUMN gravity_type TEXT NOT NULL DEFAULT 'BALANCED'"
+                )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_settlement_tickets_shape_timestamp
+                ON settlement_tickets (shape_type, timestamp)
+                """
+            )
             connection.executemany(
                 "INSERT OR IGNORE INTO mana_pool (element, current_mana) VALUES (?, 0)",
                 ((element,) for element in self.ELEMENTS),
@@ -120,6 +154,24 @@ class MagicLedgerDB:
             "incantation": incantation,
             "message": incantation,
         }
+
+    def record_settlement_ticket(self, data_dict: dict[str, Any]) -> None:
+        """Persist one completed package settlement and its generated persona."""
+        required = ("ticket_id", "timestamp", "shape_type", "symbol_count", "symbols_json",
+                    "total_pnl", "mana_consumed", "iching_context", "persona_name", "gravity_type")
+        missing = [key for key in required if key not in data_dict]
+        if missing:
+            raise ValueError(f"missing settlement ticket fields: {', '.join(missing)}")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO settlement_tickets
+                    (ticket_id, timestamp, shape_type, symbol_count, symbols_json,
+                     total_pnl, mana_consumed, iching_context, persona_name, gravity_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(data_dict[key] for key in required),
+            )
 
     def consume_mana(self, element: str, mana_cost: int) -> int | None:
         """Atomically consume mana and return the remaining balance, if affordable."""

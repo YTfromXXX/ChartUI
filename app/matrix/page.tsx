@@ -1,9 +1,12 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CircleDot, Coins, LockKeyhole, Sparkles, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
-import MarketGoBoard, { type MarketGoInteraction, type MarketNode } from '@/components/MarketGoBoard';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import MarketGoBoard, { type ActivePosition, type MarketGoInteraction, type MarketNode } from '@/components/MarketGoBoard';
+import InteractiveKnotBuilder from '@/components/3d/InteractiveKnotBuilder';
+import SingularityOverload from '@/components/SingularityOverload';
 import TarotCard, { type TarotCardProps, type WuxingPhase } from '@/components/TarotCard';
 import { useAffinityPortfolio, calculateAffinity } from '@/hooks/useAffinityRadar';
 import { useMarketStream, type MarketData } from '@/hooks/useMarketStream';
@@ -52,6 +55,29 @@ function statusForNode(node: MarketNode): string {
   return node.market?.tri_layer.micro ?? `${node.kind} signal`;
 }
 
+function FormationOverlay({ positions, hoveredIndex, onHover }: { positions: ActivePosition[]; hoveredIndex: number | null; onHover: (index: number | null) => void }) {
+  if (positions.length < 4 || positions.length > 7) return null;
+  const points = positions.map((_, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / 6;
+    return positions.length === 7 && index === 6 ? { x: 50, y: 50 } : { x: 50 + Math.cos(angle) * 34, y: 50 + Math.sin(angle) * 34 };
+  });
+  const lines = Array.from({ length: 6 }, (_, index) => [index, (index + 2) % 6] as const);
+  if (positions.length === 7) lines.push(...Array.from({ length: 6 }, (_, index) => [index, 6] as const));
+  const totalDelta = positions.reduce((sum, position) => sum + position.delta, 0);
+  const phaseCounts = positions.reduce<Record<string, number>>((counts, position) => ({ ...counts, [position.wuxingPhase ?? 'EARTH']: (counts[position.wuxingPhase ?? 'EARTH'] ?? 0) + 1 }), {});
+  const dominantPhase = Object.entries(phaseCounts).sort((left, right) => right[1] - left[1])[0]?.[0] ?? 'EARTH';
+
+  return (
+    <div className="relative mb-5 h-[260px] overflow-hidden border border-amber-200/25 bg-black/25 sm:h-[310px]">
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true">
+        {lines.map(([source, target]) => <motion.line key={`${source}-${target}`} x1={points[source].x} y1={points[source].y} x2={points[target].x} y2={points[target].y} stroke="#f6d365" strokeWidth="0.55" strokeDasharray="1.6 1.2" animate={{ opacity: [0.25, 0.85, 0.25] }} transition={{ duration: 2.1, repeat: Infinity }} />)}
+      </svg>
+      {positions.map((position, index) => <motion.button key={position.symbol} type="button" className={`absolute z-10 flex h-12 w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center border bg-[#071018]/80 font-mono shadow-[0_0_20px_rgba(245,208,111,.14)] backdrop-blur ${hoveredIndex === index ? 'border-white text-white' : 'border-amber-200/35 text-amber-100'}`} style={{ left: `${points[index].x}%`, top: `${points[index].y}%` }} onMouseEnter={() => onHover(index)} onMouseLeave={() => onHover(null)} onTouchMove={() => onHover(index)}><span className="text-[9px] tracking-[0.12em]">{position.symbol}</span><span className={position.delta >= 0 ? 'text-teal-200' : 'text-rose-200'}>{position.delta >= 0 ? '+' : ''}{position.delta.toFixed(1)}</span></motion.button>)}
+      <AnimatePresence>{hoveredIndex !== null && <motion.div className="absolute bottom-3 left-3 z-20 w-[min(300px,calc(100%-1.5rem))] border border-white/20 bg-[#071018]/90 p-3 font-mono shadow-[0_0_30px_rgba(34,211,238,.2)] backdrop-blur-xl" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}><p className="text-[9px] uppercase tracking-[0.2em] text-amber-200/65">Hexagram balance / {positions[hoveredIndex].symbol}</p><p className="mt-2 text-sm text-stone-100">Portfolio Delta <span className={totalDelta >= 0 ? 'text-teal-200' : 'text-rose-200'}>{totalDelta >= 0 ? '+' : ''}{totalDelta.toFixed(1)}</span></p><p className="mt-1 text-[9px] uppercase tracking-[0.14em] text-stone-400">Dominant element: <span className="text-cyan-200">{dominantPhase}</span> / {Object.entries(phaseCounts).map(([phase, count]) => `${phase}:${count}`).join(' ')}</p></motion.div>}</AnimatePresence>
+    </div>
+  );
+}
+
 export default function MatrixPage() {
   const { marketDataMap, isConnected } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals');
   const markets = Object.values(marketDataMap);
@@ -64,6 +90,8 @@ export default function MatrixPage() {
   const [hexagramLocked, setHexagramLocked] = useState(false);
   const [realizedCards, setRealizedCards] = useState<number[]>([]);
   const [notice, setNotice] = useState('Select a frame, then explore the field');
+  const [hoveredFormationIndex, setHoveredFormationIndex] = useState<number | null>(null);
+  const [overdrive, setOverdrive] = useState(false);
   const longPressTimer = useRef<number | null>(null);
 
   const marketBySymbol = useMemo(() => new Map(markets.map((market) => [market.symbol.toUpperCase(), market])), [markets]);
@@ -75,6 +103,15 @@ export default function MatrixPage() {
     const symbol = assignedSymbols[index] ?? symbols[index] ?? `ARCANA_${String(index + 1).padStart(2, '0')}`;
     return cardFromMarket(symbol, index, marketBySymbol.get(symbol), heldCards.includes(index));
   }), [assignedSymbols, heldCards, marketBySymbol, symbols]);
+  const activePositions = useMemo<ActivePosition[]>(() => heldCards.map((index) => {
+    const card = cards[index];
+    const market = marketBySymbol.get(card.symbol);
+    return { symbol: card.symbol, delta: market?.s15_delta ?? 0, magicState: market?.tri_layer.micro ?? 'OBSERVING', mana: Math.max(0, 100 - Math.abs(market?.s15_delta ?? 0)), cardName: card.cardName, wuxingPhase: card.wuxing_phase };
+  }), [cards, heldCards, marketBySymbol]);
+
+  useEffect(() => {
+    setOverdrive(activePositions.length >= 11);
+  }, [activePositions.length]);
   const recommendedAdditions = useMemo(() => cards
     .filter((card) => !heldCards.includes(card.index) && !realizedCards.includes(card.index))
     .map((card) => ({ card, score: calculateAffinity(portfolioSlots, marketBySymbol.get(card.symbol))?.score ?? 0 }))
@@ -164,7 +201,7 @@ export default function MatrixPage() {
           <div><p className="text-[9px] uppercase tracking-[0.34em] text-cyan-300/60">Matrix / arcana field</p><h1 className="mt-1 text-xl tracking-[0.12em] text-stone-100 sm:text-2xl">GO BOARD EXPLORER</h1></div>
           <p className="max-w-[220px] text-right text-[9px] uppercase tracking-[0.16em] text-stone-500">{notice}</p>
         </div>
-        <MarketGoBoard className="h-[58vh] min-h-[480px] w-full border border-cyan-200/10" markets={markets} onNodeInteract={assignNode} onNodeHover={(node) => setNotice(`Scanning around ${node.symbol} / ${statusForNode(node)}`)} />
+        <MarketGoBoard className="h-[58vh] min-h-[480px] w-full border border-cyan-200/10" markets={markets} activePositions={activePositions} onNodeInteract={assignNode} onNodeHover={(node) => setNotice(`Scanning around ${node.symbol} / ${statusForNode(node)}`)} />
       </section>
       <section className="px-3 pb-10 pt-8 sm:px-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-3 px-2">
@@ -197,6 +234,7 @@ export default function MatrixPage() {
           </div>}
           {realizedCards.length > 0 && <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-red-200/60">Realized lines: {realizedCards.map((index) => arcanaNames[index]).join(' / ')}</p>}
         </div>
+        <FormationOverlay positions={activePositions} hoveredIndex={hoveredFormationIndex} onHover={setHoveredFormationIndex} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
           {cards.map((card) => <button
             key={card.index}
@@ -207,11 +245,14 @@ export default function MatrixPage() {
             onPointerDown={() => handleCardPointerDown(card.index)}
             onPointerUp={clearCardLongPress}
             onPointerLeave={clearCardLongPress}
+            onMouseEnter={() => { const index = activePositions.findIndex((position) => position.symbol === card.symbol); setHoveredFormationIndex(index >= 0 ? index : null); }}
+            onTouchMove={() => { const index = activePositions.findIndex((position) => position.symbol === card.symbol); setHoveredFormationIndex(index >= 0 ? index : null); }}
           >
-            <TarotCard {...card} />
+            <TarotCard {...card} active={card.held} />
             <span className={`absolute left-3 top-3 rounded-sm border px-2 py-1 font-mono text-[8px] uppercase tracking-[0.16em] ${card.held ? 'border-amber-200/60 bg-amber-200/15 text-amber-100' : 'border-white/15 bg-black/30 text-stone-500'}`}>{card.held ? 'held' : 'open'}</span>
           </button>)}
         </div>
+        <InteractiveKnotBuilder initialSymbols={activePositions.map((position) => position.symbol)} apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'} />
       </section>
       {recommendation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm">
         <div className="w-full max-w-md border border-amber-200/35 bg-[#071018] p-5 shadow-[0_0_50px_rgba(245,208,111,0.18)]">
@@ -225,6 +266,7 @@ export default function MatrixPage() {
           </div>
         </div>
       </div>}
+      <AnimatePresence>{overdrive && <SingularityOverload positionCount={activePositions.length} onDismiss={() => setOverdrive(false)} />}</AnimatePresence>
     </main>
   );
 }

@@ -7,8 +7,8 @@ const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grot
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-ibm-plex-mono" });
 
 export const metadata: Metadata = {
-  title: "Tarot Command Center",
-  description: "Realtime market signal command center",
+  title: "ChartUI",
+  description: "ChartUI realtime market signal command center",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
