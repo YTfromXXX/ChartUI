@@ -90,253 +90,9 @@ ELEMENT_FIELD_COEFFICIENTS: dict[str, float] = {
     "EARTH": 0.5,
 }
 
-if len(MAJOR_ARCANA_SYMBOLS) != 22 or len(set(WATCHLIST_SYMBOLS)) != 22:
-    raise ValueError("Major Arcana watchlist must contain 22 unique symbols.")
-
-
-def calculate_iching_weight(df_m7: pd.DataFrame, element: str) -> dict[str, Any]:
-    """Translate six recent M7 bodies into an I Ching volatility field.
-
-    The lower trigram begins with the oldest candle: yang is the visible force of a
-    close at or above its open, while yin is the receptive force below it. A missing
-    six-candle window returns a neutral, inspectable result rather than inventing a
-    hexagram.
-    """
-    if not {"open", "close"}.issubset(df_m7.columns):
-        return {"hexagram_binary": "", "hexagram_decimal": None, "volatility_weight": None}
-
-    recent = df_m7[["open", "close"]].tail(6).apply(pd.to_numeric, errors="coerce").dropna()
-    if len(recent) < 6:
-        return {"hexagram_binary": "", "hexagram_decimal": None, "volatility_weight": None}
-
-    # The six bodies become six lines; reading old to new preserves the lower-to-upper
-    # movement of the hexagram instead of letting the latest candle overwrite history.
-    lines = ["1" if close >= open_price else "0" for open_price, close in recent.itertuples(index=False)]
-    binary = "".join(lines)
-    decimal = int(binary, 2)
-
-    # Sustained polarity stores energy; each yin/yang change releases or redirects it.
-    yang_ratio = lines.count("1") / 6
-    transitions = sum(left != right for left, right in zip(lines, lines[1:]))
-    polarity_energy = 0.72 + abs(yang_ratio - 0.5) * 0.36
-    transition_energy = transitions * 0.09
-    hexagram_energy = 0.85 + (decimal / 63) * 0.3
-    base_weight = polarity_energy + transition_energy + (hexagram_energy - 0.85)
-
-    field_coefficient = ELEMENT_FIELD_COEFFICIENTS.get(element.upper(), 1.0)
-    volatility_weight = round(base_weight * field_coefficient, 4)
-    return {
-        "hexagram_binary": binary,
-        "hexagram_decimal": decimal,
-        "volatility_weight": volatility_weight,
-    }
-
-
-def calculate_knot_topology(price_history: Sequence[float] | pd.Series | pd.DataFrame) -> dict[str, float]:
-    """Calculate Frenet-Serret curvature and torsion for a price trajectory."""
-    if isinstance(price_history, pd.DataFrame):
-        values = price_history.get("close", pd.Series(dtype=float))
-    else:
-        values = price_history
-    prices = pd.to_numeric(pd.Series(values), errors="coerce").dropna().to_numpy(dtype=float)
-    if len(prices) < 4:
-        return {"kappa": 0.0, "tau": 0.0}
-
-    velocity = prices[1:] - prices[:-1]
-    acceleration = velocity[1:] - velocity[:-1]
-    jerk = acceleration[1:] - acceleration[:-1]
-    snap = jerk[1:] - jerk[:-1] if len(jerk) > 1 else [0.0]
-    first = [1.0, velocity[-1], acceleration[-1]]
-    second = [0.0, acceleration[-1], jerk[-1]]
-    third = [0.0, jerk[-1], snap[-1]]
-    cross = [
-        first[1] * second[2] - first[2] * second[1],
-        first[2] * second[0] - first[0] * second[2],
-        first[0] * second[1] - first[1] * second[0],
-    ]
-    first_norm = sqrt(sum(component * component for component in first))
-    cross_norm_squared = sum(component * component for component in cross)
-    curvature = sqrt(cross_norm_squared) / max(first_norm ** 3, 1e-12)
-    determinant = sum(
-        first[index] * (second[(index + 1) % 3] * third[(index + 2) % 3] - second[(index + 2) % 3] * third[(index + 1) % 3])
-        for index in range(3)
-    )
-    torsion = determinant / max(cross_norm_squared, 1e-12)
-    return {
-        "kappa": float(round(curvature if isfinite(curvature) else 0.0, 6)),
-        "tau": float(round(torsion if isfinite(torsion) else 0.0, 6)),
-    }
-
-
-def calculate_gravity_gradient(order_book: Mapping[str, Any] | None) -> float:
-    """Estimate signed liquidity gravity from bid and ask depth."""
-    if not order_book:
-        return 0.0
-
-    def weighted_depth(levels: Any) -> float:
-        if isinstance(levels, (int, float)):
-            return max(float(levels), 0.0)
-        total = 0.0
-        for level in levels if isinstance(levels, (list, tuple)) else []:
-            if isinstance(level, Mapping):
-                volume = level.get("volume", level.get("quantity", 0.0))
-                distance = level.get("distance", 1.0)
-            elif isinstance(level, (list, tuple)) and len(level) >= 2:
-                _, volume = level[:2]
-                distance = 1.0
-            else:
-                continue
-            try:
-                total += max(float(volume), 0.0) / max(abs(float(distance)), 1e-6)
-            except (TypeError, ValueError):
-                continue
-        return total
-
-    bid_depth = weighted_depth(order_book.get("bids", order_book.get("bid_volume", 0.0)))
-    ask_depth = weighted_depth(order_book.get("asks", order_book.get("ask_volume", 0.0)))
-    total_depth = bid_depth + ask_depth
-    return round((bid_depth - ask_depth) / total_depth, 6) if total_depth else 0.0
-
-
-def calculate_branch_probabilities(
-    kappa: float, tau: float, gravity_tensor: float
-) -> list[dict[str, str | float]]:
-    """Convert topology and liquidity gravity into four normalized attractors."""
-    curvature = max(float(kappa), 0.0)
-    torsion = float(tau)
-    gravity = max(-1.0, min(1.0, float(gravity_tensor)))
-    scores = [
-        exp(max(-20.0, min(20.0, 1.8 * curvature + gravity + 0.5 * torsion))),
-        exp(max(-20.0, min(20.0, 0.5 + 1.5 * abs(torsion) + 0.4 * curvature))),
-        exp(max(-20.0, min(20.0, 1.0 - 2.0 * curvature - abs(torsion) - abs(gravity)))),
-        exp(max(-20.0, min(20.0, 0.4 - gravity + 0.7 * abs(torsion)))),
-    ]
-    probabilities = [score / sum(scores) * 100.0 for score in scores]
-    rounded = [round(probability, 1) for probability in probabilities]
-    rounded[-1] = round(100.0 - sum(rounded[:-1]), 1)
-    branches = (("wands", "#FFD700"), ("swords", "#00FFFF"), ("cups", "#FFFFFF"), ("pentacles", "#800080"))
-    return [
-        {"id": branch_id, "prob": probability, "color_hex": color}
-        for (branch_id, color), probability in zip(branches, rounded)
-    ]
-
-
-def evaluate_micro_distortion(
-    df_s15: pd.DataFrame,
-    current_minor_card: str | None,
-    macro_trend: str | None,
-) -> str:
-    """Promote an extreme Minor Arcana card when the S15 pressure agrees.
-
-    The latest four S15 bars form the micro impulse. A volume spike is measured
-    against the preceding four-bar average when available; without that baseline,
-    the function conservatively declines to promote the card.
-    """
-    if not current_minor_card or len(df_s15) < 4 or not {"open", "close", "volume"}.issubset(df_s15.columns):
-        return current_minor_card or ""
-
-    card_parts = current_minor_card.upper().split("_")
-    if len(card_parts) != 2 or card_parts[0] not in {"WANDS", "CUPS", "SWORDS", "PENTACLES"} or card_parts[1] not in {"8", "9", "10"}:
-        return current_minor_card
-
-    recent = df_s15[["open", "close", "volume"]].tail(4).apply(pd.to_numeric, errors="coerce")
-    if recent.isna().any().any():
-        return current_minor_card
-
-    net_delta = float(recent["close"].iloc[-1] - recent["open"].iloc[0])
-    reference_price = max(abs(float(recent["open"].iloc[0])), 1e-12)
-    delta_ratio = abs(net_delta) / reference_price
-    prior = df_s15["volume"].iloc[:-4].tail(4).apply(pd.to_numeric, errors="coerce").dropna()
-    if prior.empty:
-        return current_minor_card
-    volume_ratio = float(recent["volume"].sum()) / max(float(prior.mean()) * 4, 1e-12)
-    if delta_ratio < 0.0005 or volume_ratio < 1.5:
-        return current_minor_card
-
-    normalized_macro = (macro_trend or "").upper()
-    moving_down = net_delta < 0
-    direction_matches = (moving_down and normalized_macro in {"DOWN", "DOWN_CONFIRMED"}) or (
-        not moving_down and normalized_macro in {"UP", "UP_CONFIRMED"}
-    )
-    if not direction_matches:
-        return current_minor_card
-
-    suit = card_parts[0]
-    volatility_weight = df_s15.attrs.get("volatility_weight")
-    if volatility_weight is None and "volatility_weight" in df_s15.columns:
-        volatility_weight = df_s15["volatility_weight"].iloc[-1]
-    try:
-        field_is_synchronized = float(volatility_weight) >= 1.0
-    except (TypeError, ValueError):
-        field_is_synchronized = False
-    return f"KING_OF_{suit}" if field_is_synchronized else f"KNIGHT_OF_{suit}"
-
-
-def evaluate_court_promotion(
-    df_s15: pd.DataFrame,
-    current_minor_card: str,
-    macro_trend: str,
-    volatility_weight: float,
-) -> str:
-    """Promote a mature numbered card when four S15 bars break out.
-
-    Volume is compared with the preceding four-bar average. Delta is the sum of each
-    S15 candle body, normalized by the opening price so the thresholds work across
-    instruments with different price scales.
-    """
-    if not current_minor_card or len(df_s15) < 4:
-        return current_minor_card
-    if not {"open", "close"}.issubset(df_s15.columns):
-        return current_minor_card
-
-    card_parts = current_minor_card.upper().split("_")
-    suits = {"WANDS", "CUPS", "SWORDS", "PENTACLES"}
-    suit = next((part for part in card_parts if part in suits), None)
-    strength = next((part for part in card_parts if part in {"8", "9", "10"}), None)
-    if suit is None or strength is None:
-        return current_minor_card
-
-    volume_column = "tick_volume" if "tick_volume" in df_s15.columns else "volume"
-    if volume_column not in df_s15.columns or len(df_s15) <= 4:
-        return current_minor_card
-
-    recent = df_s15[["open", "close", volume_column]].tail(4).apply(pd.to_numeric, errors="coerce")
-    reference = df_s15[volume_column].iloc[:-4].tail(4).apply(pd.to_numeric, errors="coerce").dropna()
-    if recent.isna().any().any() or reference.empty:
-        return current_minor_card
-
-    volume_sum = float(recent[volume_column].sum())
-    reference_sum = float(reference.mean()) * 4
-    volume_ratio = volume_sum / max(reference_sum, 1e-12)
-    cumulative_delta = float((recent["close"] - recent["open"]).sum())
-    opening_price = max(abs(float(recent["open"].iloc[0])), 1e-12)
-    delta_ratio = abs(cumulative_delta) / opening_price
-
-    try:
-        tolerance = max(abs(float(volatility_weight)), 1e-6) * 0.0005
-    except (TypeError, ValueError):
-        tolerance = 0.0005
-    normalized_macro = (macro_trend or "").upper()
-    direction_matches = (
-        cumulative_delta > 0 and normalized_macro in {"UP", "UP_CONFIRMED"}
-    ) or (
-        cumulative_delta < 0 and normalized_macro in {"DOWN", "DOWN_CONFIRMED"}
-    )
-
-    if volume_ratio >= 1.5 and direction_matches and delta_ratio >= tolerance * 2.5:
-        return f"KING_OF_{suit}"
-    if volume_ratio >= 1.5 and direction_matches and delta_ratio >= tolerance:
-        return f"KNIGHT_OF_{suit}"
-    if volume_ratio >= 1.2 and direction_matches and delta_ratio <= tolerance:
-        return f"QUEEN_OF_{suit}"
-    if volume_ratio >= 1.5 and not direction_matches:
-        return f"PAGE_OF_{suit}"
-    return current_minor_card
-
 
 def get_archetype_parameters(element: str, card_name: str) -> dict[str, float]:
-    """Return volatility-sensitive thresholds for a Major Arcana archetype."""
-    parameters: dict[str, float] = {
+    parameters = {
         "rsi_overbought": 80.0,
         "rsi_oversold": 20.0,
         "bbw_squeeze_threshold": 0.02,
@@ -644,3 +400,71 @@ def calculate_iching_visuals(volatility: float, timestamp: datetime | None = Non
     decimal = (int(round(normalized * 63.0)) + seasonal * 7) % 64
     color_index = (decimal // 8 + seasonal) % len(_ICHING_COLORS)
     return {"i_ching_hexagram_symbol": ICHING_SYMBOLS[decimal], "background_hex": _ICHING_COLORS[color_index]}
+
+
+def analyze_4d_timeline(symbol: str, target_time: datetime | str) -> dict[str, Any]:
+    """Compare scalp-oriented market states across four deterministic time layers.
+
+    A live adapter can replace ``_timeline_snapshot`` with OHLCV history later. The
+    fallback is intentionally deterministic so backtests, API responses, and UI demos
+    produce the same result for the same symbol and target timestamp.
+    """
+    moment = datetime.fromisoformat(target_time) if isinstance(target_time, str) else target_time
+    if not isinstance(moment, datetime):
+        raise TypeError("target_time must be a datetime or ISO-8601 string")
+    normalized_symbol = str(symbol).strip().upper()
+    if not normalized_symbol:
+        raise ValueError("symbol must not be empty")
+
+    layers = {
+        "T-40m": moment - pd.Timedelta(minutes=40).to_pytimedelta(),
+        "T-4h": moment - pd.Timedelta(hours=4).to_pytimedelta(),
+        "T-target": moment,
+        "T-best": moment - pd.Timedelta(days=((sum(map(ord, normalized_symbol)) % 17) + 1)).to_pytimedelta(),
+    }
+
+    snapshots: dict[str, dict[str, Any]] = {}
+    seed = sum((index + 1) * ord(character) for index, character in enumerate(normalized_symbol))
+    for index, (layer, timestamp) in enumerate(layers.items()):
+        time_seed = int(timestamp.timestamp() // 60)
+        volatility = ((seed * 17 + time_seed * 13 + index * 29) % 1000) / 1000.0
+        decimal = (seed + time_seed // 5 + index * 11) % 64
+        binary = format(decimal, "06b")
+        snapshots[layer] = {
+            "timestamp": timestamp.isoformat(),
+            "hexagram_decimal": decimal,
+            "hexagram_binary": binary,
+            "hexagram_symbol": ICHING_SYMBOLS[decimal],
+            "volatility": round(volatility, 6),
+        }
+
+    baseline = snapshots["T-target"]
+    distortions: dict[str, dict[str, float | int]] = {}
+    for layer, snapshot in snapshots.items():
+        if layer == "T-target":
+            continue
+        volatility_delta = round(snapshot["volatility"] - baseline["volatility"], 6)
+        hexagram_delta = int(snapshot["hexagram_decimal"]) - int(baseline["hexagram_decimal"])
+        distortions[layer] = {
+            "volatility_delta": volatility_delta,
+            "hexagram_delta": hexagram_delta,
+            "distance": round(abs(volatility_delta) + abs(hexagram_delta) / 63.0, 6),
+        }
+
+    short_term = float(distortions["T-40m"]["volatility_delta"])
+    meso_term = float(distortions["T-4h"]["volatility_delta"])
+    ideal_term = float(distortions["T-best"]["volatility_delta"])
+    convergence_score = max(-1.0, min(1.0, ideal_term * 0.5 - short_term * 0.3 - meso_term * 0.2))
+    direction = "EXPANDING" if convergence_score > 0.12 else "CONTRACTING" if convergence_score < -0.12 else "BALANCED"
+
+    return {
+        "symbol": normalized_symbol,
+        "target_time": moment.isoformat(),
+        "layers": snapshots,
+        "distortions": distortions,
+        "convergence": {
+            "score": round(convergence_score, 6),
+            "direction": direction,
+            "note": "Positive values lean toward the best historical fractal; negative values lean toward compression.",
+        },
+    }

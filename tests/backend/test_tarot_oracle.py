@@ -3,10 +3,21 @@
 import math
 
 from tarot_engine import (
+    analyze_4d_timeline,
     calculate_branch_probabilities,
     calculate_gravity_gradient,
     calculate_knot_topology,
 )
+
+
+def test_4d_timeline_returns_four_layers_and_convergence():
+    result = analyze_4d_timeline("BTCUSD", "2024-01-01T00:00:00")
+
+    assert result["symbol"] == "BTCUSD"
+    assert list(result["layers"]) == ["T-40m", "T-4h", "T-target", "T-best"]
+    assert all(0.0 <= layer["volatility"] <= 1.0 for layer in result["layers"].values())
+    assert all(len(layer["hexagram_binary"]) == 6 for layer in result["layers"].values())
+    assert result["convergence"]["direction"] in {"EXPANDING", "CONTRACTING", "BALANCED"}
 
 
 def test_knot_topology_returns_finite_frenet_values():

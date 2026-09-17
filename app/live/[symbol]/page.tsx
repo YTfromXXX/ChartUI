@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import LiveChartView from '@/components/LiveChartView';
+import KnotChart, { type KnotTimelineLayer, type KnotTick } from '@/components/2d/KnotChart';
 import TarotScene from '@/components/3d/TarotScene';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
@@ -31,6 +32,21 @@ export default function LiveSymbolPage() {
   const queryRoute = searchParams.get('transition');
   const resonance = calculateResonance(demoPortfolio, data);
   const transitionRoute: TransitionRoute = queryRoute === 'voxel' || queryRoute === 'lens' ? queryRoute : getTransitionRoute(resonance);
+  const knotTick: KnotTick | undefined = data ? {
+    timestamp: (data.chart_data?.time ?? Date.now() / 1000) * 1000,
+    price: data.chart_data?.close ?? data.s15_delta,
+    volatility: Math.min(1, Math.abs(data.rendered_physics?.complexity_c ?? data.rsi_tension ?? 0.25)),
+    angle: ((data.rendered_physics?.tornado_tilt_deg ?? data.curvature ?? 0) * Math.PI) / 180,
+    magicLength: Math.min(3, Math.abs(data.elastic_energy ?? data.volume_mass ?? 0) / 100),
+    tension: Math.min(1, Math.abs(data.rendered_physics?.tension_t ?? data.s15_delta) / 100),
+    jump: data.physics_event === 'knot_burst',
+  } : undefined;
+  const knotTimeline: Record<'t40m' | 't4h' | 'target' | 'best', KnotTimelineLayer> = {
+    t40m: { price: knotTick?.price ?? 0, volatility: Math.min(1, (knotTick?.volatility ?? 0.2) * 1.2), angle: (knotTick?.angle ?? 0) - 0.25, color: '#38bdf8', opacity: 0.3 },
+    t4h: { price: knotTick?.price ?? 0, volatility: Math.min(1, (knotTick?.volatility ?? 0.2) * 0.9), angle: (knotTick?.angle ?? 0) + 0.65, color: '#f8d66d', opacity: 0.28 },
+    target: { price: knotTick?.price ?? 0, volatility: knotTick?.volatility ?? 0.2, angle: knotTick?.angle ?? 0, color: '#fb7185', opacity: 0.34 },
+    best: { price: knotTick?.price ?? 0, volatility: Math.max(0.08, (knotTick?.volatility ?? 0.2) * 0.72), angle: (knotTick?.angle ?? 0) - 0.9, color: '#a78bfa', opacity: 0.24 },
+  };
   const [strategy, setStrategy] = useState<StrategyContract | null>(null);
   const [mana, setMana] = useState(0);
   const [knotChain, setKnotChain] = useState(0);
@@ -54,7 +70,7 @@ export default function LiveSymbolPage() {
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-col gap-5 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link href="/gallery" className="mb-5 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-stone-500 transition-colors hover:text-cyan-200"><ArrowLeft className="h-3 w-3" /> Arcana gallery</Link>
+            <div className="mb-5 flex flex-wrap items-center gap-4"><Link href="/gallery" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-stone-500 transition-colors hover:text-cyan-200"><ArrowLeft className="h-3 w-3" /> Arcana gallery</Link><Link href="/knot-chart" className="font-mono text-[10px] uppercase tracking-[0.25em] text-cyan-200/70 transition-colors hover:text-cyan-100">Full-screen knot chart</Link></div>
             <div className="flex items-center gap-3"><Radio className="h-4 w-4 text-cyan-300" /><p className="font-mono text-[10px] uppercase tracking-[0.4em] text-stone-500">Live chart access</p></div>
             <h1 className="mt-2 text-4xl font-medium tracking-[-0.04em] text-cyan-100 sm:text-6xl">{symbol || 'UNKNOWN'}</h1>
           </div>
@@ -77,6 +93,13 @@ export default function LiveSymbolPage() {
           ].map(([label, value]) => <div key={label as string}><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{typeof value === 'number' ? value.toFixed(3) : '--'}</p></div>)}
         </section>
         <LiveChartView symbol={symbol} data={data} isConnected={isConnected} />
+        <section className="mt-5 overflow-hidden border border-cyan-200/15 bg-[#020814] p-4" aria-label="High frequency knot projection">
+          <div className="mb-3 flex items-end justify-between border-b border-white/10 pb-3">
+            <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-cyan-200/60">Projection / native canvas</p><h2 className="mt-1 text-lg tracking-[0.12em] text-stone-100">FOUR-LAYER KNOT TRACE</h2></div>
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">ring buffer / 60fps</span>
+          </div>
+          <KnotChart tick={knotTick} timeline={knotTimeline} height={340} />
+        </section>
         {strategy && <section className="mt-5 border border-amber-200/20 bg-amber-100/[0.035] p-4" aria-label="ChartUI strategy contract">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 text-amber-200" /><div><p className="font-mono text-[9px] uppercase tracking-[0.24em] text-amber-200/65">ChartUI strategy contract</p><p className="mt-1 text-sm text-stone-200">{strategy.courtCard} / hexagram {strategy.hexagramBinary}</p></div></div>

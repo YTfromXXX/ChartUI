@@ -5,6 +5,7 @@ import { ArrowLeft, CircleDot, Radio, ScanSearch, Sparkles, UserRound } from "lu
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import TarotCard, { type TarotCardProps, type TriLayerStatus, type WuxingPhase } from "@/components/TarotCard";
+import SymbolOmniSearch, { type SearchSymbol, type SymbolTag } from "@/components/SymbolOmniSearch";
 import SingularityOverload from "@/components/SingularityOverload";
 import { useMarketStream } from "@/hooks/useMarketStream";
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from "@/lib/portfolio";
@@ -13,6 +14,14 @@ import * as THREE from "three";
 import { EffectComposer, DepthOfField } from "@react-three/postprocessing";
 
 type GalleryCard = TarotCardProps & { index: number; isLive: boolean };
+
+const symbolTags: Record<string, SymbolTag[]> = {
+  DOGEUSD: ["Crypto", "Meme", "High Volatility", "FIRE"], BTCUSD: ["Crypto", "L1/L2", "High Volatility", "FIRE"], EURUSD: ["Forex", "WATER"],
+  XAUUSD: ["Commodity", "Safe Haven", "EARTH"], US500: ["Indices", "High Volatility", "FIRE"], GBPUSD: ["Forex", "EARTH"], ETHUSD: ["Crypto", "L1/L2", "High Volatility", "WATER"],
+  NAS100: ["Indices", "High Volatility", "WATER"], US30: ["Indices", "FIRE"], USDJPY: ["Forex", "Safe Haven", "EARTH"], SOLUSD: ["Crypto", "L1/L2", "High Volatility", "FIRE"],
+  AUDUSD: ["Forex", "WOOD"], XAGUSD: ["Commodity", "WATER"], LTCUSD: ["Crypto", "High Volatility", "WATER"], USDCHF: ["Forex", "Safe Haven", "WATER"], XRPUSD: ["Crypto", "High Volatility", "FIRE"],
+  BTCXAU: ["Commodity", "High Volatility", "FIRE"], NZDUSD: ["Forex", "WATER"], USDCAD: ["Forex", "WATER"], DAX40: ["Indices", "High Volatility", "FIRE"], ADAUSD: ["Crypto", "L1/L2", "High Volatility", "WATER"], GER40: ["Indices", "Safe Haven", "EARTH"],
+};
 
 const arcanaCards: Array<Pick<GalleryCard, "index" | "cardName" | "symbol">> = [
   { index: 0, cardName: "0_THE_FOOL", symbol: "DOGEUSD" },
@@ -177,6 +186,28 @@ function GenesisTransition({ symbol, phase }: { symbol: string; phase: "focus" |
   );
 }
 
+function MatrixPreview({ activeIndex, cardCount }: { activeIndex: number | null; cardCount: number }) {
+  if (activeIndex === null) return null;
+  const point = (index: number) => ({ x: (index % 2) * 50 + 25, y: (Math.floor(index / 2) + 0.5) * (100 / Math.ceil(cardCount / 2)) });
+  const source = point(activeIndex);
+  const partner = point((activeIndex + 7) % cardCount);
+
+  return (
+    <svg className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {Array.from({ length: cardCount }, (_, index) => {
+        if (index === activeIndex) return null;
+        const target = point(index);
+        const attraction = ((index + activeIndex) % 5) / 4;
+        const color = index === (activeIndex + 7) % cardCount ? "#f8d66d" : index % 3 === 0 ? "#38bdf8" : "#fb7185";
+        return <motion.line key={`thread-${index}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y} stroke={color} strokeWidth={index === (activeIndex + 7) % cardCount ? 0.65 : 0.22} strokeDasharray={index === (activeIndex + 7) % cardCount ? "2 1" : "0.8 1.8"} initial={{ opacity: 0 }} animate={{ opacity: 0.1 + attraction * 0.22 }} transition={{ duration: 0.45 }} />;
+      })}
+      <motion.line x1={source.x} y1={source.y} x2={partner.x} y2={partner.y} stroke="#fef3c7" strokeWidth="1.1" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0.25, 1, 0.45] }} transition={{ duration: 1.1, repeat: Infinity }} />
+      <motion.circle cx={source.x} cy={source.y} r="2.2" fill="#fef3c7" animate={{ r: [1.5, 3.2, 1.5], opacity: [0.55, 1, 0.55] }} transition={{ duration: 1.2, repeat: Infinity }} />
+      <motion.circle cx={partner.x} cy={partner.y} r="1.5" fill="#67e8f9" animate={{ r: [1, 2.4, 1], opacity: [0.3, 0.9, 0.3] }} transition={{ duration: 1.4, repeat: Infinity }} />
+    </svg>
+  );
+}
+
 export default function GalleryPage() {
   const { marketDataMap, isConnected } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws/signals");
   const demoCards = useMemo(() => arcanaCards.map((_, index) => demoState(index)), []);
@@ -192,8 +223,14 @@ export default function GalleryPage() {
   const cards = useMemo(() => {
     const liveSymbols = new Set(liveCards.map((card) => card.symbol));
     const placeholders = demoCards.filter((card) => !liveSymbols.has(card.symbol));
-    return [...liveCards, ...placeholders];
+    return [...liveCards, ...placeholders].slice(0, 22);
   }, [demoCards, liveCards]);
+  const searchSymbols = useMemo<SearchSymbol[]>(() => cards.map((card) => ({
+    symbol: card.symbol,
+    cardName: card.cardName,
+    index: card.index,
+    tags: symbolTags[card.symbol] ?? [phaseFrom(card.wuxing_phase, "EARTH")],
+  })), [cards]);
 
   const activeCount = useMemo(() => Object.values(marketDataMap).filter((card) => card.tri_layer.micro !== "STABLE").length, [marketDataMap]);
   const updatedSymbol = Object.keys(marketDataMap).at(-1) ?? null;
@@ -202,6 +239,8 @@ export default function GalleryPage() {
   const [genesisPhase, setGenesisPhase] = useState<"focus" | "birth">("focus");
   const [hasGenesis, setHasGenesis] = useState<boolean | null>(null);
   const [overdrive, setOverdrive] = useState(false);
+  const [previewSymbol, setPreviewSymbol] = useState<string | null>(null);
+  const previewIndex = previewSymbol ? cards.findIndex((card) => card.symbol === previewSymbol) : null;
 
   useEffect(() => {
     setOverdrive(activeCount >= 11);
@@ -260,7 +299,10 @@ export default function GalleryPage() {
           </div>
         </header>
 
-        <section aria-label="Major Arcana market gallery" className="grid grid-cols-2 items-start gap-3 sm:gap-5">
+        <SymbolOmniSearch symbols={searchSymbols} onPreview={setPreviewSymbol} onSelect={openSymbol} />
+
+        <section aria-label="Major Arcana market gallery" className="relative grid grid-cols-2 items-start gap-3 sm:gap-5">
+          <MatrixPreview activeIndex={previewIndex !== null && previewIndex >= 0 ? previewIndex : null} cardCount={cards.length} />
           {Object.values(cards).map((card, index) => (
             <motion.div
               className="relative z-0"
@@ -271,7 +313,7 @@ export default function GalleryPage() {
               whileHover={{ scale: 1.045, zIndex: 30, transition: { duration: 0.2 } }}
             >
               <button type="button" onClick={() => openSymbol(card.symbol)} className="block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                <TarotCard {...card} active={card.isLive && card.tri_layer.meso !== "SCANNING"} />
+                <TarotCard {...card} active={previewIndex === index || (card.isLive && card.tri_layer.meso !== "SCANNING")} />
               </button>
             </motion.div>
           ))}
