@@ -16,7 +16,7 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    setIsAuthenticated(window.sessionStorage.getItem("charttestui-authenticated") === "true");
+    setIsAuthenticated(window.sessionStorage.getItem("chartui-authenticated") === "true" || window.sessionStorage.getItem("charttestui-authenticated") === "true");
   }, []);
 
   async function handleAuthenticate(event: FormEvent<HTMLFormElement>) {
@@ -43,8 +43,8 @@ export default function Home() {
       const token = await response.json() as { access_token: string };
       const sessionResult = await signIn("observer-credentials", { email, password, redirect: false });
       if (sessionResult?.error) throw new Error("Auth.js session could not be created");
-      window.sessionStorage.setItem("charttestui-authenticated", "true");
-      window.sessionStorage.setItem("charttestui-access-token", token.access_token);
+      window.sessionStorage.setItem("chartui-authenticated", "true");
+      window.sessionStorage.setItem("chartui-access-token", token.access_token);
       const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
       router.push(callbackUrl || "/gallery");
     } catch {
@@ -59,6 +59,9 @@ export default function Home() {
       <div className="relative">
         <TarotCommandCenter />
         <TarotSceneDemo />
+        <div className="absolute left-4 top-6 z-30 rounded-full border border-cyan-200/20 bg-[#060d16]/85 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
+          <a href="/contest" className="hover:text-white">Contest board</a>
+        </div>
       </div>
 
       {!isAuthenticated && <div className="absolute bottom-4 right-4 z-20 w-[min(24rem,calc(100%-2rem))] p-2 sm:bottom-8 sm:right-8">
