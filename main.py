@@ -25,6 +25,7 @@ from auth import authenticate_user, get_current_user, issue_token
 from database.magic_ledger import MagicLedgerDB
 from market_aggregator import TarotMatrixManager
 from mt5_executor import MT5Executor
+from spiral_cube_analyzer import analyze_spiral_cube
 
 from tarot_engine import (
     MAJOR_ARCANA_SYMBOLS,
@@ -614,6 +615,20 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     oracle_prediction = _oracle_prediction(price_history, market_data.get("order_book"))
     prices = pd.to_numeric(pd.Series(price_history), errors="coerce").dropna().to_numpy(dtype=float)
     latest_delta = float(prices[-1] - prices[-2]) if len(prices) > 1 else 0.0
+    history_volumes = history["volume"] if isinstance(history, pd.DataFrame) and "volume" in history else history["tick_volume"] if isinstance(history, pd.DataFrame) and "tick_volume" in history else pd.Series(dtype=float)
+    cube_input = {
+        "prices": prices.tolist(),
+        "volumes": pd.to_numeric(history_volumes, errors="coerce").dropna().tolist(),
+        "current_price": float(prices[-1]) if len(prices) else 0.0,
+        "previous_price": float(prices[-2]) if len(prices) > 1 else 0.0,
+        "s15_delta": market_data.get("s15_delta", latest_delta),
+        "volatility": physics["complexity_c"],
+        "momentum": abs(latest_delta) / max(abs(float(prices[-1])) * 0.001, 1e-12) if len(prices) else 0.0,
+        "support": float(prices[-32:].min()) if len(prices) else 0.0,
+        "resistance": float(prices[-32:].max()) if len(prices) else 1.0,
+        "support_thickness": min(1.0, abs(float(market_data.get("s15_volume") or 0.0)) / 1000.0),
+    }
+    spiral_cube = analyze_spiral_cube(cube_input, steps=5).to_dict()
     topology = oracle_prediction["topology"]
     return {
         "symbol": symbol,
@@ -629,6 +644,7 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
             "i_ching_hexagram_symbol": visuals["i_ching_hexagram_symbol"],
         },
         "oracle_prediction": oracle_prediction,
+        "spiral_cube": spiral_cube,
         "coordinate": [
             0.0,
             round(latest_delta, 6),

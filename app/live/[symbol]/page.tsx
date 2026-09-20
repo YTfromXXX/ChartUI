@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import LiveChartView from '@/components/LiveChartView';
-import KnotChart, { type KnotTimelineLayer, type KnotTick } from '@/components/2d/KnotChart';
+import KnotChart, { type KnotFutureProjection, type KnotTimelineLayer, type KnotTick } from '@/components/2d/KnotChart';
 import TarotScene from '@/components/3d/TarotScene';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
@@ -47,6 +47,7 @@ export default function LiveSymbolPage() {
     target: { price: knotTick?.price ?? 0, volatility: knotTick?.volatility ?? 0.2, angle: knotTick?.angle ?? 0, color: '#fb7185', opacity: 0.34 },
     best: { price: knotTick?.price ?? 0, volatility: Math.max(0.08, (knotTick?.volatility ?? 0.2) * 0.72), angle: (knotTick?.angle ?? 0) - 0.9, color: '#a78bfa', opacity: 0.24 },
   };
+  const futureProjection: KnotFutureProjection | undefined = data?.spiral_cube;
   const [strategy, setStrategy] = useState<StrategyContract | null>(null);
   const [mana, setMana] = useState(0);
   const [knotChain, setKnotChain] = useState(0);
@@ -98,7 +99,7 @@ export default function LiveSymbolPage() {
             <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-cyan-200/60">Projection / native canvas</p><h2 className="mt-1 text-lg tracking-[0.12em] text-stone-100">FOUR-LAYER KNOT TRACE</h2></div>
             <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">ring buffer / 60fps</span>
           </div>
-          <KnotChart tick={knotTick} timeline={knotTimeline} height={340} />
+          <KnotChart tick={knotTick} timeline={knotTimeline} futureProjection={futureProjection} height={340} />
         </section>
         {strategy && <section className="mt-5 border border-amber-200/20 bg-amber-100/[0.035] p-4" aria-label="ChartUI strategy contract">
           <div className="flex flex-wrap items-start justify-between gap-4">

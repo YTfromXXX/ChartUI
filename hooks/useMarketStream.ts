@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import type { KnotFutureProjection } from '@/components/2d/KnotChart';
 
 export type Vector3Tuple = [number, number, number];
 export type OracleBranch = { id: string; probability: number; color?: string };
@@ -81,6 +82,7 @@ export interface MarketData {
     trigger_firework: boolean;
     i_ching_hexagram_symbol: string;
   };
+  spiral_cube?: KnotFutureProjection;
   chart_data?: {
     time: number;
     open: number;
@@ -104,6 +106,7 @@ type PartialMarketData = Partial<MarketData> & {
   symbols?: Record<string, PartialMarketData>;
   rendered_physics?: MarketData['rendered_physics'];
   visual_triggers?: MarketData['visual_triggers'];
+  spiral_cube?: KnotFutureProjection;
   oracle_prediction?: {
     topology?: { kappa?: number; tau?: number };
     branches?: Array<{ id?: string; prob?: number; probability?: number; color_hex?: string; color?: string }>;
@@ -170,6 +173,7 @@ function normalizeMarketData(value: PartialMarketData, symbol?: string): MarketD
     physics_event: payload.event === 'knot_burst' || payload.event === 'stable' ? payload.event : undefined,
     rendered_physics: payload.rendered_physics,
     visual_triggers: payload.visual_triggers,
+    spiral_cube: payload.spiral_cube,
     chart_data: payload.chart_data,
     coordinate: parseCoordinate(payload.coordinate ?? payload.coordinates ?? payload.position ?? payload.latest_3d_coordinate),
     curvature: Number(payload.curvature ?? payload.kappa ?? topology.kappa ?? 0),

@@ -64,7 +64,7 @@ export default function SymbolOmniSearch({ symbols, onSelect, onPreview }: Symbo
           <label className="flex items-center gap-3 border border-cyan-200/20 bg-black/20 px-3 py-3 focus-within:border-cyan-100/70">
             <Search className="h-4 w-4 shrink-0 text-cyan-200" />
             <input value={query} onChange={(event) => { setQuery(event.target.value); setIsOpen(true); }} onFocus={() => setIsOpen(true)} placeholder="Search symbol, archetype, or theme" className="min-w-0 flex-1 bg-transparent font-mono text-xs text-stone-100 outline-none placeholder:text-stone-600" />
-            {(query || selectedTags.length) > 0 && <button type="button" onClick={() => { setQuery(''); setSelectedTags([]); }} className="text-stone-500 hover:text-white" aria-label="Clear search"><X className="h-4 w-4" /></button>}
+            {(query.length > 0 || selectedTags.length > 0) && <button type="button" onClick={() => { setQuery(''); setSelectedTags([]); }} className="text-stone-500 hover:text-white" aria-label="Clear search"><X className="h-4 w-4" /></button>}
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
             {tagGroups.flatMap((group) => group.tags).map((tag) => {

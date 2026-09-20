@@ -12,6 +12,16 @@ export type KnotTick = {
   jump?: boolean;
 };
 
+export type SpiralCubePoint = { x: number; y: number; z: number };
+
+export type KnotFutureProjection = {
+  vertical_pressure: number;
+  horizontal_pressure: number;
+  topology: string;
+  topology_label?: string;
+  coordinates: readonly SpiralCubePoint[];
+};
+
 export type KnotTimelineLayer = {
   price: number;
   volatility: number;
@@ -32,6 +42,7 @@ export type KnotChartProps = {
   className?: string;
   height?: number;
   maxTicks?: number;
+  futureProjection?: KnotFutureProjection;
 };
 
 type CanvasSize = { width: number; height: number; dpr: number };
@@ -162,7 +173,96 @@ function drawTimelinePath(ctx: CanvasRenderingContext2D, width: number, height: 
   ctx.restore();
 }
 
-function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: KnotBuffer, timeline: KnotChartProps['timeline'], frame: number) {
+function fallbackProjection(buffer: KnotBuffer, currentIndex: number): KnotFutureProjection {
+  const currentPrice = buffer.prices[currentIndex];
+  const previousPrice = buffer.count > 1 ? buffer.prices[readIndex(buffer, buffer.count - 2)] : currentPrice;
+  const recentStart = Math.max(0, buffer.count - 12);
+  const recentPrices = Array.from({ length: buffer.count - recentStart }, (_, offset) => buffer.prices[readIndex(buffer, recentStart + offset)]);
+  const range = Math.max(Math.max(...recentPrices, currentPrice) - Math.min(...recentPrices, currentPrice), Math.abs(currentPrice) * 0.0001, 0.000001);
+  const verticalPressure = Math.min(1, Math.abs(currentPrice - previousPrice) / range * 0.7 + buffer.tensions[currentIndex] * 0.3);
+  const dwell = recentPrices.filter((price) => Math.abs(price - currentPrice) <= range * 0.18).length / Math.max(1, recentPrices.length);
+  const horizontalPressure = Math.min(1, dwell * 0.7 + (1 - verticalPressure) * 0.3);
+  const topology = verticalPressure > horizontalPressure * 1.18 && verticalPressure > 0.55
+    ? 'trefoil'
+    : horizontalPressure > verticalPressure * 1.18 && horizontalPressure > 0.55 ? 'figure_eight' : 'spiral';
+  const direction = currentPrice >= previousPrice ? 1 : -1;
+  return {
+    vertical_pressure: verticalPressure,
+    horizontal_pressure: horizontalPressure,
+    topology,
+    coordinates: Array.from({ length: 5 }, (_, index) => ({
+      x: 0.5 + Math.sin(index * 1.15) * 0.05,
+      y: Math.max(0, Math.min(1, 0.5 + direction * index * (0.08 + verticalPressure * 0.06))),
+      z: 0.5 + Math.cos(index * 1.15) * 0.05,
+    })),
+  };
+}
+
+function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY: number, width: number, height: number, projection: KnotFutureProjection, frame: number) {
+  const vertical = Math.max(0, Math.min(1, projection.vertical_pressure));
+  const horizontal = Math.max(0, Math.min(1, projection.horizontal_pressure));
+  const futureWidth = Math.min(width * 0.3, 154);
+  const pulse = 1 + Math.sin(frame * 0.06) * 0.045;
+  const scaleX = (0.92 + horizontal * 0.5 - vertical * 0.16) * pulse;
+  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse;
+  const anchorX = targetX + futureWidth * 0.56;
+  const anchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22;
+  const topology = projection.topology.toLowerCase();
+  const color = topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 5]);
+  ctx.beginPath();
+  ctx.moveTo(targetX, targetY);
+  projection.coordinates.forEach((point, index) => {
+    const pointX = targetX + futureWidth * ((index + 1) / Math.max(1, projection.coordinates.length)) * (0.65 + point.x * 0.35);
+    const pointY = targetY + (point.y - 0.5) * height * 0.32;
+    if (index === 0) ctx.lineTo(pointX, pointY);
+    else ctx.quadraticCurveTo(pointX - futureWidth * 0.08, pointY, pointX, pointY);
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(anchorX, anchorY);
+  ctx.scale(scaleX, scaleY);
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([3, 6]);
+  ctx.beginPath();
+  const samples = 48;
+  for (let index = 0; index <= samples; index += 1) {
+    const t = (index / samples) * TAU * (topology.includes('figure') ? 2 : topology.includes('trefoil') ? 3 : 1.5);
+    let localX: number;
+    let localY: number;
+    if (topology.includes('figure')) {
+      const radius = 0.42 + Math.cos(t) * 0.18;
+      localX = Math.sin(t * 1.5) * radius;
+      localY = Math.sin(t) * 0.82;
+    } else if (topology.includes('trefoil')) {
+      localX = (Math.sin(t) + 2 * Math.sin(2 * t)) / 3.2;
+      localY = (Math.cos(t) - 2 * Math.cos(2 * t)) / 3.2;
+    } else {
+      const radius = 0.72 - (index / samples) * 0.46;
+      localX = Math.cos(t) * radius;
+      localY = Math.sin(t) * radius;
+    }
+    const pointX = localX * Math.min(width, height) * 0.14;
+    const pointY = localY * Math.min(width, height) * 0.14;
+    if (index === 0) ctx.moveTo(pointX, pointY);
+    else ctx.lineTo(pointX, pointY);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: KnotBuffer, timeline: KnotChartProps['timeline'], futureProjection: KnotFutureProjection | undefined, frame: number) {
   const { width, height } = size;
   ctx.clearRect(0, 0, width, height);
   if (buffer.count === 0) return;
@@ -187,13 +287,16 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const plotBottom = height - 20;
   const xScale = (plotRight - plotLeft) / Math.max(1, buffer.count - 1);
   const yScale = (plotBottom - plotTop) / priceRange;
-  const targetX = plotRight - 8;
+  const projection = futureProjection ?? fallbackProjection(buffer, currentIndex);
+  const forecastWidth = Math.min(width * 0.3, 154);
+  const targetX = plotRight - forecastWidth - 10;
   const targetY = plotBottom - (currentPrice - minPrice) * yScale;
 
   if (timeline?.t40m) drawTimelinePath(ctx, width, height, currentTension, timeline.t40m, targetX, targetY, 0);
   if (timeline?.t4h) drawTimelinePath(ctx, width, height, currentTension, timeline.t4h, targetX, targetY, 1);
   if (timeline?.target) drawTimelinePath(ctx, width, height, currentTension, timeline.target, targetX, targetY, 2);
   if (timeline?.best) drawTimelinePath(ctx, width, height, currentTension, timeline.best, targetX, targetY, 3);
+  drawFutureKnot(ctx, targetX, targetY, width, height, projection, frame);
 
   ctx.save();
   ctx.strokeStyle = '#dbeafe';
@@ -274,10 +377,11 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256 }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
+  const futureProjectionRef = useRef(futureProjection);
   const historyRef = useRef<readonly KnotTick[] | undefined>(undefined);
   const bufferRef = useRef<KnotBuffer>(createBuffer(Math.max(16, maxTicks)));
   const sizeRef = useRef<CanvasSize>({ width: 640, height, dpr: 1 });
@@ -295,6 +399,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
   useEffect(() => {
     latestTickData.current = tick;
     timelineRef.current = timeline;
+    futureProjectionRef.current = futureProjection;
     if (tick) writeTick(bufferRef.current, tick);
   }, [tick, timeline]);
 
@@ -324,7 +429,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     resize();
     const draw = () => {
       if (!running) return;
-      renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, frame);
+      renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, futureProjectionRef.current, frame);
       frame += 1;
       animationFrame = window.requestAnimationFrame(draw);
     };
