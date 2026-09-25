@@ -25,6 +25,7 @@ from auth import authenticate_user, get_current_user, issue_token
 from database.magic_ledger import MagicLedgerDB
 from market_aggregator import TarotMatrixManager
 from mt5_executor import MT5Executor
+from orderbook_analyzer import OrderBookSpoofFilter, calculate_true_gravity_tensor
 from spiral_cube_analyzer import analyze_spiral_cube
 
 from tarot_engine import (
@@ -83,6 +84,7 @@ MONITOR_CACHE_LOCK = threading.Lock()
 COINGECKO_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 COINGECKO_CACHE_LOCK = threading.Lock()
 LAST_PROMOTED_CARDS: dict[str, str] = {}
+ORDER_BOOK_FILTERS: dict[str, OrderBookSpoofFilter] = {}
 
 
 def _oracle_prediction(price_history: Any, order_book: dict[str, Any] | None) -> dict[str, Any]:
@@ -113,6 +115,10 @@ def _dummy_knot_payload(symbol: str) -> dict[str, Any]:
         price_history,
         {"bid_volume": random.uniform(100.0, 1000.0), "ask_volume": random.uniform(100.0, 1000.0)},
     )
+    gravity_tensor = calculate_true_gravity_tensor({
+        "bids": [{"price": price - 0.3, "volume": 800.0, "lifespan_seconds": 8.0}],
+        "asks": [{"price": price + 0.3, "volume": 420.0, "lifespan_seconds": 8.0}],
+    })
     return {
         "event": "KNOT_UPDATE", "symbol": symbol,
         "major_arcana": "0_THE_FOOL" if symbol.startswith("DOGE") else "4_THE_EMPEROR",
@@ -124,6 +130,7 @@ def _dummy_knot_payload(symbol: str) -> dict[str, Any]:
         "hexagram_binary": format(random.randrange(64), "06b"),
         "tri_layer": {"macro": "TRENDING", "meso": "KNOT_FORMED", "micro": "PRESSURE"},
         "oracle_prediction": oracle_prediction,
+        "true_gravity_tensor": gravity_tensor,
         "coordinate": [
             round(delta * 2.0, 4),
             round((rsi - 50.0) / 20.0, 4),
@@ -499,6 +506,13 @@ def fetch_and_calculate_sync(symbol: str | None = None) -> dict[str, Any] | None
                 continue
             signal = _serialize_tick(tick)
             signal["symbol"] = current_symbol
+            order_book = _fetch_order_book(current_symbol)
+            if order_book is not None:
+                signal["order_book"] = order_book
+                signal["true_gravity_tensor"] = calculate_true_gravity_tensor(
+                    order_book,
+                    tracker=ORDER_BOOK_FILTERS.setdefault(current_symbol, OrderBookSpoofFilter()),
+                )
             m7_frame = _fetch_m7_frame(current_symbol)
             signal["wuxing_phase"] = calculate_wuxing_phase(m7_frame) if m7_frame is not None else None
             minor_card = calculate_minor_arcana(m7_frame, symbol=current_symbol) if m7_frame is not None else None
@@ -588,6 +602,32 @@ def _serialize_tick(tick: Any) -> dict[str, Any]:
     }
 
 
+def _fetch_order_book(symbol: str) -> dict[str, list[dict[str, float]]] | None:
+    """Read the terminal depth snapshot without making order-book support mandatory."""
+    if mt5 is None or not hasattr(mt5, "market_book_get"):
+        return None
+    try:
+        entries = mt5.market_book_get(symbol)
+    except Exception:
+        logger.exception("Failed to read market book for %s.", symbol)
+        return None
+    if not entries:
+        return None
+
+    bid_types = {getattr(mt5, "BOOK_TYPE_BUY", 0), getattr(mt5, "BOOK_TYPE_BUY_MARKET", 2)}
+    ask_types = {getattr(mt5, "BOOK_TYPE_SELL", 1), getattr(mt5, "BOOK_TYPE_SELL_MARKET", 3)}
+    book: dict[str, list[dict[str, float]]] = {"bids": [], "asks": []}
+    for entry in entries:
+        entry_type = getattr(entry, "type", None)
+        side = "bids" if entry_type in bid_types else "asks" if entry_type in ask_types else None
+        price = getattr(entry, "price", None)
+        volume = getattr(entry, "volume", getattr(entry, "volume_real", None))
+        if side is None or not isinstance(price, (int, float)) or not isinstance(volume, (int, float)) or volume <= 0:
+            continue
+        book[side].append({"price": float(price), "volume": float(volume)})
+    return book if book["bids"] or book["asks"] else None
+
+
 def _major_arcana_for_symbol(symbol: str) -> str | None:
     """Return the configured Major Arcana card for a watchlist symbol."""
     for entry in MAJOR_ARCANA_SYMBOLS.values():
@@ -613,7 +653,14 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     chart_data = _chart_data_from_frame(history) if isinstance(history, pd.DataFrame) else None
     price_history = market_data.get("price_history", history)
     oracle_prediction = _oracle_prediction(price_history, market_data.get("order_book"))
+    gravity_tensor = market_data.get("true_gravity_tensor")
+    if not isinstance(gravity_tensor, dict):
+        gravity_tensor = calculate_true_gravity_tensor(
+            market_data.get("order_book"),
+            tracker=ORDER_BOOK_FILTERS.setdefault(symbol, OrderBookSpoofFilter()),
+        )
     prices = pd.to_numeric(pd.Series(price_history), errors="coerce").dropna().to_numpy(dtype=float)
+    current_price = float(market_data.get("price") or (prices[-1] if len(prices) else 0.0))
     latest_delta = float(prices[-1] - prices[-2]) if len(prices) > 1 else 0.0
     history_volumes = history["volume"] if isinstance(history, pd.DataFrame) and "volume" in history else history["tick_volume"] if isinstance(history, pd.DataFrame) and "tick_volume" in history else pd.Series(dtype=float)
     cube_input = {
@@ -633,6 +680,7 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     return {
         "symbol": symbol,
         "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
+        "current_price": current_price,
         "rendered_physics": {
             key: physics[key]
             for key in ("thickness_r", "tension_t", "complexity_c", "tornado_tilt_deg", "gravity_g")
@@ -644,6 +692,7 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
             "i_ching_hexagram_symbol": visuals["i_ching_hexagram_symbol"],
         },
         "oracle_prediction": oracle_prediction,
+        "true_gravity_tensor": gravity_tensor,
         "spiral_cube": spiral_cube,
         "coordinate": [
             0.0,

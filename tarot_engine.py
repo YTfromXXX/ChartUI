@@ -300,6 +300,24 @@ def evaluate_court_card(
     return "KNIGHT_OF_WANDS"
 
 
+def evaluate_court_promotion(
+    s15_frame: pd.DataFrame,
+    minor_card: str | None,
+    macro_trend: str | None,
+    volatility_weight: float = 1.0,
+) -> str | None:
+    """Promote a Minor Arcana state when recent S15 flow confirms the setup."""
+    if not isinstance(s15_frame, pd.DataFrame) or minor_card is None:
+        return minor_card
+    close = pd.to_numeric(s15_frame.get("close", pd.Series(dtype=float)), errors="coerce").dropna()
+    open_values = pd.to_numeric(s15_frame.get("open", pd.Series(dtype=float)), errors="coerce").dropna()
+    if close.empty or open_values.empty:
+        return minor_card
+    delta = float(close.tail(4).sum() - open_values.tail(4).sum())
+    micro_status = "FILLING" if delta * max(float(volatility_weight), 0.0) > 0 else "STABLE"
+    return evaluate_court_card(minor_card, micro_status, macro_trend)
+
+
 ICHING_SYMBOLS = [
     "䷀", "䷁", "䷂", "䷃", "䷄", "䷅", "䷆", "䷇", "䷈", "䷉", "䷊", "䷋", "䷌", "䷍", "䷎", "䷏",
     "䷐", "䷑", "䷒", "䷓", "䷔", "䷕", "䷖", "䷗", "䷘", "䷙", "䷚", "䷛", "䷜", "䷝", "䷞", "䷟",
@@ -400,6 +418,75 @@ def calculate_iching_visuals(volatility: float, timestamp: datetime | None = Non
     decimal = (int(round(normalized * 63.0)) + seasonal * 7) % 64
     color_index = (decimal // 8 + seasonal) % len(_ICHING_COLORS)
     return {"i_ching_hexagram_symbol": ICHING_SYMBOLS[decimal], "background_hex": _ICHING_COLORS[color_index]}
+
+
+def calculate_iching_weight(frame: pd.DataFrame, element: str = "EARTH") -> dict[str, Any]:
+    """Encode six recent candles as a hexagram and derive a bounded volatility weight."""
+    if not isinstance(frame, pd.DataFrame) or "close" not in frame.columns:
+        return {"hexagram_decimal": 0, "hexagram_binary": "000000", "volatility_weight": 1.0}
+
+    close = pd.to_numeric(frame["close"], errors="coerce").dropna().tail(6)
+    if len(close) < 6:
+        return {"hexagram_decimal": 0, "hexagram_binary": "000000", "volatility_weight": 1.0}
+    if "open" in frame.columns:
+        open_values = pd.to_numeric(frame.loc[close.index, "open"], errors="coerce").fillna(close)
+        bits = "".join("1" if closing >= opening else "0" for closing, opening in zip(close, open_values))
+    else:
+        deltas = close.diff().fillna(0.0)
+        bits = "".join("1" if delta >= 0 else "0" for delta in deltas)
+
+    decimal = int(bits, 2)
+    returns = close.pct_change().replace([float("inf"), -float("inf")], pd.NA).dropna()
+    volatility = float(returns.std()) if len(returns) > 1 else 0.0
+    coefficient = ELEMENT_FIELD_COEFFICIENTS.get(str(element).upper(), 1.0)
+    volatility_weight = max(0.5, min(2.0, 1.0 + volatility * 100 * coefficient))
+    return {
+        "hexagram_decimal": decimal,
+        "hexagram_binary": bits,
+        "volatility_weight": round(volatility_weight, 6),
+    }
+
+
+def calculate_gravity_gradient(order_book: Mapping[str, Any] | None) -> float:
+    """Return the normalized bid/ask imbalance used by the topology oracle."""
+    if not isinstance(order_book, Mapping):
+        return 0.0
+    bid_volume = _market_value(order_book, "bid_volume", "buy_volume")
+    ask_volume = _market_value(order_book, "ask_volume", "sell_volume")
+    return (bid_volume - ask_volume) / max(bid_volume + ask_volume, 1e-12) if bid_volume + ask_volume else 0.0
+
+
+def calculate_knot_topology(price_history: Sequence[float] | pd.Series | Any) -> dict[str, float]:
+    """Estimate finite curvature and torsion from first through third price differences."""
+    values = pd.to_numeric(pd.Series(price_history), errors="coerce").dropna().to_list()
+    if len(values) < 3:
+        return {"kappa": 0.0, "tau": 0.0}
+    scale = max(abs(values[-1]), max(values) - min(values), 1e-12)
+    first = [values[index] - values[index - 1] for index in range(1, len(values))]
+    second = [first[index] - first[index - 1] for index in range(1, len(first))]
+    third = [second[index] - second[index - 1] for index in range(1, len(second))]
+    kappa = sqrt(sum(value * value for value in second) / max(len(second), 1)) / scale
+    tau = sum(third) / max(len(third), 1) / scale if third else 0.0
+    return {"kappa": float(kappa), "tau": float(tau)}
+
+
+def calculate_branch_probabilities(kappa: float, tau: float, gravity_tensor: float) -> list[dict[str, float | str]]:
+    """Distribute oracle mass across the four stable Minor Arcana attractors."""
+    curvature = max(0.0, float(kappa))
+    torsion = float(tau)
+    gravity = max(-1.0, min(1.0, float(gravity_tensor)))
+    raw = [
+        1.0 + curvature + max(gravity, 0.0),
+        1.0 + max(-torsion, 0.0) + max(-gravity, 0.0),
+        1.0 + max(torsion, 0.0),
+        1.0 + 1.0 / (1.0 + curvature + abs(torsion)),
+    ]
+    total = sum(raw)
+    ids_and_colors = (("wands", "#FFD700"), ("swords", "#00FFFF"), ("cups", "#FFFFFF"), ("pentacles", "#800080"))
+    return [
+        {"id": identifier, "prob": round(score / total * 100.0, 6), "color_hex": color}
+        for (identifier, color), score in zip(ids_and_colors, raw)
+    ]
 
 
 def analyze_4d_timeline(symbol: str, target_time: datetime | str) -> dict[str, Any]:

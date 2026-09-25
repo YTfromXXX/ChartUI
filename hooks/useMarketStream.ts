@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { KnotFutureProjection } from '@/components/2d/KnotChart';
+import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 
 export type Vector3Tuple = [number, number, number];
 export type OracleBranch = { id: string; probability: number; color?: string };
@@ -49,6 +50,7 @@ export function usePortfolioMock() {
 export interface MarketData {
   symbol: string;
   timestamp?: string;
+  current_price?: number;
   major_arcana: string;
   knot_type?: string;
   market_behavior?: string;
@@ -83,6 +85,7 @@ export interface MarketData {
     i_ching_hexagram_symbol: string;
   };
   spiral_cube?: KnotFutureProjection;
+  true_gravity_tensor?: TrueGravityTensor;
   chart_data?: {
     time: number;
     open: number;
@@ -107,6 +110,7 @@ type PartialMarketData = Partial<MarketData> & {
   rendered_physics?: MarketData['rendered_physics'];
   visual_triggers?: MarketData['visual_triggers'];
   spiral_cube?: KnotFutureProjection;
+  true_gravity_tensor?: TrueGravityTensor;
   oracle_prediction?: {
     topology?: { kappa?: number; tau?: number };
     branches?: Array<{ id?: string; prob?: number; probability?: number; color_hex?: string; color?: string }>;
@@ -152,6 +156,7 @@ function normalizeMarketData(value: PartialMarketData, symbol?: string): MarketD
   return {
     symbol: resolvedSymbol,
     timestamp: payload.timestamp,
+    current_price: payload.current_price,
     major_arcana: payload.major_arcana ?? '',
     knot_type: payload.knot_type,
     market_behavior: payload.market_behavior,
@@ -174,6 +179,7 @@ function normalizeMarketData(value: PartialMarketData, symbol?: string): MarketD
     rendered_physics: payload.rendered_physics,
     visual_triggers: payload.visual_triggers,
     spiral_cube: payload.spiral_cube,
+    true_gravity_tensor: payload.true_gravity_tensor,
     chart_data: payload.chart_data,
     coordinate: parseCoordinate(payload.coordinate ?? payload.coordinates ?? payload.position ?? payload.latest_3d_coordinate),
     curvature: Number(payload.curvature ?? payload.kappa ?? topology.kappa ?? 0),

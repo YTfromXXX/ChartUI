@@ -99,7 +99,7 @@ export default function LiveSymbolPage() {
             <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-cyan-200/60">Projection / native canvas</p><h2 className="mt-1 text-lg tracking-[0.12em] text-stone-100">FOUR-LAYER KNOT TRACE</h2></div>
             <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">ring buffer / 60fps</span>
           </div>
-          <KnotChart tick={knotTick} timeline={knotTimeline} futureProjection={futureProjection} height={340} />
+          <KnotChart tick={knotTick} timeline={knotTimeline} futureProjection={futureProjection} gravityTensor={data?.true_gravity_tensor} height={340} />
         </section>
         {strategy && <section className="mt-5 border border-amber-200/20 bg-amber-100/[0.035] p-4" aria-label="ChartUI strategy contract">
           <div className="flex flex-wrap items-start justify-between gap-4">
