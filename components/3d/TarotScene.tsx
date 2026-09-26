@@ -10,7 +10,7 @@ import CameraController from './CameraController';
 import DataTornado from './DataTornado';
 import HexagramTemple from './HexagramTemple';
 import KnotFireworks from './KnotFireworks';
-import ProbabilityBranches from './ProbabilityBranches';
+import ProbabilityBranches, { type SquareArcTarget } from './ProbabilityBranches';
 import type { OracleBranch, Vector3Tuple } from '@/hooks/useMarketStream';
 import { getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
 
@@ -35,6 +35,9 @@ type TarotSceneData = {
   oracleBranches?: OracleBranch[];
   resonance?: number;
   transitionRoute?: TransitionRoute;
+  squareArcTargets?: SquareArcTarget[];
+  currentPrice?: number;
+  squareArcStandardDeviation?: number;
 };
 
 type TarotSceneProps = {
@@ -140,7 +143,13 @@ export default function TarotScene({ data, className }: TarotSceneProps) {
         <group position={[0.25, 0, 0]}>
           <HexagramTemple hexagramBinary={data.hexagramBinary ?? '101100'} />
           <DataTornado s15Volume={data.s15Volume} s15Delta={data.s15Delta} wuxingPhase={data.wuxingPhase} knotType={data.knotType ?? ''} isOverdrive={data.isOverdrive ?? false} trajectory={data.trajectory} />
-          <ProbabilityBranches origin={data.trajectory?.at(-1)} branches={data.oracleBranches ?? []} />
+          <ProbabilityBranches
+            origin={data.trajectory?.at(-1)}
+            branches={data.oracleBranches ?? []}
+            squareArcTargets={data.squareArcTargets}
+            currentPrice={data.currentPrice}
+            standardDeviation={data.squareArcStandardDeviation}
+          />
           <KnotFireworks burstPosition={knotCenter} energy={data.elasticEnergy ?? 0} tarotColor={data.tarotColor ?? '#e0ff00'} backgroundHex={data.backgroundHex} triggerFirework={data.triggerFirework} burstId={data.burstId} active={Boolean(data.triggerFirework)} />
         </group>
         <VoxelCollapse active={route === 'voxel' && Boolean(data.triggerFirework)} />
