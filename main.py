@@ -38,6 +38,7 @@ from tarot_engine import (
     calculate_knot_topology,
     calculate_minor_arcana,
     calculate_physics_parameters,
+    calculate_square_arcs,
     evaluate_court_promotion,
     evaluate_court_card,
     map_market_archetype,
@@ -180,6 +181,14 @@ class PackageLimitOrderRequest(BaseModel):
     lot_size: float = Field(default=0.01, gt=0)
     action: str = Field(default="LONG", min_length=1)
     strategy: str = Field(min_length=1)
+
+
+class SquareArcRequest(BaseModel):
+    """Validated topology request from the LIVE PROJECTION knot palette."""
+
+    current_price: float = Field(gt=0)
+    standard_deviation: float = Field(gt=0)
+    knot_ids: list[int] = Field(default_factory=list, max_length=22)
 
 
 async def execute_trade(symbol: str, action: str) -> None:
@@ -784,6 +793,19 @@ def settlement_tickets(limit: int = 80) -> dict[str, Any]:
             for row in rows
         ]
     }
+
+
+@app.post("/api/square-arcs")
+def square_arcs(request: SquareArcRequest) -> dict[str, Any]:
+    """Return non-executing 3D Square Arc targets for the selected knot set."""
+    try:
+        return calculate_square_arcs(
+            current_price=request.current_price,
+            standard_deviation=request.standard_deviation,
+            knot_ids=request.knot_ids,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/execute_package")
