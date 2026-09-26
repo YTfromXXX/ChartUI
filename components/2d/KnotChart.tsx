@@ -56,6 +56,7 @@ export type KnotChartProps = {
   futureProjection?: KnotFutureProjection;
   gravityTensor?: TrueGravityTensor;
   guideTracking?: boolean;
+  guidePointer?: GuidePointer;
   onGuideTrackingChange?: (active: boolean) => void;
   onGuidePointerChange?: (pointer: GuidePointer) => void;
   selectedKnotIds?: readonly number[];
@@ -876,14 +877,14 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
   const futureProjectionRef = useRef(futureProjection);
   const gravityTensorRef = useRef(gravityTensor);
   const guideTrackingRef = useRef(guideTracking);
-  const guidePointerRef = useRef<GuidePointer | undefined>(undefined);
+  const guidePointerRef = useRef<GuidePointer | undefined>(guidePointer);
   const selectedKnotIdsRef = useRef<readonly number[]>(selectedKnotIds);
   const gestureStartRef = useRef<{ count: number; x: number; y: number; lastX: number; lastY: number; distance: number; shellScale: number; timestamp: number } | undefined>(undefined);
   const historyRef = useRef<readonly KnotTick[] | undefined>(undefined);
@@ -909,6 +910,14 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     selectedKnotIdsRef.current = selectedKnotIds;
     if (tick) writeTick(bufferRef.current, tick);
   }, [tick, timeline, futureProjection, gravityTensor, guideTracking, selectedKnotIds]);
+
+  useEffect(() => {
+    if (!guidePointer) return;
+    guidePointerRef.current = {
+      x: Math.max(0, Math.min(1, guidePointer.x)),
+      y: Math.max(0, Math.min(1, guidePointer.y)),
+    };
+  }, [guidePointer]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

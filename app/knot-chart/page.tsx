@@ -28,6 +28,39 @@ type KnotTimelineLayerState = {
 
 type BtcUsdTicker = { price: number; timestamp: number };
 
+type GuideInputProps = {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix?: string;
+  onChange: (value: number) => void;
+};
+
+function GuideInput({ label, value, min, max, step, suffix, onChange }: GuideInputProps) {
+  return (
+    <label className="block">
+      <span className="mb-1 block font-mono text-[8px] uppercase tracking-[0.16em] text-stone-600">{label}</span>
+      <div className="flex items-center border border-white/10 bg-black/20 focus-within:border-cyan-200/50">
+        <input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next)));
+          }}
+          className="min-w-0 flex-1 bg-transparent px-2 py-1.5 font-mono text-[11px] text-cyan-50 outline-none"
+        />
+        {suffix && <span className="pr-2 font-mono text-[8px] text-stone-600">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
 function useBtcUsdTicker() {
   const [ticker, setTicker] = useState<BtcUsdTicker>();
   const [isConnected, setIsConnected] = useState(false);
@@ -182,6 +215,11 @@ export default function KnotChartPage() {
     setGuidePointer((current) => Math.abs(current.x - pointer.x) > 0.005 || Math.abs(current.y - pointer.y) > 0.005 ? pointer : current);
   }
 
+  function updateGuideCoordinate(axis: keyof GuidePointer, percent: number) {
+    setGuidePointer((current) => ({ ...current, [axis]: Math.max(0, Math.min(1, percent / 100)) }));
+    setIsGuideTracking(true);
+  }
+
   function toggleKnot(id: number) {
     if (!selectionLocked) setSelectedKnotIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
@@ -236,26 +274,32 @@ export default function KnotChartPage() {
             </div>
             <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
               <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
-              <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={liveData?.spiral_cube} guideTracking={isGuideTracking} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
+              <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={liveData?.spiral_cube} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
               {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live BTCUSD market data</div>}
               <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
-              <div className="absolute bottom-4 left-4 w-[min(320px,calc(100%-2rem))] border border-cyan-200/20 bg-[#020814]/85 p-3 backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2"><MousePointer2 className={`h-3.5 w-3.5 ${isGuideTracking ? 'text-cyan-200' : 'text-stone-600'}`} /><span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-300">Mouse guide</span></div>
-                  <button type="button" onClick={() => setIsGuideTracking((current) => !current)} className={`border px-2 py-1 font-mono text-[8px] uppercase tracking-[0.16em] ${isGuideTracking ? 'border-cyan-200/50 bg-cyan-100/10 text-cyan-100' : 'border-white/15 text-stone-500 hover:border-cyan-200/35 hover:text-cyan-100'}`}>{isGuideTracking ? 'Tracking / on' : 'Tracking / off'}</button>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
-                  <span>Center / {Math.round(guidePointer.x * 100)}%, {Math.round(guidePointer.y * 100)}%</span><span>Bands / 4 chromatic</span>
-                  <span className="flex items-center gap-1"><ScanLine className="h-3 w-3 text-violet-300" /> L∞ square projection</span><span>Sweep / 112°–171°</span>
-                  <span>Time density / {gridTimeScale.toFixed(2)}×</span><span>Shell / {shellScale.toFixed(2)}×</span>
-                  <span>Pattern / {patternOffset + 1}-4</span><span>{selectionLocked ? 'Selection / locked' : 'Selection / fluid'}</span>
-                </div>
-                <p className="mt-2 font-mono text-[8px] leading-4 text-stone-600">Double-click toggles mouse tracking. Touch: 2F tap locks selection, drag changes density or angle, pinch scales shell; 3F opens tickets or cycles patterns; 4F changes inventory pages.</p>
-              </div>
               <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
               </div>
               <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
             </div>
+            <section className="mt-4 border border-cyan-200/20 bg-[#020814]/85 p-3 backdrop-blur-sm" aria-label="Mouse guide controls">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2"><MousePointer2 className={`h-3.5 w-3.5 ${isGuideTracking ? 'text-cyan-200' : 'text-stone-600'}`} /><span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-300">Mouse guide / bottom control</span></div>
+                <button type="button" onClick={() => setIsGuideTracking((current) => !current)} className={`border px-2 py-1 font-mono text-[8px] uppercase tracking-[0.16em] ${isGuideTracking ? 'border-cyan-200/50 bg-cyan-100/10 text-cyan-100' : 'border-white/15 text-stone-500 hover:border-cyan-200/35 hover:text-cyan-100'}`}>{isGuideTracking ? 'Tracking / on' : 'Tracking / off'}</button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                <GuideInput label="Cursor X" value={Math.round(guidePointer.x * 100)} min={0} max={100} step={1} suffix="%" onChange={(value) => updateGuideCoordinate('x', value)} />
+                <GuideInput label="Cursor Y" value={Math.round(guidePointer.y * 100)} min={0} max={100} step={1} suffix="%" onChange={(value) => updateGuideCoordinate('y', value)} />
+                <GuideInput label="Time density" value={Number(gridTimeScale.toFixed(2))} min={0.55} max={1.75} step={0.05} suffix="×" onChange={setGridTimeScale} />
+                <GuideInput label="Shell scale" value={Number(shellScale.toFixed(2))} min={0.65} max={1.45} step={0.05} suffix="×" onChange={setShellScale} />
+                <GuideInput label="Intrusion angle" value={Math.round(intrusionRotation * 180 / Math.PI)} min={-180} max={180} step={1} suffix="°" onChange={(value) => setIntrusionRotation(value * Math.PI / 180)} />
+                <GuideInput label="Pattern" value={patternOffset + 1} min={1} max={4} step={1} suffix="/4" onChange={(value) => setPatternOffset(Math.round(value) - 1)} />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
+                <span className="flex items-center gap-1"><ScanLine className="h-3 w-3 text-violet-300" /> L∞ square projection / 4 chromatic bands</span>
+                <span>Center / {Math.round(guidePointer.x * 100)}%, {Math.round(guidePointer.y * 100)}% / {selectionLocked ? 'Selection locked' : 'Selection fluid'}</span>
+              </div>
+              <p className="mt-2 font-mono text-[8px] leading-4 text-stone-600">X/Y updates immediately position the guide cursor and enable tracking. Double-click the projection to toggle pointer tracking. Touch gestures remain available for density, intrusion, shell, pattern, and inventory control.</p>
+            </section>
           </section>
 
           <aside className="border-l border-cyan-100/10 bg-[#050b13]/90 p-4 sm:p-6">
