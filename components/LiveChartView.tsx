@@ -2,15 +2,18 @@
 
 import { CandlestickSeries, ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
+import ProjectionField, { PROJECTION_TIMEFRAMES, type ProjectionTimeframe } from './ProjectionField';
 import type { MarketData } from '@/hooks/useMarketStream';
 
 type LiveChartViewProps = {
   symbol: string;
   data?: MarketData;
   isConnected: boolean;
+  timeframe: ProjectionTimeframe;
+  onTimeframeChange: (timeframe: ProjectionTimeframe) => void;
 };
 
-export default function LiveChartView({ symbol, data, isConnected }: LiveChartViewProps) {
+export default function LiveChartView({ symbol, data, isConnected, timeframe, onTimeframeChange }: LiveChartViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -48,11 +51,17 @@ export default function LiveChartView({ symbol, data, isConnected }: LiveChartVi
 
   return (
     <section className="overflow-hidden border border-cyan-300/20 bg-[#070b12] shadow-[0_0_70px_rgba(34,211,238,0.08)]">
-      <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 font-mono text-[10px] uppercase tracking-[0.24em]">
-        <span className="text-stone-400">M7 / live market field</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 font-mono text-[10px] uppercase tracking-[0.24em]">
+        <span className="text-stone-400">Gspace / live market field</span>
+        <div className="flex items-center gap-1" aria-label="Projection timeframe">
+          {PROJECTION_TIMEFRAMES.map((option) => <button key={option} type="button" onClick={() => onTimeframeChange(option)} aria-pressed={timeframe === option} className={`border px-2 py-1 text-[8px] tracking-[0.1em] transition-colors ${timeframe === option ? 'border-cyan-200/65 bg-cyan-100/10 text-cyan-100' : 'border-white/10 text-stone-600 hover:border-cyan-200/35 hover:text-cyan-100'}`}>{option}</button>)}
+        </div>
         <span className={isConnected ? 'text-emerald-300' : 'text-stone-600'}>{isConnected ? 'connected' : 'awaiting signal'}</span>
       </div>
-      <div ref={containerRef} className="h-[460px] w-full" />
+      <div className="relative h-[460px] w-full">
+        <div ref={containerRef} className="h-full w-full" />
+        <ProjectionField currentPrice={data?.current_price ?? data?.chart_data?.close} gravityTensor={data?.true_gravity_tensor} projection={data?.spiral_cube} timeframe={timeframe} />
+      </div>
       {!data?.chart_data && <div className="border-t border-white/10 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-600">Waiting for {symbol} chart data</div>}
     </section>
   );

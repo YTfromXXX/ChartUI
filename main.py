@@ -86,6 +86,14 @@ COINGECKO_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 COINGECKO_CACHE_LOCK = threading.Lock()
 LAST_PROMOTED_CARDS: dict[str, str] = {}
 ORDER_BOOK_FILTERS: dict[str, OrderBookSpoofFilter] = {}
+TIMEFRAME_ANALYSIS: dict[str, dict[str, float | int]] = {
+    "1m": {"gravity_span": 12, "spiral_scale": 0.58},
+    "5m": {"gravity_span": 24, "spiral_scale": 0.76},
+    "15m": {"gravity_span": 64, "spiral_scale": 1.0},
+    "1H": {"gravity_span": 160, "spiral_scale": 1.28},
+    "4H": {"gravity_span": 320, "spiral_scale": 1.62},
+    "1D": {"gravity_span": 720, "spiral_scale": 2.0},
+}
 
 
 def _oracle_prediction(price_history: Any, order_book: dict[str, Any] | None) -> dict[str, Any]:
@@ -712,6 +720,57 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _timeframe_projection_payload(payload: dict[str, Any], timeframe: str | None) -> dict[str, Any]:
+    """Rescale live gravity and cube geometry for a validated analysis horizon."""
+    normalized_timeframe = timeframe if timeframe in TIMEFRAME_ANALYSIS else "15m"
+    settings = TIMEFRAME_ANALYSIS[normalized_timeframe]
+    span = int(settings["gravity_span"])
+    space_scale = float(settings["spiral_scale"])
+    gravity_scale = max(0.55, min(1.8, math.sqrt(span / 64)))
+    adjusted = dict(payload)
+
+    tensor = payload.get("true_gravity_tensor")
+    if isinstance(tensor, dict):
+        gradient = tensor.get("gradient")
+        adjusted_tensor = dict(tensor)
+        adjusted_tensor["magnitude"] = round(float(tensor.get("magnitude", 0.0)) * gravity_scale, 8)
+        adjusted_tensor["net_force"] = round(float(tensor.get("net_force", 0.0)) * gravity_scale, 8)
+        if isinstance(gradient, dict):
+            adjusted_tensor["gradient"] = {
+                "x": round(float(gradient.get("x", 0.0)) * gravity_scale, 8),
+                "y": round(float(gradient.get("y", 0.0)) * gravity_scale, 8),
+            }
+        centers = tensor.get("centers")
+        if isinstance(centers, list):
+            adjusted_tensor["centers"] = [
+                {**center, "strength": round(float(center.get("strength", 0.0)) * gravity_scale, 8)}
+                for center in centers
+                if isinstance(center, dict)
+            ]
+        adjusted["true_gravity_tensor"] = adjusted_tensor
+
+    cube = payload.get("spiral_cube")
+    if isinstance(cube, dict):
+        adjusted_cube = dict(cube)
+        coordinates = cube.get("coordinates")
+        if isinstance(coordinates, list):
+            adjusted_cube["coordinates"] = [
+                {
+                    "x": round(max(0.0, min(1.0, 0.5 + (float(point.get("x", 0.5)) - 0.5) * space_scale)), 6),
+                    "y": round(max(0.0, min(1.0, 0.5 + (float(point.get("y", 0.5)) - 0.5) * space_scale)), 6),
+                    "z": round(max(0.0, min(1.0, 0.5 + (float(point.get("z", 0.5)) - 0.5) * space_scale)), 6),
+                }
+                for point in coordinates
+                if isinstance(point, dict)
+            ]
+        adjusted["spiral_cube"] = adjusted_cube
+
+    adjusted["analysis_timeframe"] = normalized_timeframe
+    adjusted["gravity_span"] = span
+    adjusted["spiral_space_scale"] = space_scale
+    return adjusted
+
+
 def _tarot_screener_payload(symbol: str, signal: dict[str, Any]) -> dict[str, Any]:
     """Combine a symbol signal with its tri-layer and court-card interpretation."""
     minor_card = signal.get("minor_arcana")
@@ -1006,14 +1065,15 @@ async def live_websocket_endpoint(websocket: WebSocket, symbol: str) -> None:
     """Stream the 3D physics contract for one symbol once per second."""
     await websocket.accept()
     normalized_symbol = symbol.strip().upper()
+    timeframe = websocket.query_params.get("timeframe")
     try:
         while True:
             result = await asyncio.to_thread(fetch_and_calculate_sync, normalized_symbol)
             signal = result.get("symbols", {}).get(normalized_symbol) if result else None
             if isinstance(signal, dict) and isinstance(signal.get("live_payload"), dict):
-                await websocket.send_json(signal["live_payload"])
+                await websocket.send_json(_timeframe_projection_payload(signal["live_payload"], timeframe))
             else:
-                await websocket.send_json(_live_payload(normalized_symbol, {"price": 1.0}))
+                await websocket.send_json(_timeframe_projection_payload(_live_payload(normalized_symbol, {"price": 1.0}), timeframe))
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         logger.info("Live WebSocket client disconnected for %s.", normalized_symbol)

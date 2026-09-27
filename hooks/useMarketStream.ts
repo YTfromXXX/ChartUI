@@ -51,6 +51,9 @@ export interface MarketData {
   symbol: string;
   timestamp?: string;
   current_price?: number;
+  analysis_timeframe?: string;
+  gravity_span?: number;
+  spiral_space_scale?: number;
   major_arcana: string;
   knot_type?: string;
   market_behavior?: string;
@@ -157,6 +160,9 @@ function normalizeMarketData(value: PartialMarketData, symbol?: string): MarketD
     symbol: resolvedSymbol,
     timestamp: payload.timestamp,
     current_price: payload.current_price,
+    analysis_timeframe: payload.analysis_timeframe,
+    gravity_span: payload.gravity_span,
+    spiral_space_scale: payload.spiral_space_scale,
     major_arcana: payload.major_arcana ?? '',
     knot_type: payload.knot_type,
     market_behavior: payload.market_behavior,
@@ -199,7 +205,7 @@ function parsePayload(payload: PartialMarketData): MarketData[] {
   return normalized ? [normalized] : [];
 }
 
-export function useMarketStream(url: string, symbol?: string) {
+export function useMarketStream(url: string, symbol?: string, timeframe?: string) {
   const { data: session } = useSession();
   const [marketDataMap, setMarketDataMap] = useState<Record<string, MarketData>>({});
   const [coordinateHistoryMap, setCoordinateHistoryMap] = useState<Record<string, Vector3Tuple[]>>({});
@@ -228,7 +234,10 @@ export function useMarketStream(url: string, symbol?: string) {
       const streamUrl = symbol
         ? `${url.replace(/\/ws\/(signals|live\/[^/]+|oracle\/v1\/stream\/[^/]+)\/?$/, '')}/ws/oracle/v1/stream/${encodeURIComponent(symbol.toUpperCase())}`
         : url;
-      const ws = new WebSocket(streamUrl);
+      const timeframeUrl = timeframe
+        ? `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}timeframe=${encodeURIComponent(timeframe)}`
+        : streamUrl;
+      const ws = new WebSocket(timeframeUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -296,7 +305,7 @@ export function useMarketStream(url: string, symbol?: string) {
       wsRef.current = null;
       setIsConnected(false);
     };
-  }, [url, symbol, session]);
+  }, [url, symbol, timeframe, session]);
 
   return { marketDataMap, coordinateHistoryMap, isConnected, burstEvent, burstId };
 }

@@ -9,6 +9,7 @@ import KnotChart, { type KnotFutureProjection, type KnotTimelineLayer, type Knot
 import KnotGlyphPalette from '@/components/KnotGlyphPalette';
 import type { SquareArcTarget } from '@/components/3d/ProbabilityBranches';
 import TarotScene from '@/components/3d/TarotScene';
+import type { ProjectionTimeframe } from '@/components/ProjectionField';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useKnotSelection } from '@/hooks/useKnotSelection';
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
@@ -27,7 +28,8 @@ export default function LiveSymbolPage() {
   const params = useParams<{ symbol: string }>();
   const searchParams = useSearchParams();
   const symbol = decodeURIComponent(params.symbol ?? '').toUpperCase();
-  const { marketDataMap, coordinateHistoryMap, isConnected, burstEvent, burstId } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals', symbol);
+  const [projectionTimeframe, setProjectionTimeframe] = useState<ProjectionTimeframe>('15m');
+  const { marketDataMap, coordinateHistoryMap, isConnected, burstEvent, burstId } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals', symbol, projectionTimeframe);
   const data = marketDataMap[symbol];
   const selectedArcana = data?.major_arcana || arcanaBySymbol[symbol] || 'ARCANA_PENDING';
   const physics = data?.rendered_physics;
@@ -139,7 +141,7 @@ export default function LiveSymbolPage() {
             ['Gravity', physics?.gravity_g],
           ].map(([label, value]) => <div key={label as string}><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{typeof value === 'number' ? value.toFixed(3) : '--'}</p></div>)}
         </section>
-        <LiveChartView symbol={symbol} data={data} isConnected={isConnected} />
+        <LiveChartView symbol={symbol} data={data} isConnected={isConnected} timeframe={projectionTimeframe} onTimeframeChange={setProjectionTimeframe} />
         <section className="mt-5 overflow-hidden border border-cyan-200/15 bg-[#020814] p-4" aria-label="High frequency knot projection">
           <div className="mb-3 flex items-end justify-between border-b border-white/10 pb-3">
             <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-cyan-200/60">Projection / native canvas</p><h2 className="mt-1 text-lg tracking-[0.12em] text-stone-100">FOUR-LAYER KNOT TRACE</h2></div>
