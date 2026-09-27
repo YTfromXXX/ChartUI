@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import TarotCard, { type TarotCardProps, type TriLayerStatus, type WuxingPhase } from "@/components/TarotCard";
 import SymbolOmniSearch, { type SearchSymbol, type SymbolTag } from "@/components/SymbolOmniSearch";
 import SingularityOverload from "@/components/SingularityOverload";
+import MatrixGridExplorer, { EXPLORER_SYMBOLS } from "@/components/MatrixGridExplorer";
 import { useMarketStream } from "@/hooks/useMarketStream";
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from "@/lib/portfolio";
 import { Canvas, useFrame } from "@react-three/fiber";
@@ -317,6 +318,14 @@ export default function GalleryPage() {
               </button>
             </motion.div>
           ))}
+        </section>
+
+        <section className="mt-8 border-t border-white/10 pt-6" aria-label="Matrix grid explorer">
+          <div className="mb-3 flex items-center justify-between">
+            <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-violet-200/55">Explorer / matrix grid</p><h2 className="mt-1 text-lg tracking-[0.1em] text-stone-100">SENSOR FIELD</h2></div>
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">{EXPLORER_SYMBOLS.length} symbols / grain · metal · stock · currency · crypto · index</span>
+          </div>
+          <MatrixGridExplorer height={380} />
         </section>
 
         <footer className="mt-8 flex items-center justify-between border-t border-white/10 pt-4 font-mono text-[9px] uppercase tracking-[0.24em] text-stone-600">
