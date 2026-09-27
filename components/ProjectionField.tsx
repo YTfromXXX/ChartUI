@@ -3,6 +3,9 @@
 import { useEffect, useRef } from 'react';
 import type { KnotFutureProjection } from './2d/KnotChart';
 import type { TrueGravityTensor } from './2d/GravityHoneycomb';
+import { computeProjectionGrid } from '@/lib/projectionGrid';
+import { coefficientsFromMarket, planeDistances } from '@/lib/distortionField';
+import { useArcanaTraps } from '@/hooks/useArcanaTraps';
 
 export const PROJECTION_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'] as const;
 export type ProjectionTimeframe = (typeof PROJECTION_TIMEFRAMES)[number];
@@ -86,13 +89,14 @@ export default function ProjectionField({ currentPrice, gravityTensor, projectio
       const netForce = finite(gravityTensor?.net_force);
       const verticalPressure = clamp(finite(projection?.vertical_pressure), 0, 1);
       const horizontalPressure = clamp(finite(projection?.horizontal_pressure), 0, 1);
-      const gridX = width * 0.15;
-      const gridY = height * 0.11;
-      const gridWidth = width * 0.76;
-      const gridHeight = height * 0.78;
-      const cellWidth = gridWidth / 8;
-      const cellHeight = gridHeight / 6;
+      const { gridX, gridY, gridWidth, gridHeight, cellWidth, cellHeight } = computeProjectionGrid(width, height);
       const drift = clamp(netForce * 0.22 + (verticalPressure - horizontalPressure) * 0.36, -0.68, 0.68);
+
+      // Arcana trap system: fit the gravity tensor to a distorted-sphere SH
+      // field and feed the per-cell Dk(t) distances into the trap store so
+      // armed traps can detect a breakout / accelerating approach.
+      const distortionCoefficients = coefficientsFromMarket(verticalPressure, horizontalPressure, magnitude, netForce);
+      useArcanaTraps.getState().recordDistances(planeDistances(distortionCoefficients), time);
       const predictionRange = clamp((0.08 + magnitude * 0.12 + verticalPressure * 0.13) * spaceScale, 0.06, 0.42);
       const boxWidth = gridWidth * clamp(0.25 + horizontalPressure * 0.28, 0.24, 0.58);
       const boxHeight = gridHeight * predictionRange;

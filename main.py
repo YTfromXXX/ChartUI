@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from auth import authenticate_user, get_current_user, issue_token
 from database.magic_ledger import MagicLedgerDB
+from distortion_field import calculate_true_gravity_tensor_distortion_from_payload
 from market_aggregator import TarotMatrixManager
 from mt5_executor import MT5Executor
 from orderbook_analyzer import OrderBookSpoofFilter, calculate_true_gravity_tensor
@@ -197,6 +198,16 @@ class SquareArcRequest(BaseModel):
     current_price: float = Field(gt=0)
     standard_deviation: float = Field(gt=0)
     knot_ids: list[int] = Field(default_factory=list, max_length=22)
+
+
+class DistortionFieldRequest(BaseModel):
+    """Order-book pressure inputs used to fit the 48-plane distortion field."""
+
+    vertical_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    horizontal_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    gravity_magnitude: float = Field(default=0.0, ge=0.0, le=1.0)
+    net_force: float = Field(default=0.0, ge=-1.0, le=1.0)
+    base_radius: float = Field(default=1.0, gt=0.0)
 
 
 async def execute_trade(symbol: str, action: str) -> None:
@@ -865,6 +876,20 @@ def square_arcs(request: SquareArcRequest) -> dict[str, Any]:
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/api/distortion-field")
+def distortion_field(request: DistortionFieldRequest) -> dict[str, Any]:
+    """Returns the 48-plane spherical-harmonic distortion field (Dk(t)) used
+    by the Arcana trap system and Portfolio Radar."""
+
+    return calculate_true_gravity_tensor_distortion_from_payload(
+        vertical_pressure=request.vertical_pressure,
+        horizontal_pressure=request.horizontal_pressure,
+        gravity_magnitude=request.gravity_magnitude,
+        net_force=request.net_force,
+        base_radius=request.base_radius,
+    )
 
 
 @app.post("/api/execute_package")

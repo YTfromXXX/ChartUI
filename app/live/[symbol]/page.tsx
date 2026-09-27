@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import LiveChartView from '@/components/LiveChartView';
 import KnotChart, { type KnotFutureProjection, type KnotTimelineLayer, type KnotTick } from '@/components/2d/KnotChart';
 import KnotGlyphPalette from '@/components/KnotGlyphPalette';
+import ArcanaTacticPalette from '@/components/ArcanaTacticPalette';
 import type { SquareArcTarget } from '@/components/3d/ProbabilityBranches';
 import TarotScene from '@/components/3d/TarotScene';
 import type { ProjectionTimeframe } from '@/components/ProjectionField';
@@ -182,7 +183,10 @@ export default function LiveSymbolPage() {
             squareArcStandardDeviation,
           }}
           />
-          <KnotGlyphPalette />
+          <div className="grid gap-3">
+            <KnotGlyphPalette />
+            <ArcanaTacticPalette />
+          </div>
         </section>
         <p className={`mt-3 font-mono text-[9px] uppercase tracking-[0.2em] ${squareArcError ? 'text-red-300' : 'text-cyan-200/70'}`}>
           {squareArcError ?? `Square Arc field / ${selectedKnots.length} Major Arcana knots linked / ${squareArcTargets.length * 2 || 0} target boxes`}

@@ -3,6 +3,8 @@
 import { CandlestickSeries, ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
 import ProjectionField, { PROJECTION_TIMEFRAMES, type ProjectionTimeframe } from './ProjectionField';
+import TrapDropGrid from './TrapDropGrid';
+import ArcanaTrapShatter from './ArcanaTrapShatter';
 import type { MarketData } from '@/hooks/useMarketStream';
 
 type LiveChartViewProps = {
@@ -61,6 +63,8 @@ export default function LiveChartView({ symbol, data, isConnected, timeframe, on
       <div className="relative h-[460px] w-full">
         <div ref={containerRef} className="h-full w-full" />
         <ProjectionField currentPrice={data?.current_price ?? data?.chart_data?.close} gravityTensor={data?.true_gravity_tensor} projection={data?.spiral_cube} timeframe={timeframe} />
+        <TrapDropGrid />
+        <ArcanaTrapShatter />
       </div>
       {!data?.chart_data && <div className="border-t border-white/10 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-600">Waiting for {symbol} chart data</div>}
     </section>
