@@ -23,8 +23,10 @@ from pydantic import BaseModel, Field
 
 from auth import authenticate_user, get_current_user, issue_token
 from database.magic_ledger import MagicLedgerDB
+from distortion_field import calculate_true_gravity_tensor_distortion_from_payload
 from market_aggregator import TarotMatrixManager
 from mt5_executor import MT5Executor
+from orderbook_analyzer import OrderBookSpoofFilter, calculate_true_gravity_tensor
 from spiral_cube_analyzer import analyze_spiral_cube
 
 from tarot_engine import (
@@ -37,6 +39,7 @@ from tarot_engine import (
     calculate_knot_topology,
     calculate_minor_arcana,
     calculate_physics_parameters,
+    calculate_square_arcs,
     evaluate_court_promotion,
     evaluate_court_card,
     map_market_archetype,
@@ -83,6 +86,15 @@ MONITOR_CACHE_LOCK = threading.Lock()
 COINGECKO_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 COINGECKO_CACHE_LOCK = threading.Lock()
 LAST_PROMOTED_CARDS: dict[str, str] = {}
+ORDER_BOOK_FILTERS: dict[str, OrderBookSpoofFilter] = {}
+TIMEFRAME_ANALYSIS: dict[str, dict[str, float | int]] = {
+    "1m": {"gravity_span": 12, "spiral_scale": 0.58},
+    "5m": {"gravity_span": 24, "spiral_scale": 0.76},
+    "15m": {"gravity_span": 64, "spiral_scale": 1.0},
+    "1H": {"gravity_span": 160, "spiral_scale": 1.28},
+    "4H": {"gravity_span": 320, "spiral_scale": 1.62},
+    "1D": {"gravity_span": 720, "spiral_scale": 2.0},
+}
 
 
 def _oracle_prediction(price_history: Any, order_book: dict[str, Any] | None) -> dict[str, Any]:
@@ -113,6 +125,10 @@ def _dummy_knot_payload(symbol: str) -> dict[str, Any]:
         price_history,
         {"bid_volume": random.uniform(100.0, 1000.0), "ask_volume": random.uniform(100.0, 1000.0)},
     )
+    gravity_tensor = calculate_true_gravity_tensor({
+        "bids": [{"price": price - 0.3, "volume": 800.0, "lifespan_seconds": 8.0}],
+        "asks": [{"price": price + 0.3, "volume": 420.0, "lifespan_seconds": 8.0}],
+    })
     return {
         "event": "KNOT_UPDATE", "symbol": symbol,
         "major_arcana": "0_THE_FOOL" if symbol.startswith("DOGE") else "4_THE_EMPEROR",
@@ -124,6 +140,7 @@ def _dummy_knot_payload(symbol: str) -> dict[str, Any]:
         "hexagram_binary": format(random.randrange(64), "06b"),
         "tri_layer": {"macro": "TRENDING", "meso": "KNOT_FORMED", "micro": "PRESSURE"},
         "oracle_prediction": oracle_prediction,
+        "true_gravity_tensor": gravity_tensor,
         "coordinate": [
             round(delta * 2.0, 4),
             round((rsi - 50.0) / 20.0, 4),
@@ -173,6 +190,24 @@ class PackageLimitOrderRequest(BaseModel):
     lot_size: float = Field(default=0.01, gt=0)
     action: str = Field(default="LONG", min_length=1)
     strategy: str = Field(min_length=1)
+
+
+class SquareArcRequest(BaseModel):
+    """Validated topology request from the LIVE PROJECTION knot palette."""
+
+    current_price: float = Field(gt=0)
+    standard_deviation: float = Field(gt=0)
+    knot_ids: list[int] = Field(default_factory=list, max_length=22)
+
+
+class DistortionFieldRequest(BaseModel):
+    """Order-book pressure inputs used to fit the 48-plane distortion field."""
+
+    vertical_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    horizontal_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    gravity_magnitude: float = Field(default=0.0, ge=0.0, le=1.0)
+    net_force: float = Field(default=0.0, ge=-1.0, le=1.0)
+    base_radius: float = Field(default=1.0, gt=0.0)
 
 
 async def execute_trade(symbol: str, action: str) -> None:
@@ -499,6 +534,13 @@ def fetch_and_calculate_sync(symbol: str | None = None) -> dict[str, Any] | None
                 continue
             signal = _serialize_tick(tick)
             signal["symbol"] = current_symbol
+            order_book = _fetch_order_book(current_symbol)
+            if order_book is not None:
+                signal["order_book"] = order_book
+                signal["true_gravity_tensor"] = calculate_true_gravity_tensor(
+                    order_book,
+                    tracker=ORDER_BOOK_FILTERS.setdefault(current_symbol, OrderBookSpoofFilter()),
+                )
             m7_frame = _fetch_m7_frame(current_symbol)
             signal["wuxing_phase"] = calculate_wuxing_phase(m7_frame) if m7_frame is not None else None
             minor_card = calculate_minor_arcana(m7_frame, symbol=current_symbol) if m7_frame is not None else None
@@ -588,6 +630,32 @@ def _serialize_tick(tick: Any) -> dict[str, Any]:
     }
 
 
+def _fetch_order_book(symbol: str) -> dict[str, list[dict[str, float]]] | None:
+    """Read the terminal depth snapshot without making order-book support mandatory."""
+    if mt5 is None or not hasattr(mt5, "market_book_get"):
+        return None
+    try:
+        entries = mt5.market_book_get(symbol)
+    except Exception:
+        logger.exception("Failed to read market book for %s.", symbol)
+        return None
+    if not entries:
+        return None
+
+    bid_types = {getattr(mt5, "BOOK_TYPE_BUY", 0), getattr(mt5, "BOOK_TYPE_BUY_MARKET", 2)}
+    ask_types = {getattr(mt5, "BOOK_TYPE_SELL", 1), getattr(mt5, "BOOK_TYPE_SELL_MARKET", 3)}
+    book: dict[str, list[dict[str, float]]] = {"bids": [], "asks": []}
+    for entry in entries:
+        entry_type = getattr(entry, "type", None)
+        side = "bids" if entry_type in bid_types else "asks" if entry_type in ask_types else None
+        price = getattr(entry, "price", None)
+        volume = getattr(entry, "volume", getattr(entry, "volume_real", None))
+        if side is None or not isinstance(price, (int, float)) or not isinstance(volume, (int, float)) or volume <= 0:
+            continue
+        book[side].append({"price": float(price), "volume": float(volume)})
+    return book if book["bids"] or book["asks"] else None
+
+
 def _major_arcana_for_symbol(symbol: str) -> str | None:
     """Return the configured Major Arcana card for a watchlist symbol."""
     for entry in MAJOR_ARCANA_SYMBOLS.values():
@@ -613,7 +681,14 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     chart_data = _chart_data_from_frame(history) if isinstance(history, pd.DataFrame) else None
     price_history = market_data.get("price_history", history)
     oracle_prediction = _oracle_prediction(price_history, market_data.get("order_book"))
+    gravity_tensor = market_data.get("true_gravity_tensor")
+    if not isinstance(gravity_tensor, dict):
+        gravity_tensor = calculate_true_gravity_tensor(
+            market_data.get("order_book"),
+            tracker=ORDER_BOOK_FILTERS.setdefault(symbol, OrderBookSpoofFilter()),
+        )
     prices = pd.to_numeric(pd.Series(price_history), errors="coerce").dropna().to_numpy(dtype=float)
+    current_price = float(market_data.get("price") or (prices[-1] if len(prices) else 0.0))
     latest_delta = float(prices[-1] - prices[-2]) if len(prices) > 1 else 0.0
     history_volumes = history["volume"] if isinstance(history, pd.DataFrame) and "volume" in history else history["tick_volume"] if isinstance(history, pd.DataFrame) and "tick_volume" in history else pd.Series(dtype=float)
     cube_input = {
@@ -633,6 +708,7 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
     return {
         "symbol": symbol,
         "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
+        "current_price": current_price,
         "rendered_physics": {
             key: physics[key]
             for key in ("thickness_r", "tension_t", "complexity_c", "tornado_tilt_deg", "gravity_g")
@@ -644,6 +720,7 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
             "i_ching_hexagram_symbol": visuals["i_ching_hexagram_symbol"],
         },
         "oracle_prediction": oracle_prediction,
+        "true_gravity_tensor": gravity_tensor,
         "spiral_cube": spiral_cube,
         "coordinate": [
             0.0,
@@ -652,6 +729,57 @@ def _live_payload(symbol: str, market_data: dict[str, Any]) -> dict[str, Any]:
         ],
         "chart_data": chart_data,
     }
+
+
+def _timeframe_projection_payload(payload: dict[str, Any], timeframe: str | None) -> dict[str, Any]:
+    """Rescale live gravity and cube geometry for a validated analysis horizon."""
+    normalized_timeframe = timeframe if timeframe in TIMEFRAME_ANALYSIS else "15m"
+    settings = TIMEFRAME_ANALYSIS[normalized_timeframe]
+    span = int(settings["gravity_span"])
+    space_scale = float(settings["spiral_scale"])
+    gravity_scale = max(0.55, min(1.8, math.sqrt(span / 64)))
+    adjusted = dict(payload)
+
+    tensor = payload.get("true_gravity_tensor")
+    if isinstance(tensor, dict):
+        gradient = tensor.get("gradient")
+        adjusted_tensor = dict(tensor)
+        adjusted_tensor["magnitude"] = round(float(tensor.get("magnitude", 0.0)) * gravity_scale, 8)
+        adjusted_tensor["net_force"] = round(float(tensor.get("net_force", 0.0)) * gravity_scale, 8)
+        if isinstance(gradient, dict):
+            adjusted_tensor["gradient"] = {
+                "x": round(float(gradient.get("x", 0.0)) * gravity_scale, 8),
+                "y": round(float(gradient.get("y", 0.0)) * gravity_scale, 8),
+            }
+        centers = tensor.get("centers")
+        if isinstance(centers, list):
+            adjusted_tensor["centers"] = [
+                {**center, "strength": round(float(center.get("strength", 0.0)) * gravity_scale, 8)}
+                for center in centers
+                if isinstance(center, dict)
+            ]
+        adjusted["true_gravity_tensor"] = adjusted_tensor
+
+    cube = payload.get("spiral_cube")
+    if isinstance(cube, dict):
+        adjusted_cube = dict(cube)
+        coordinates = cube.get("coordinates")
+        if isinstance(coordinates, list):
+            adjusted_cube["coordinates"] = [
+                {
+                    "x": round(max(0.0, min(1.0, 0.5 + (float(point.get("x", 0.5)) - 0.5) * space_scale)), 6),
+                    "y": round(max(0.0, min(1.0, 0.5 + (float(point.get("y", 0.5)) - 0.5) * space_scale)), 6),
+                    "z": round(max(0.0, min(1.0, 0.5 + (float(point.get("z", 0.5)) - 0.5) * space_scale)), 6),
+                }
+                for point in coordinates
+                if isinstance(point, dict)
+            ]
+        adjusted["spiral_cube"] = adjusted_cube
+
+    adjusted["analysis_timeframe"] = normalized_timeframe
+    adjusted["gravity_span"] = span
+    adjusted["spiral_space_scale"] = space_scale
+    return adjusted
 
 
 def _tarot_screener_payload(symbol: str, signal: dict[str, Any]) -> dict[str, Any]:
@@ -735,6 +863,33 @@ def settlement_tickets(limit: int = 80) -> dict[str, Any]:
             for row in rows
         ]
     }
+
+
+@app.post("/api/square-arcs")
+def square_arcs(request: SquareArcRequest) -> dict[str, Any]:
+    """Return non-executing 3D Square Arc targets for the selected knot set."""
+    try:
+        return calculate_square_arcs(
+            current_price=request.current_price,
+            standard_deviation=request.standard_deviation,
+            knot_ids=request.knot_ids,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/api/distortion-field")
+def distortion_field(request: DistortionFieldRequest) -> dict[str, Any]:
+    """Returns the 48-plane spherical-harmonic distortion field (Dk(t)) used
+    by the Arcana trap system and Portfolio Radar."""
+
+    return calculate_true_gravity_tensor_distortion_from_payload(
+        vertical_pressure=request.vertical_pressure,
+        horizontal_pressure=request.horizontal_pressure,
+        gravity_magnitude=request.gravity_magnitude,
+        net_force=request.net_force,
+        base_radius=request.base_radius,
+    )
 
 
 @app.post("/api/execute_package")
@@ -935,14 +1090,15 @@ async def live_websocket_endpoint(websocket: WebSocket, symbol: str) -> None:
     """Stream the 3D physics contract for one symbol once per second."""
     await websocket.accept()
     normalized_symbol = symbol.strip().upper()
+    timeframe = websocket.query_params.get("timeframe")
     try:
         while True:
             result = await asyncio.to_thread(fetch_and_calculate_sync, normalized_symbol)
             signal = result.get("symbols", {}).get(normalized_symbol) if result else None
             if isinstance(signal, dict) and isinstance(signal.get("live_payload"), dict):
-                await websocket.send_json(signal["live_payload"])
+                await websocket.send_json(_timeframe_projection_payload(signal["live_payload"], timeframe))
             else:
-                await websocket.send_json(_live_payload(normalized_symbol, {"price": 1.0}))
+                await websocket.send_json(_timeframe_projection_payload(_live_payload(normalized_symbol, {"price": 1.0}), timeframe))
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         logger.info("Live WebSocket client disconnected for %s.", normalized_symbol)

@@ -61,6 +61,8 @@ export default function Home() {
         <TarotSceneDemo />
         <div className="absolute left-4 top-6 z-30 rounded-full border border-cyan-200/20 bg-[#060d16]/85 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
           <a href="/contest" className="hover:text-white">Contest board</a>
+          <span className="mx-2 text-stone-600">/</span>
+          <a href="/portfolio" className="hover:text-white">Portfolio radar</a>
         </div>
       </div>
 

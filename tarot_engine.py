@@ -1,7 +1,7 @@
 """Tarot market mappings and minor arcana signal classification."""
 
 from datetime import datetime
-from math import atan, ceil, exp, isfinite, log10, pi, sqrt
+from math import atan, ceil, exp, isfinite, log10, pi, sqrt, tanh
 from typing import Any, Dict, List, Mapping, Sequence, TypedDict
 
 import pandas as pd
@@ -42,7 +42,111 @@ MAJOR_ARCANA_SYMBOLS: Dict[int, MajorArcanaSymbol] = {
 
 WATCHLIST_SYMBOLS: List[str] = [entry["symbol"] for entry in MAJOR_ARCANA_SYMBOLS.values()]
 
+KNOT_MATRIX: dict[int, dict[str, float | str]] = {
+    0: {"name": "The Fool", "variance_multiplier": 0.96, "directional_bias": 0.10},
+    1: {"name": "The Magician", "variance_multiplier": 0.90, "directional_bias": 0.35},
+    2: {"name": "The High Priestess", "variance_multiplier": 0.82, "directional_bias": -0.08},
+    3: {"name": "The Empress", "variance_multiplier": 0.88, "directional_bias": 0.22},
+    4: {"name": "The Emperor", "variance_multiplier": 0.78, "directional_bias": 0.28},
+    5: {"name": "The Hierophant", "variance_multiplier": 0.80, "directional_bias": 0.05},
+    6: {"name": "The Lovers", "variance_multiplier": 0.92, "directional_bias": 0.12},
+    7: {"name": "The Chariot", "variance_multiplier": 0.86, "directional_bias": 0.48},
+    8: {"name": "Strength", "variance_multiplier": 0.76, "directional_bias": 0.18},
+    9: {"name": "The Hermit", "variance_multiplier": 0.70, "directional_bias": -0.16},
+    10: {"name": "Wheel of Fortune", "variance_multiplier": 0.98, "directional_bias": 0.00},
+    11: {"name": "Justice", "variance_multiplier": 0.74, "directional_bias": 0.00},
+    12: {"name": "The Hanged Man", "variance_multiplier": 0.73, "directional_bias": -0.25},
+    13: {"name": "Death", "variance_multiplier": 0.84, "directional_bias": -0.42},
+    14: {"name": "Temperance", "variance_multiplier": 0.68, "directional_bias": 0.04},
+    15: {"name": "The Devil", "variance_multiplier": 0.94, "directional_bias": -0.34},
+    16: {"name": "The Tower", "variance_multiplier": 0.62, "directional_bias": -0.95},
+    17: {"name": "The Star", "variance_multiplier": 0.81, "directional_bias": 0.30},
+    18: {"name": "The Moon", "variance_multiplier": 0.91, "directional_bias": -0.30},
+    19: {"name": "The Sun", "variance_multiplier": 0.83, "directional_bias": 0.55},
+    20: {"name": "Judgement", "variance_multiplier": 0.87, "directional_bias": 0.20},
+    21: {"name": "The World", "variance_multiplier": 0.72, "directional_bias": 0.08},
+}
+
 _PERSONA_RANKS = ((50, "PAGE"), (150, "KNIGHT"), (300, "QUEEN"))
+
+
+def calculate_square_arcs(
+    current_price: float,
+    standard_deviation: float,
+    knot_ids: Sequence[int] | None = None,
+) -> dict[str, Any]:
+    """Calculate 3D Buy/Sell Square Arc targets for four topology trajectories.
+
+    ``knot_ids`` accepts any deduplicated subset of the 22 Major Arcana IDs. Their
+    variance multipliers are multiplied, while directional biases are composed into
+    a bounded field. The resulting field contracts every trajectory's standard
+    deviation and asymmetrically expands its Buy or Sell box.
+    """
+    price = float(current_price)
+    deviation = float(standard_deviation)
+    if not isfinite(price) or price <= 0:
+        raise ValueError("current_price must be a positive finite value")
+    if not isfinite(deviation) or deviation <= 0:
+        raise ValueError("standard_deviation must be a positive finite value")
+
+    supplied_ids = tuple(knot_ids or [])
+    if any(isinstance(knot_id, bool) or not isinstance(knot_id, int) for knot_id in supplied_ids):
+        raise ValueError("knot_ids must contain integer Major Arcana IDs")
+    selected_ids = tuple(dict.fromkeys(supplied_ids))
+    unknown_ids = [knot_id for knot_id in selected_ids if knot_id not in KNOT_MATRIX]
+    if unknown_ids:
+        raise ValueError(f"unknown knot IDs: {unknown_ids}")
+
+    variance_multiplier = 1.0
+    raw_bias = 0.0
+    for knot_id in selected_ids:
+        matrix = KNOT_MATRIX[knot_id]
+        variance_multiplier *= float(matrix["variance_multiplier"])
+        raw_bias += float(matrix["directional_bias"])
+    directional_bias = tanh(raw_bias)
+    effective_deviation = deviation * variance_multiplier
+    buy_width_multiplier = max(0.08, 1.0 + directional_bias)
+    sell_width_multiplier = max(0.08, 1.0 - directional_bias)
+
+    trajectories = (
+        ("surge", 1.85, 1.35),
+        ("continuation", 1.0, 0.95),
+        ("range", 0.0, 0.58),
+        ("plunge", -1.85, 1.35),
+    )
+    targets: list[dict[str, Any]] = []
+    points: list[dict[str, Any]] = []
+    for index, (name, slope, range_factor) in enumerate(trajectories):
+        horizon = float(index + 1)
+        upward_travel = effective_deviation * (0.42 + max(slope, 0.0)) * (1.0 + max(directional_bias, 0.0))
+        downward_travel = effective_deviation * (0.42 + max(-slope, 0.0)) * (1.0 + max(-directional_bias, 0.0))
+        box_base = effective_deviation * range_factor
+        buy_price = price + upward_travel + box_base * buy_width_multiplier
+        sell_price = price - downward_travel - box_base * sell_width_multiplier
+        z_field = round(slope + directional_bias, 8)
+        buy_point = {"x": horizon, "y": round(buy_price, 8), "z": z_field}
+        sell_point = {"x": horizon, "y": round(sell_price, 8), "z": round(-z_field, 8)}
+        width = buy_price - sell_price
+        target = {
+            "trajectory": name,
+            "buy_stop": buy_point,
+            "sell_stop": sell_point,
+            "box_volume": round(width * horizon * (1.0 + abs(z_field)), 8),
+        }
+        targets.append(target)
+        points.extend((
+            {"trajectory": name, "side": "buy_stop", **buy_point},
+            {"trajectory": name, "side": "sell_stop", **sell_point},
+        ))
+
+    return {
+        "selected_knot_ids": list(selected_ids),
+        "variance_multiplier": round(variance_multiplier, 8),
+        "directional_bias": round(directional_bias, 8),
+        "effective_standard_deviation": round(effective_deviation, 8),
+        "targets": targets,
+        "points": points,
+    }
 
 
 def generate_ticket_persona(symbols_data: list[dict[str, Any]], total_mana: int) -> dict[str, str]:
@@ -300,6 +404,24 @@ def evaluate_court_card(
     return "KNIGHT_OF_WANDS"
 
 
+def evaluate_court_promotion(
+    s15_frame: pd.DataFrame,
+    minor_card: str | None,
+    macro_trend: str | None,
+    volatility_weight: float = 1.0,
+) -> str | None:
+    """Promote a Minor Arcana state when recent S15 flow confirms the setup."""
+    if not isinstance(s15_frame, pd.DataFrame) or minor_card is None:
+        return minor_card
+    close = pd.to_numeric(s15_frame.get("close", pd.Series(dtype=float)), errors="coerce").dropna()
+    open_values = pd.to_numeric(s15_frame.get("open", pd.Series(dtype=float)), errors="coerce").dropna()
+    if close.empty or open_values.empty:
+        return minor_card
+    delta = float(close.tail(4).sum() - open_values.tail(4).sum())
+    micro_status = "FILLING" if delta * max(float(volatility_weight), 0.0) > 0 else "STABLE"
+    return evaluate_court_card(minor_card, micro_status, macro_trend)
+
+
 ICHING_SYMBOLS = [
     "䷀", "䷁", "䷂", "䷃", "䷄", "䷅", "䷆", "䷇", "䷈", "䷉", "䷊", "䷋", "䷌", "䷍", "䷎", "䷏",
     "䷐", "䷑", "䷒", "䷓", "䷔", "䷕", "䷖", "䷗", "䷘", "䷙", "䷚", "䷛", "䷜", "䷝", "䷞", "䷟",
@@ -400,6 +522,75 @@ def calculate_iching_visuals(volatility: float, timestamp: datetime | None = Non
     decimal = (int(round(normalized * 63.0)) + seasonal * 7) % 64
     color_index = (decimal // 8 + seasonal) % len(_ICHING_COLORS)
     return {"i_ching_hexagram_symbol": ICHING_SYMBOLS[decimal], "background_hex": _ICHING_COLORS[color_index]}
+
+
+def calculate_iching_weight(frame: pd.DataFrame, element: str = "EARTH") -> dict[str, Any]:
+    """Encode six recent candles as a hexagram and derive a bounded volatility weight."""
+    if not isinstance(frame, pd.DataFrame) or "close" not in frame.columns:
+        return {"hexagram_decimal": 0, "hexagram_binary": "000000", "volatility_weight": 1.0}
+
+    close = pd.to_numeric(frame["close"], errors="coerce").dropna().tail(6)
+    if len(close) < 6:
+        return {"hexagram_decimal": 0, "hexagram_binary": "000000", "volatility_weight": 1.0}
+    if "open" in frame.columns:
+        open_values = pd.to_numeric(frame.loc[close.index, "open"], errors="coerce").fillna(close)
+        bits = "".join("1" if closing >= opening else "0" for closing, opening in zip(close, open_values))
+    else:
+        deltas = close.diff().fillna(0.0)
+        bits = "".join("1" if delta >= 0 else "0" for delta in deltas)
+
+    decimal = int(bits, 2)
+    returns = close.pct_change().replace([float("inf"), -float("inf")], pd.NA).dropna()
+    volatility = float(returns.std()) if len(returns) > 1 else 0.0
+    coefficient = ELEMENT_FIELD_COEFFICIENTS.get(str(element).upper(), 1.0)
+    volatility_weight = max(0.5, min(2.0, 1.0 + volatility * 100 * coefficient))
+    return {
+        "hexagram_decimal": decimal,
+        "hexagram_binary": bits,
+        "volatility_weight": round(volatility_weight, 6),
+    }
+
+
+def calculate_gravity_gradient(order_book: Mapping[str, Any] | None) -> float:
+    """Return the normalized bid/ask imbalance used by the topology oracle."""
+    if not isinstance(order_book, Mapping):
+        return 0.0
+    bid_volume = _market_value(order_book, "bid_volume", "buy_volume")
+    ask_volume = _market_value(order_book, "ask_volume", "sell_volume")
+    return (bid_volume - ask_volume) / max(bid_volume + ask_volume, 1e-12) if bid_volume + ask_volume else 0.0
+
+
+def calculate_knot_topology(price_history: Sequence[float] | pd.Series | Any) -> dict[str, float]:
+    """Estimate finite curvature and torsion from first through third price differences."""
+    values = pd.to_numeric(pd.Series(price_history), errors="coerce").dropna().to_list()
+    if len(values) < 3:
+        return {"kappa": 0.0, "tau": 0.0}
+    scale = max(abs(values[-1]), max(values) - min(values), 1e-12)
+    first = [values[index] - values[index - 1] for index in range(1, len(values))]
+    second = [first[index] - first[index - 1] for index in range(1, len(first))]
+    third = [second[index] - second[index - 1] for index in range(1, len(second))]
+    kappa = sqrt(sum(value * value for value in second) / max(len(second), 1)) / scale
+    tau = sum(third) / max(len(third), 1) / scale if third else 0.0
+    return {"kappa": float(kappa), "tau": float(tau)}
+
+
+def calculate_branch_probabilities(kappa: float, tau: float, gravity_tensor: float) -> list[dict[str, float | str]]:
+    """Distribute oracle mass across the four stable Minor Arcana attractors."""
+    curvature = max(0.0, float(kappa))
+    torsion = float(tau)
+    gravity = max(-1.0, min(1.0, float(gravity_tensor)))
+    raw = [
+        1.0 + curvature + max(gravity, 0.0),
+        1.0 + max(-torsion, 0.0) + max(-gravity, 0.0),
+        1.0 + max(torsion, 0.0),
+        1.0 + 1.0 / (1.0 + curvature + abs(torsion)),
+    ]
+    total = sum(raw)
+    ids_and_colors = (("wands", "#FFD700"), ("swords", "#00FFFF"), ("cups", "#FFFFFF"), ("pentacles", "#800080"))
+    return [
+        {"id": identifier, "prob": round(score / total * 100.0, 6), "color_hex": color}
+        for (identifier, color), score in zip(ids_and_colors, raw)
+    ]
 
 
 def analyze_4d_timeline(symbol: str, target_time: datetime | str) -> dict[str, Any]:

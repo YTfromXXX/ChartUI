@@ -43,3 +43,15 @@ export function calculateResonance(portfolio: PortfolioProfile, market?: Resonan
 export function getTransitionRoute(resonance: number): TransitionRoute {
   return resonance >= 0.58 ? 'lens' : 'voxel';
 }
+
+/** Deterministic direction (theta, phi) for a symbol, used to place each
+ * position's energy bump on the Portfolio Radar's distorted sphere. */
+export function positionDirection(symbol: string): { theta: number; phi: number } {
+  let hash = 0;
+  for (let index = 0; index < symbol.length; index += 1) {
+    hash = (hash * 31 + symbol.charCodeAt(index)) >>> 0;
+  }
+  const theta = (((hash % 1000) / 1000) * 0.72 + 0.14) * Math.PI;
+  const phi = ((Math.floor(hash / 1000) % 1000) / 1000) * 2 * Math.PI;
+  return { theta, phi };
+}
