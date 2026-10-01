@@ -45,6 +45,7 @@ from tarot_engine import (
     map_market_archetype,
     generate_ticket_persona,
 )
+from tactics_384 import calculate_true_gravity_candy_points
 
 try:
     import MetaTrader5 as mt5
@@ -208,6 +209,15 @@ class DistortionFieldRequest(BaseModel):
     gravity_magnitude: float = Field(default=0.0, ge=0.0, le=1.0)
     net_force: float = Field(default=0.0, ge=-1.0, le=1.0)
     base_radius: float = Field(default=1.0, gt=0.0)
+
+
+class CandyPointsRequest(BaseModel):
+    """Inputs to compute the 384 candy control points (48 cells * 4 spirals * 2 poles)."""
+
+    current_price: float = Field(gt=0)
+    radius: float = Field(default=100.0, gt=0)
+    dataset: list[dict[str, Any]] = Field(default_factory=list)
+    turns: float = Field(default=3.0, gt=0)
 
 
 async def execute_trade(symbol: str, action: str) -> None:
@@ -890,6 +900,22 @@ def distortion_field(request: DistortionFieldRequest) -> dict[str, Any]:
         net_force=request.net_force,
         base_radius=request.base_radius,
     )
+
+
+@app.post("/api/candy-points")
+def candy_points(request: CandyPointsRequest) -> dict[str, Any]:
+    """Returns 384 candy control points (48 cells * 4 spirals * 2 poles)
+    tangent to the 48-cell spherical Fibonacci lattice with normal vectors,
+    prediction probabilities, direction labels, and Major Arcana attributes."""
+    try:
+        return calculate_true_gravity_candy_points(
+            current_price=request.current_price,
+            radius=request.radius,
+            dataset=request.dataset or None,
+            turns=request.turns,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/execute_package")

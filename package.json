@@ -9,10 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.19.2",
     "@react-spring/three": "^10.1.2",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@react-three/postprocessing": "^3.1.1",
+    "@react-three/rapier": "^2.2.0",
+    "@react-three/xr": "^6.6.31",
+    "@use-gesture/react": "^10.3.1",
     "framer-motion": "^12.23.12",
     "lightweight-charts": "^5.0.8",
     "lucide-react": "^0.468.0",
