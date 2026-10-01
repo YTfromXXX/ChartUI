@@ -2,6 +2,7 @@
 
 import { OrbitControls, Text } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
+import { createXRStore, XR } from '@react-three/xr';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
@@ -11,6 +12,7 @@ import {
   type CandyPoint,
   type CandyPointsResponse,
 } from '@/lib/candyPoints';
+import CandyXRPhysics from './CandyXRPhysics';
 import { CandyInstancedMesh, CyberpunkPriceSphere } from './CandySpiralMesh';
 
 type CandySpiralSceneProps = {
@@ -117,9 +119,48 @@ export default function CandySpiralScene({
   const [spinSpeed, setSpinSpeed] = useState(1.8);
   const [showSpirals, setShowSpirals] = useState(true);
   const [isAutoRotate, setIsAutoRotate] = useState(true);
+  const [physicsEnabled, setPhysicsEnabled] = useState(false);
+  const [isCandyGrabbed, setIsCandyGrabbed] = useState(false);
+  const [impactCount, setImpactCount] = useState(0);
+  const [xrMode, setXRMode] = useState<XRSessionMode | null>(null);
+  const [xrError, setXRError] = useState('');
+  // XR v6 mounts its default controller and hand models/pointers from the store configuration.
+  const [xrStore] = useState(() => createXRStore({
+    handTracking: true,
+    controller: true,
+    hand: true,
+    offerSession: false,
+    emulate: false,
+  }));
+
+  useEffect(() => xrStore.subscribe((state) => setXRMode(state.mode)), [xrStore]);
+
+  async function enterXRSession(mode: 'immersive-ar' | 'immersive-vr') {
+    try {
+      setXRError('');
+      const session = mode === 'immersive-ar' ? await xrStore.enterAR() : await xrStore.enterVR();
+      if (!session) setXRError(`${mode === 'immersive-ar' ? 'MR' : 'VR'} session is unavailable in this browser/device.`);
+    } catch (error) {
+      setXRError(error instanceof Error ? error.message : 'Unable to start the XR session.');
+    }
+  }
+
+  async function togglePhysicsMode() {
+    if (physicsEnabled && xrStore.getState().session) {
+      try {
+        await xrStore.getState().session?.end();
+      } catch (error) {
+        setXRError(error instanceof Error ? error.message : 'Unable to end the XR session.');
+        return;
+      }
+    }
+    setPhysicsEnabled((current) => !current);
+    setXRError('');
+  }
 
   // Fetch true gravity candy points from backend
   useEffect(() => {
+    if (physicsEnabled) return;
     let canceled = false;
     const fetchPoints = async () => {
       try {
@@ -146,7 +187,16 @@ export default function CandySpiralScene({
     return () => {
       canceled = true;
     };
-  }, [currentPrice]);
+  }, [currentPrice, physicsEnabled]);
+
+  async function endXRSession() {
+    try {
+      await xrStore.getState().session?.end();
+      setXRError('');
+    } catch (error) {
+      setXRError(error instanceof Error ? error.message : 'Unable to end the XR session.');
+    }
+  }
 
   return (
     <div
@@ -157,49 +207,48 @@ export default function CandySpiralScene({
       <Canvas
         camera={{ position: [0, 1.2, 6.2], fov: 45, near: 0.1, far: 100 }}
         dpr={[1, 2]}
+        gl={{ alpha: true, antialias: true }}
       >
-        <color attach="background" args={['#020611']} />
-        <fog attach="fog" args={['#020611', 8, 26]} />
+        <XR store={xrStore}>
+          {!(physicsEnabled && xrMode === 'immersive-ar') && <color attach="background" args={['#020611']} />}
+          {!(physicsEnabled && xrMode === 'immersive-ar') && <fog attach="fog" args={['#020611', 8, 26]} />}
 
-        {/* Ambient & Studio Cyberpunk Lights */}
-        <ambientLight intensity={0.55} />
-        <pointLight position={[5, 6, 5]} intensity={24} distance={22} color="#ffffff" />
-        <pointLight position={[-5, -4, -4]} intensity={18} distance={20} color="#00f5ff" />
-        <pointLight position={[0, 8, 0]} intensity={15} distance={18} color="#ffd700" />
-        <pointLight position={[0, -6, 2]} intensity={12} distance={15} color="#ec4899" />
+          <ambientLight intensity={0.55} />
+          <pointLight position={[5, 6, 5]} intensity={24} distance={22} color="#ffffff" />
+          <pointLight position={[-5, -4, -4]} intensity={18} distance={20} color="#00f5ff" />
+          <pointLight position={[0, 8, 0]} intensity={15} distance={18} color="#ffd700" />
+          <pointLight position={[0, -6, 2]} intensity={12} distance={15} color="#ec4899" />
 
-        {/* Orbit controls */}
-        <OrbitControls
-          autoRotate={isAutoRotate}
-          autoRotateSpeed={0.35}
-          enableDamping
-          dampingFactor={0.06}
-          minDistance={3.5}
-          maxDistance={12.0}
-        />
+          <OrbitControls
+            enabled={!xrMode}
+            autoRotate={isAutoRotate && !physicsEnabled}
+            autoRotateSpeed={0.35}
+            enableDamping
+            dampingFactor={0.06}
+            minDistance={3.5}
+            maxDistance={12.0}
+          />
 
-        {/* Center Price Sphere with 48 inner cells */}
-        <CyberpunkPriceSphere
-          radius={2.0}
-          price={currentPrice}
-          symbol={symbol}
-          wuxingPhase={wuxingPhase}
-        />
+          <CyberpunkPriceSphere radius={2.0} price={currentPrice} symbol={symbol} wuxingPhase={wuxingPhase} />
+          <FloatingPriceTag price={currentPrice} radius={2.0} />
+          {showSpirals && <SpiralGuideLines radius={2.0} />}
 
-        {/* Floating price header tag */}
-        <FloatingPriceTag price={currentPrice} radius={2.0} />
-
-        {/* 4 prediction spiral guide curves */}
-        {showSpirals && <SpiralGuideLines radius={2.0} />}
-
-        {/* 384 Candy InstancedMesh with DNA self-rotation & orbit */}
-        <CandyInstancedMesh
-          candies={candies}
-          radius={2.0}
-          orbitSpeed={orbitSpeed}
-          spinSpeed={spinSpeed}
-          onHoverCandy={setHoveredCandy}
-        />
+          {physicsEnabled ? (
+            <CandyXRPhysics
+              candies={candies}
+              onGrabChange={setIsCandyGrabbed}
+              onImpact={() => setImpactCount((count) => count + 1)}
+            />
+          ) : (
+            <CandyInstancedMesh
+              candies={candies}
+              radius={2.0}
+              orbitSpeed={orbitSpeed}
+              spinSpeed={spinSpeed}
+              onHoverCandy={setHoveredCandy}
+            />
+          )}
+        </XR>
       </Canvas>
 
       {/* Top HUD overlay */}
@@ -227,6 +276,51 @@ export default function CandySpiralScene({
             </div>
           );
         })}
+      </div>
+
+      <div className="absolute left-4 top-[4.5rem] z-10 max-w-[min(92%,34rem)] rounded-xl border border-cyan-300/20 bg-[#020611]/85 p-2.5 font-mono text-[9px] text-stone-300 shadow-[0_0_24px_rgba(0,245,255,0.08)] backdrop-blur-md">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePhysicsMode}
+            className={`rounded-md border px-2.5 py-1.5 uppercase tracking-[0.12em] transition ${
+              physicsEnabled ? 'border-fuchsia-400/60 bg-fuchsia-500/15 text-fuchsia-100' : 'border-cyan-300/35 bg-cyan-500/10 text-cyan-100 hover:border-cyan-200/70'
+            }`}
+          >
+            {physicsEnabled ? 'Physics / XR ON' : 'Enable XR Physics'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void enterXRSession('immersive-ar')}
+            disabled={!physicsEnabled || Boolean(xrMode)}
+            className="rounded-md border border-emerald-300/35 px-2.5 py-1.5 uppercase tracking-[0.12em] text-emerald-100 enabled:hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Enter MR
+          </button>
+          <button
+            type="button"
+            onClick={() => void enterXRSession('immersive-vr')}
+            disabled={!physicsEnabled || Boolean(xrMode)}
+            className="rounded-md border border-violet-300/35 px-2.5 py-1.5 uppercase tracking-[0.12em] text-violet-100 enabled:hover:bg-violet-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Enter VR
+          </button>
+          {xrMode && (
+            <button
+              type="button"
+              onClick={() => void endXRSession()}
+              className="rounded-md border border-rose-300/35 px-2.5 py-1.5 uppercase tracking-[0.12em] text-rose-100 hover:bg-rose-400/10"
+            >
+              Exit XR
+            </button>
+          )}
+        </div>
+        <p className="mt-1.5 text-[8px] uppercase tracking-[0.12em] text-stone-500">
+          {xrMode ? `${xrMode} • hand tracking + controller grab` : physicsEnabled ? 'Pinch / squeeze or mouse-drag a candy, then release to throw' : 'Enable physics to activate 384 grab-ready candy bodies'}
+          {isCandyGrabbed ? ' • candy held' : ''}
+          {impactCount > 0 ? ` • ${impactCount} target impacts` : ''}
+        </p>
+        {xrError && <p role="status" className="mt-1 text-[8px] text-rose-300">{xrError}</p>}
       </div>
 
       {/* Bottom left hover candy inspector */}
