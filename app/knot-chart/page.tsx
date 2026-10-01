@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import KnotChart, { type GuidePointer, type KnotTick, type KnotTimelineLayer, type ProjectionGesture } from '@/components/2d/KnotChart';
 import KnotGlyphPalette from '@/components/KnotGlyphPalette';
+import CandySpiralScene from '@/components/3d/CandySpiralScene';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { useMarketStream } from '@/hooks/useMarketStream';
 
@@ -171,6 +172,7 @@ export default function KnotChartPage() {
   const [shellScale, setShellScale] = useState(1);
   const [intrusionRotation, setIntrusionRotation] = useState(0);
   const [patternOffset, setPatternOffset] = useState(0);
+  const [viewMode, setViewMode] = useState<'2d' | '3d' | 'split'>('split');
   const lastTickTimestamp = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -272,15 +274,79 @@ export default function KnotChartPage() {
                 ['burst events', String(burstCount)],
               ].map(([label, value]) => <div key={label} className="border border-white/10 bg-white/[0.025] px-3 py-2"><p className="font-mono text-[8px] uppercase tracking-[0.22em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{value}</p></div>)}
             </div>
-            <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
-              <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
-              <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={liveData?.spiral_cube} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
-              {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live BTCUSD market data</div>}
-              <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
-              <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
+            {/* View Mode Bar */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-cyan-500/20 bg-black/40 px-3 py-2 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-200">View</span>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('2d')}
+                  className={`px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.14em] transition ${
+                    viewMode === '2d'
+                      ? 'border border-cyan-400 bg-cyan-400/15 text-cyan-100'
+                      : 'border border-white/10 text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  2D Live Projection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('3d')}
+                  className={`px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.14em] transition ${
+                    viewMode === '3d'
+                      ? 'border border-amber-400 bg-amber-400/15 text-amber-100'
+                      : 'border border-white/10 text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  3D Candy Spiral (384 Knots)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('split')}
+                  className={`px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.14em] transition ${
+                    viewMode === 'split'
+                      ? 'border border-violet-400 bg-violet-400/15 text-violet-100'
+                      : 'border border-white/10 text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  Dual Split View
+                </button>
               </div>
-              <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
+              <span className="hidden font-mono text-[8px] uppercase tracking-[0.16em] text-stone-500 sm:inline">
+                48-Cell Fibonacci • 4 Timeline Spirals • InstancedMesh
+              </span>
             </div>
+
+            {viewMode === 'split' ? (
+              <div className="space-y-4">
+                <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
+                  <div className="relative h-[560px] min-h-[480px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
+                    <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={liveData?.spiral_cube} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
+                    {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live BTCUSD market data</div>}
+                    <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
+                    <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
+                  </div>
+                  <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
+                </div>
+                <div className="mt-4">
+                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} />
+                </div>
+              </div>
+            ) : viewMode === '3d' ? (
+              <div className="space-y-4">
+                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} />
+              </div>
+            ) : (
+              <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
+                <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
+                <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={liveData?.spiral_cube} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
+                {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live BTCUSD market data</div>}
+                <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
+                <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
+                </div>
+                <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
+              </div>
+            )}
             <section className="mt-4 border border-cyan-200/20 bg-[#020814]/85 p-3 backdrop-blur-sm" aria-label="Mouse guide controls">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2"><MousePointer2 className={`h-3.5 w-3.5 ${isGuideTracking ? 'text-cyan-200' : 'text-stone-600'}`} /><span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-300">Mouse guide / bottom control</span></div>
