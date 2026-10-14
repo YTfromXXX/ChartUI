@@ -25,6 +25,7 @@ from auth import authenticate_user, get_current_user, issue_token
 from database.magic_ledger import MagicLedgerDB
 from market_aggregator import TarotMatrixManager
 from mt5_executor import MT5Executor
+from knot_optimizer import calculate_knot_weather
 from spiral_cube_analyzer import analyze_spiral_cube
 
 from tarot_engine import (
@@ -701,6 +702,29 @@ def _tarot_screener_payload(symbol: str, signal: dict[str, Any]) -> dict[str, An
 def health_check() -> dict[str, str]:
     """Return a lightweight application health response."""
     return {"status": "ok"}
+
+
+@app.get("/api/oracle/knot-weather")
+def oracle_knot_weather(symbol: str = "BTCUSD") -> dict[str, Any]:
+    """Expose knot-theory market metrics as 'weather' for the METADOGG ecosystem."""
+    closes: list[float] = []
+    frame = _fetch_m7_frame(symbol)
+    if frame is not None and len(frame) >= 3:
+        closes = [float(value) for value in frame["close"].tolist()]
+    elif _coingecko_symbol(symbol):
+        try:
+            response = requests.get(
+                f"https://api.coingecko.com/api/v3/coins/{_coingecko_symbol(symbol)}/market_chart",
+                params={"vs_currency": "usd", "days": "1"},
+                timeout=8,
+            )
+            response.raise_for_status()
+            closes = [float(price[1]) for price in response.json().get("prices", [])]
+        except Exception:
+            logger.exception("Knot weather price fetch failed for %s.", symbol)
+    if len(closes) < 3:
+        raise HTTPException(status_code=503, detail="Market data unavailable for knot weather.")
+    return {"timestamp": int(time.time()), "data": calculate_knot_weather(closes)}
 
 
 @app.get("/api/settlement-tickets")

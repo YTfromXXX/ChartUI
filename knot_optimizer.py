@@ -83,3 +83,49 @@ def evaluate_strategy_profiles(symbols_data: list[dict[str, Any]]) -> dict[str, 
         "THE_HANGED_MAN": _hanged_man(items),
         "TEMPERANCE": _temperance(items),
     }
+
+def _std(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    avg = mean(values)
+    return (sum((value - avg) ** 2 for value in values) / len(values)) ** 0.5
+
+
+def calculate_knot_weather(closes: list[float], window: int = 20) -> dict[str, Any]:
+    """Map a close-price series to knot crossings, tension stress and topology phase.
+
+    Crossings count how often price weaves through its moving average (range-bound
+    markets tangle the most). Tension combines return volatility with drawdown from
+    the recent peak, scaled to 0-100.
+    """
+    series = [float(value) for value in closes if value is not None and value == value]
+    if len(series) < 3:
+        return {"knot_crossing": 0, "tension_stress": 0.0, "topology_phase": "Unknot"}
+    window = max(2, min(window, len(series)))
+
+    crossings = 0
+    previous_side = 0
+    for index in range(window - 1, len(series)):
+        base = mean(series[index - window + 1:index + 1])
+        side = (series[index] > base) - (series[index] < base)
+        if side and previous_side and side != previous_side:
+            crossings += 1
+        if side:
+            previous_side = side
+
+    returns = [
+        (series[i] - series[i - 1]) / series[i - 1]
+        for i in range(1, len(series)) if series[i - 1] != 0
+    ]
+    peak = max(series)
+    drawdown = (peak - series[-1]) / peak if peak > 0 else 0.0
+    volatility = _std(returns)
+    tension = min(100.0, max(0.0, volatility * 10000.0 * 0.5 + drawdown * 100.0 * 4.0))
+
+    if tension >= 70.0 or crossings >= 8:
+        phase = "Chaotic_Tangle"
+    elif crossings >= 3:
+        phase = "Trefoil"
+    else:
+        phase = "Unknot"
+    return {"knot_crossing": crossings, "tension_stress": round(tension, 2), "topology_phase": phase}
