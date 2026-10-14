@@ -204,7 +204,7 @@ function usePortfolioJets(portfolio: PortfolioProfile) {
     const ranked = [...portfolio.positions].sort((a, b) => b.volatility - a.volatility).slice(0, FLUID_JETS);
     ranked.forEach((position, index) => {
       const { theta, phi } = positionDirection(position.symbol);
-      const flow = (position.volatility - 0.4) * 3.2;
+      const flow = Math.tanh(((Number.isFinite(position.volatility) ? position.volatility : 0) - 0.4) * 3.2);
       jets[index].set(Math.sin(theta) * Math.cos(phi), Math.cos(theta), Math.sin(theta) * Math.sin(phi), flow);
     });
     return jets;
@@ -259,7 +259,7 @@ function usePortfolioCoefficients(portfolio: PortfolioProfile) {
   return useMemo(() => {
     const bumps = portfolio.positions.map((position) => ({
       ...positionDirection(position.symbol),
-      weight: position.volatility * 1.4,
+      weight: Math.min(2, Math.max(0, Number.isFinite(position.volatility) ? position.volatility : 0)) * 1.4,
     }));
     const samples = Array.from({ length: 48 }, (_, index) => {
       const { theta, phi } = cellAngles(index);

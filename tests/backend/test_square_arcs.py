@@ -117,3 +117,47 @@ def test_margins_do_not_overlap_for_well_separated_crossings():
     crossings = find_crossings(FOUR_LINES)
     assert not margins_overlap(crossings, 0.5)
     assert margins_overlap(crossings, 100.0)
+
+
+# ---- Stress pipeline: Knot Overload -------------------------------------------------
+from mocks.geometric_stress_generator import knot_overload_segments, knot_overload_ticks  # noqa: E402
+
+
+@pytest.mark.parametrize("seed", (1, 11, 99))
+def test_knot_overload_crossings_keep_valid_margin_squares(seed):
+    segments = knot_overload_segments(count=48, seed=seed)
+    crossings = find_crossings(segments)
+
+    assert len(crossings) > 200  # saturated: far beyond a human-readable diagram
+    for crossing in crossings:
+        assert crossing["over"] != crossing["under"]
+        assert math.isfinite(crossing["point"][0]) and math.isfinite(crossing["point"][1])
+        corners = margin_square(segments[crossing["over"]], crossing["point"], EPSILON)
+        assert all(math.isfinite(c) for corner in corners for c in corner)
+        assert square_side(corners) == pytest.approx(2 * EPSILON)
+        cx = sum(p[0] for p in corners) / 4
+        cy = sum(p[1] for p in corners) / 4
+        assert (cx, cy) == pytest.approx(crossing["point"])
+    assert abs(writhe(crossings)) <= len(crossings)
+
+
+def test_knot_overload_each_pair_crosses_at_most_once_and_is_not_duplicated():
+    segments = knot_overload_segments(count=32, seed=5)
+    crossings = find_crossings(segments)
+    pairs = [frozenset((c["over"], c["under"])) for c in crossings]
+    assert len(pairs) == len(set(pairs))
+
+
+def test_knot_overload_ticks_are_finite_and_whipsaw():
+    ticks = knot_overload_ticks(count=1024, seed=3)
+    assert all(math.isfinite(float(t["price"])) and float(t["price"]) > 0 for t in ticks)
+    reversals = sum(
+        1
+        for a, b, c in zip(ticks, ticks[1:], ticks[2:])
+        if (float(b["price"]) - float(a["price"])) * (float(c["price"]) - float(b["price"])) < 0
+    )
+    assert reversals / len(ticks) > 0.7
+    # Last-window line segments of the tick path feed the knot chart; they must stay topologically valid.
+    window = [((float(i), float(t["price"])), (float(i + 1), float(ticks[i + 1]["price"]))) for i, t in enumerate(ticks[:16])]
+    for crossing in find_crossings(window):
+        assert square_side(margin_square(window[crossing["over"]], crossing["point"], EPSILON)) == pytest.approx(2 * EPSILON)

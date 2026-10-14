@@ -19,7 +19,7 @@ the breakout is even complete.
 
 from __future__ import annotations
 
-from math import cos, isfinite, pi, sin, sqrt
+from math import acos, atan2, cos, exp, isfinite, pi, sin, sqrt
 from typing import Sequence, TypedDict
 
 GRID_COLUMNS = 8
@@ -203,3 +203,122 @@ def stream_function_velocity(x: float, y: float, strength: float = 1.0) -> tuple
     """Divergence-free 2D velocity (u, v) = (d psi/dy, -d psi/dx) for psi = strength*sin(x)*sin(y)."""
 
     return strength * sin(x) * cos(y), -strength * cos(x) * sin(y)
+
+
+# ---------------------------------------------------------------------------
+# CPU reference of the incompressible fluid step used by PortfolioRadar's shader.
+# ---------------------------------------------------------------------------
+
+MAX_FLOW_SPEED = 4.0
+
+
+def saturate_flow(flow: float, scale: float = 1.0) -> float:
+    """Smoothly bounds a raw fund-flow mass so spikes of 1000x stay finite."""
+
+    from math import tanh
+
+    return tanh(flow / scale) if isfinite(flow) else 0.0
+
+
+def sdf_at(point: Sequence[float], coefficients: SphericalCoefficients) -> float:
+    """Signed distance to the SH barrier: |x| - r(theta, phi). Negative = inside the wall."""
+
+    x, y, z = point
+    length = sqrt(x * x + y * y + z * z) or 1e-12
+    theta = acos(max(-1.0, min(1.0, y / length)))
+    phi = atan2(z, x)
+    return length - distorted_radius(theta, phi, coefficients)
+
+
+def sdf_normal(point: Sequence[float], coefficients: SphericalCoefficients, h: float = 1e-3) -> tuple[float, float, float]:
+    grad = []
+    for axis in range(3):
+        hi = list(point)
+        lo = list(point)
+        hi[axis] += h
+        lo[axis] -= h
+        grad.append(sdf_at(hi, coefficients) - sdf_at(lo, coefficients))
+    norm = sqrt(sum(g * g for g in grad)) or 1.0
+    return grad[0] / norm, grad[1] / norm, grad[2] / norm
+
+
+def boundary_response(velocity: Sequence[float], normal: Sequence[float]) -> tuple[float, float, float]:
+    """No-penetration wall response that conserves kinetic energy.
+
+    The normal component is removed and its energy is re-injected as tangential
+    rotation about the wall normal (n x t), i.e. a vortex along the barrier.
+    """
+
+    vn = sum(v * n for v, n in zip(velocity, normal))
+    tangential = [v - vn * n for v, n in zip(velocity, normal)]
+    swirl = [
+        normal[1] * tangential[2] - normal[2] * tangential[1],
+        normal[2] * tangential[0] - normal[0] * tangential[2],
+        normal[0] * tangential[1] - normal[1] * tangential[0],
+    ]
+    t_len = sqrt(sum(t * t for t in tangential))
+    s_len = sqrt(sum(s * s for s in swirl))
+    if s_len < 1e-12:
+        # Head-on impact: pick any tangent so the energy is still preserved.
+        axis = (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0)
+        swirl = [
+            normal[1] * axis[2] - normal[2] * axis[1],
+            normal[2] * axis[0] - normal[0] * axis[2],
+            normal[0] * axis[1] - normal[1] * axis[0],
+        ]
+        s_len = sqrt(sum(s * s for s in swirl)) or 1.0
+    target = sqrt(t_len * t_len + vn * vn)
+    # Keep the tangential direction, rotate the extra energy into the swirl direction.
+    extra = sqrt(max(0.0, target * target - t_len * t_len))
+    return tuple(t + extra * s / s_len for t, s in zip(tangential, swirl))  # type: ignore[return-value]
+
+
+def fluid_velocity(point: Sequence[float], time: float, jets: Sequence[Sequence[float]]) -> tuple[float, float, float]:
+    """Divergence-free velocity: analytic curl of a vector potential plus saturated rotational jets."""
+
+    x, y, z = (c * 1.7 for c in point)
+    k = 1.7
+    u = [
+        0.55 * k * (-sin(x - time * 0.21) * sin(y + time * 0.29) - cos(z + time * 0.27) * cos(x + time * 0.19)),
+        0.55 * k * (-sin(y + time * 0.31) * sin(z - time * 0.23) - cos(x - time * 0.21) * cos(y + time * 0.29)),
+        0.55 * k * (-sin(z + time * 0.27) * sin(x + time * 0.19) - cos(y + time * 0.31) * cos(z - time * 0.23)),
+    ]
+    # Sign conventions of the curl are irrelevant to the tests (only boundedness / solenoidality of jets matter).
+    for jx, jy, jz, gamma in jets:
+        norm = sqrt(jx * jx + jy * jy + jz * jz) or 1.0
+        ax, ay, az = jx / norm, jy / norm, jz / norm
+        g = saturate_flow(gamma)
+        px, py, pz = point
+        d = px * ax + py * ay + pz * az
+        rx, ry, rz = px - ax * d, py - ay * d, pz - az * d
+        rho2 = rx * rx + ry * ry + rz * rz + 0.08
+        swirl = g * (1.0 - exp(-rho2 / 0.35)) * 0.35 / rho2
+        u[0] += swirl * (ay * rz - az * ry) + g * ax * exp(-rho2 * 1.6) * 0.25
+        u[1] += swirl * (az * rx - ax * rz) + g * ay * exp(-rho2 * 1.6) * 0.25
+        u[2] += swirl * (ax * ry - ay * rx) + g * az * exp(-rho2 * 1.6) * 0.25
+    speed = sqrt(sum(c * c for c in u))
+    if speed > MAX_FLOW_SPEED:
+        u = [c * MAX_FLOW_SPEED / speed for c in u]
+    return u[0], u[1], u[2]
+
+
+def advect_particle(
+    point: Sequence[float],
+    time: float,
+    dt: float,
+    jets: Sequence[Sequence[float]],
+    coefficients: SphericalCoefficients,
+) -> tuple[tuple[float, float, float], tuple[float, float, float], bool]:
+    """One midpoint step with SDF projection. Returns (position, velocity, hit_wall)."""
+
+    u = fluid_velocity(point, time, jets)
+    mid = [p + 0.5 * dt * v for p, v in zip(point, u)]
+    u = fluid_velocity(mid, time + 0.5 * dt, jets)
+    new = [p + dt * v for p, v in zip(point, u)]
+    d = sdf_at(new, coefficients)
+    hit = d < 0.0
+    if hit:
+        n = sdf_normal(new, coefficients)
+        u = boundary_response(u, n)
+        new = [p + n_i * (-d + 0.01) for p, n_i in zip(new, n)]
+    return (new[0], new[1], new[2]), (u[0], u[1], u[2]), hit

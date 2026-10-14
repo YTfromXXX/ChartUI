@@ -145,3 +145,74 @@ def test_stream_function_velocity_is_divergence_free():
         du = (stream_function_velocity(x + h, y)[0] - stream_function_velocity(x - h, y)[0]) / (2 * h)
         dv = (stream_function_velocity(x, y + h)[1] - stream_function_velocity(x, y - h)[1]) / (2 * h)
         assert du + dv == pytest.approx(0.0, abs=1e-6)
+
+
+# ---- Stress pipeline: SDF Breakthrough / Long-term Spiral ----------------------------
+from distortion_field import advect_particle, boundary_response, sdf_at, sdf_normal  # noqa: E402
+from mocks.geometric_stress_generator import (  # noqa: E402
+    long_term_spiral_prices,
+    sdf_breakthrough_flows,
+    sdf_breakthrough_jets,
+    spiral_scale_series,
+)
+
+
+def _speed(v):
+    return math.sqrt(sum(c * c for c in v))
+
+
+def test_boundary_response_conserves_kinetic_energy_and_blocks_penetration():
+    coefficients = coefficients_from_fund_flows([3.0, -1.0])
+    for point, velocity in (((1.0, 0.1, 0.2), (2.0, 0.0, 0.0)), ((0.0, 1.2, 0.0), (0.0, -3.0, 0.0)), ((0.3, 0.8, 0.5), (-1.0, 1.0, 2.0))):
+        n = sdf_normal(point, coefficients)
+        out = boundary_response(velocity, n)
+        assert sum(o * c for o, c in zip(out, n)) == pytest.approx(0.0, abs=1e-9)
+        assert _speed(out) == pytest.approx(_speed(velocity), rel=1e-9)
+
+
+def test_flash_crash_breakthrough_stays_finite_and_flags_all_faces():
+    frames = sdf_breakthrough_flows(steps=240, spike=5000.0, spike_at=120)
+    peak = max(abs(f) for f in frames[120])
+    assert peak > 500  # mass really does jump by orders of magnitude
+    for frame in frames:
+        planes = calculate_true_gravity_distortion(coefficients_from_fund_flows(frame))
+        assert all(math.isfinite(p["distance"]) and math.isfinite(p["radius"]) for p in planes)
+        assert calculate_true_gravity_distortion(coefficients_from_fund_flows(frame))  # no exception
+    crash = calculate_true_gravity_distortion(coefficients_from_fund_flows(frames[120]))
+    assert len(detect_breakouts(crash)) > 0
+
+
+def test_fluid_stays_finite_and_forms_wall_vortices_during_flash_crash():
+    frames = sdf_breakthrough_flows(steps=160, spike=5000.0, spike_at=60)
+    jets = sdf_breakthrough_jets(frames)
+    wall_hits = 0
+    tangential_energy = 0.0
+    seeds = [(1.3 * math.cos(i), 0.9 * math.sin(i * 0.7), 1.3 * math.sin(i)) for i in range(24)]
+    points = list(seeds)
+    for step in range(60, 160):
+        coefficients = coefficients_from_fund_flows(frames[step])
+        for index, point in enumerate(points):
+            new, velocity, hit = advect_particle(point, step * 0.05, 0.05, jets[step], coefficients)
+            assert all(math.isfinite(c) for c in new + velocity)
+            assert sdf_at(new, coefficients) >= -1e-2  # never tunnels through the barrier
+            assert _speed(velocity) <= 4.0 + 1e-9
+            if hit:
+                wall_hits += 1
+                n = sdf_normal(new, coefficients)
+                tangential_energy += _speed(velocity) ** 2 - sum(v * c for v, c in zip(velocity, n)) ** 2
+            points[index] = new
+    assert wall_hits > 0
+    assert tangential_energy > 0.0
+
+
+def test_long_term_spiral_scale_grows_monotonically_and_flow_fit_stays_bounded():
+    prices = long_term_spiral_prices(years=40)
+    assert len(prices) == 40 * 252 + 1
+    assert all(math.isfinite(p) and p > 0 for p in prices)
+    scales = spiral_scale_series(prices)
+    assert all(b >= a for a, b in zip(scales, scales[1:]))
+    assert scales[-1] > scales[len(scales) // 2] > 0
+    # Decades of cumulative flow must not break the SH coefficients.
+    flows = [b - a for a, b in zip(prices[::252], prices[252::252])]
+    coefficients = coefficients_from_fund_flows(flows)
+    assert all(math.isfinite(v) and abs(v) < 1.0 for v in coefficients.values())
