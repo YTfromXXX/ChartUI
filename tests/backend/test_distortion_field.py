@@ -90,3 +90,58 @@ def test_estimate_plane_acceleration_detects_decelerating_approach():
     acceleration = estimate_plane_acceleration(history)
     assert acceleration is not None
     assert acceleration > 0
+
+
+from distortion_field import (  # noqa: E402
+    BREAKOUT_DISTANCE,
+    coefficients_from_fund_flows,
+    detect_breakouts,
+    stream_function_velocity,
+)
+
+
+def test_zero_or_invalid_fund_flows_keep_sphere_flat():
+    for flows in ([], [0.0, 0.0], [float("nan")]):
+        planes = calculate_true_gravity_distortion(coefficients_from_fund_flows(flows))
+        assert all(plane["distance"] == pytest.approx(0.0) for plane in planes)
+        assert detect_breakouts(planes) == list(range(PLANE_COUNT))
+
+
+def test_fund_flow_sign_moves_dk_at_the_poles():
+    inflow = calculate_true_gravity_distortion(coefficients_from_fund_flows([5.0, 3.0]))
+    outflow = calculate_true_gravity_distortion(coefficients_from_fund_flows([-5.0, -3.0]))
+    assert inflow[0]["distance"] < outflow[0]["distance"]
+    assert inflow[PLANE_COUNT - 1]["distance"] > outflow[PLANE_COUNT - 1]["distance"]
+
+
+def test_dk_matches_closed_form_for_fund_flow_coefficients():
+    coefficients = coefficients_from_fund_flows([4.0, -1.0, 2.0])
+    for plane in calculate_true_gravity_distortion(coefficients, base_radius=1.5):
+        theta, phi = cell_angles(plane["index"])
+        assert plane["distance"] == pytest.approx(1.5 - distorted_radius(theta, phi, coefficients, 1.5))
+
+
+def test_breakout_threshold_is_inclusive_and_matches_distance():
+    planes = calculate_true_gravity_distortion(coefficients_from_fund_flows([10.0, 2.0, -1.0]))
+    broken = detect_breakouts(planes)
+    assert broken == [p["index"] for p in planes if p["distance"] <= BREAKOUT_DISTANCE]
+    assert broken, "a strong one-sided flow must push mass through at least one face"
+    assert detect_breakouts(planes, threshold=-10.0) == []
+    boundary = [{"index": 0, "distance": BREAKOUT_DISTANCE}, {"index": 1, "distance": BREAKOUT_DISTANCE + 1e-9}]
+    assert detect_breakouts(boundary) == [0]
+
+
+def test_stronger_flow_never_reduces_breakout_count():
+    counts = [
+        len(detect_breakouts(calculate_true_gravity_distortion(coefficients_from_fund_flows([scale, scale * 0.5]))))
+        for scale in (0.5, 2.0, 20.0)
+    ]
+    assert counts == sorted(counts)
+
+
+def test_stream_function_velocity_is_divergence_free():
+    h = 1e-5
+    for x, y in ((0.3, 0.7), (1.9, 2.4), (4.0, 5.5)):
+        du = (stream_function_velocity(x + h, y)[0] - stream_function_velocity(x - h, y)[0]) / (2 * h)
+        dv = (stream_function_velocity(x, y + h)[1] - stream_function_velocity(x, y - h)[1]) / (2 * h)
+        assert du + dv == pytest.approx(0.0, abs=1e-6)

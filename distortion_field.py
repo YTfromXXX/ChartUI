@@ -165,3 +165,41 @@ def estimate_plane_acceleration(distance_history: Sequence[tuple[float, float]])
     velocity1 = (d1 - d0) / dt1
     velocity2 = (d2 - d1) / dt2
     return (velocity2 - velocity1) / max(1e-6, (dt1 + dt2) / 2)
+
+
+BREAKOUT_DISTANCE = 0.045
+
+
+def coefficients_from_fund_flows(flows: Sequence[float]) -> SphericalCoefficients:
+    """Maps signed asset fund flows (inflow > 0, outflow < 0) onto SH coefficients.
+
+    Net flow share drives the dipole, the dominant side drives the vertical
+    pressure and the flow dispersion drives the horizontal pressure.
+    """
+
+    clean = [float(flow) for flow in flows if isfinite(flow)]
+    gross = sum(abs(flow) for flow in clean)
+    if gross <= 0.0:
+        return coefficients_from_market(0.0, 0.0, 0.0, 0.0)
+    net = sum(clean) / gross
+    inflow = sum(flow for flow in clean if flow > 0) / gross
+    outflow = sum(-flow for flow in clean if flow < 0) / gross
+    dispersion = 1.0 - sum((abs(flow) / gross) ** 2 for flow in clean)
+    return coefficients_from_market(
+        vertical_pressure=max(inflow, outflow),
+        horizontal_pressure=dispersion,
+        gravity_magnitude=min(1.0, gross / (gross + 1.0)),
+        net_force=net,
+    )
+
+
+def detect_breakouts(planes: Sequence[PlaneReading], threshold: float = BREAKOUT_DISTANCE) -> list[int]:
+    """Indices of barrier faces whose D_k(t) has converged to/through the barrier."""
+
+    return [plane["index"] for plane in planes if plane["distance"] <= threshold]
+
+
+def stream_function_velocity(x: float, y: float, strength: float = 1.0) -> tuple[float, float]:
+    """Divergence-free 2D velocity (u, v) = (d psi/dy, -d psi/dx) for psi = strength*sin(x)*sin(y)."""
+
+    return strength * sin(x) * cos(y), -strength * cos(x) * sin(y)

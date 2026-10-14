@@ -1,5 +1,6 @@
 'use client';
 
+import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
 import { drawGravityHoneycomb, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
@@ -757,6 +758,8 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   ctx.restore();
 }
 
+const crossingStore = createCrossingStore();
+
 function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: KnotBuffer, timeline: KnotChartProps['timeline'], futureProjection: KnotFutureProjection | undefined, gravityTensor: TrueGravityTensor | undefined, guidePointer: GuidePointer | undefined, selectedKnotIds: readonly number[], gridTimeScale: number, shellScale: number, intrusionRotation: number, patternOffset: number, frame: number) {
   const { width, height } = size;
   ctx.clearRect(0, 0, width, height);
@@ -849,7 +852,18 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const vectorLength = Math.max(10, currentMagicLength * 18 + currentTension * 22);
   const endX = gravityTarget.x + Math.cos(currentAngle) * vectorLength;
   const endY = gravityTarget.y + Math.sin(currentAngle) * vectorLength;
-  drawSplitLine(ctx, gravityTarget.x - Math.cos(currentAngle) * vectorLength, gravityTarget.y - Math.sin(currentAngle) * vectorLength, endX, endY, gravityTarget.x, gravityTarget.y, currentVolatility * 5 + 2);
+  const ca = Math.cos(currentAngle);
+  const sa = Math.sin(currentAngle);
+  const gx = gravityTarget.x;
+  const gy = gravityTarget.y;
+  const shift = vectorLength * 0.35;
+  const reach = vectorLength * 0.85;
+  setSegment(crossingStore, 0, gx - ca * vectorLength, gy - sa * vectorLength, endX, endY);
+  setSegment(crossingStore, 1, gx + ca * shift + sa * reach, gy + sa * shift - ca * reach, gx + ca * shift - sa * reach, gy + sa * shift + ca * reach);
+  setSegment(crossingStore, 2, gx - reach, gy - vectorLength * 0.2, gx + reach, gy - vectorLength * 0.2);
+  setSegment(crossingStore, 3, gx + vectorLength * 0.2, gy - reach, gx + vectorLength * 0.2, gy + reach);
+  findCrossings(crossingStore);
+  drawSegmentsWithGaps(ctx, crossingStore, currentVolatility * 3 + 2, width, height);
   ctx.restore();
 
   for (let distance = 1; distance <= Math.min(buffer.count - 1, 8); distance += 1) {
