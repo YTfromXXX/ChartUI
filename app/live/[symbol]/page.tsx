@@ -3,11 +3,16 @@
 import { ArrowLeft, CircleDot, Flame, Radio, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import LiveChartView from '@/components/LiveChartView';
 import KnotChart, { type KnotFutureProjection, type KnotTimelineLayer, type KnotTick } from '@/components/2d/KnotChart';
+import KnotGlyphPalette from '@/components/KnotGlyphPalette';
+import ArcanaTacticPalette from '@/components/ArcanaTacticPalette';
+import type { SquareArcTarget } from '@/components/3d/ProbabilityBranches';
 import TarotScene from '@/components/3d/TarotScene';
+import type { ProjectionTimeframe } from '@/components/ProjectionField';
 import { useMarketStream } from '@/hooks/useMarketStream';
+import { useKnotSelection } from '@/hooks/useKnotSelection';
 import { calculateResonance, demoPortfolio, getTransitionRoute, type TransitionRoute } from '@/lib/portfolio';
 import { parseStrategyContract, STRATEGY_CONTRACT_KEY, type StrategyContract } from '@/lib/strategy';
 
@@ -24,7 +29,8 @@ export default function LiveSymbolPage() {
   const params = useParams<{ symbol: string }>();
   const searchParams = useSearchParams();
   const symbol = decodeURIComponent(params.symbol ?? '').toUpperCase();
-  const { marketDataMap, coordinateHistoryMap, isConnected, burstEvent, burstId } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals', symbol);
+  const [projectionTimeframe, setProjectionTimeframe] = useState<ProjectionTimeframe>('15m');
+  const { marketDataMap, coordinateHistoryMap, isConnected, burstEvent, burstId } = useMarketStream(process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals', symbol, projectionTimeframe);
   const data = marketDataMap[symbol];
   const selectedArcana = data?.major_arcana || arcanaBySymbol[symbol] || 'ARCANA_PENDING';
   const physics = data?.rendered_physics;
@@ -51,6 +57,15 @@ export default function LiveSymbolPage() {
   const [strategy, setStrategy] = useState<StrategyContract | null>(null);
   const [mana, setMana] = useState(0);
   const [knotChain, setKnotChain] = useState(0);
+  const selectedKnots = useKnotSelection((state) => state.selectedKnots);
+  const [squareArcTargets, setSquareArcTargets] = useState<SquareArcTarget[]>([]);
+  const [squareArcError, setSquareArcError] = useState<string | null>(null);
+  const squareArcPrice = data?.current_price ?? data?.chart_data?.close;
+  const squareArcStandardDeviation = useMemo(() => {
+    if (!squareArcPrice || !Number.isFinite(squareArcPrice)) return undefined;
+    const candleRange = data?.chart_data ? Math.abs(data.chart_data.high - data.chart_data.low) / 2 : 0;
+    return Math.max(candleRange, squareArcPrice * 0.0015, 0.01);
+  }, [data?.chart_data, squareArcPrice]);
 
   useEffect(() => {
     const contract = parseStrategyContract(window.sessionStorage.getItem(STRATEGY_CONTRACT_KEY));
@@ -65,6 +80,40 @@ export default function LiveSymbolPage() {
     setMana((current) => Math.max(0, current - Math.max(5, Math.round(strategy.syncLevel / 10))));
     setKnotChain((current) => current + 1);
   }, [burstEvent, strategy]);
+
+  useEffect(() => {
+    if (!squareArcPrice || !squareArcStandardDeviation) {
+      setSquareArcTargets([]);
+      return;
+    }
+    const controller = new AbortController();
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+    void fetch(`${apiBaseUrl}/api/square-arcs`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_price: squareArcPrice,
+        standard_deviation: squareArcStandardDeviation,
+        knot_ids: selectedKnots,
+      }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`Square Arc API responded ${response.status}`);
+      const payload = await response.json() as { targets?: SquareArcTarget[] };
+      if (!Array.isArray(payload.targets) || payload.targets.length !== 4) {
+        throw new Error('Square Arc API returned an invalid target set');
+      }
+      setSquareArcTargets(payload.targets);
+      setSquareArcError(null);
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return;
+      setSquareArcTargets([]);
+      setSquareArcError(error instanceof Error ? error.message : 'Square Arc API request failed');
+    });
+
+    return () => controller.abort();
+  }, [selectedKnots, squareArcPrice, squareArcStandardDeviation]);
 
   return (
     <main className="min-h-screen bg-[#080b10] px-4 py-6 font-display text-stone-100 sm:px-8 lg:px-12">
@@ -93,13 +142,13 @@ export default function LiveSymbolPage() {
             ['Gravity', physics?.gravity_g],
           ].map(([label, value]) => <div key={label as string}><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{typeof value === 'number' ? value.toFixed(3) : '--'}</p></div>)}
         </section>
-        <LiveChartView symbol={symbol} data={data} isConnected={isConnected} />
+        <LiveChartView symbol={symbol} data={data} isConnected={isConnected} timeframe={projectionTimeframe} onTimeframeChange={setProjectionTimeframe} />
         <section className="mt-5 overflow-hidden border border-cyan-200/15 bg-[#020814] p-4" aria-label="High frequency knot projection">
           <div className="mb-3 flex items-end justify-between border-b border-white/10 pb-3">
             <div><p className="font-mono text-[9px] uppercase tracking-[0.3em] text-cyan-200/60">Projection / native canvas</p><h2 className="mt-1 text-lg tracking-[0.12em] text-stone-100">FOUR-LAYER KNOT TRACE</h2></div>
             <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">ring buffer / 60fps</span>
           </div>
-          <KnotChart tick={knotTick} timeline={knotTimeline} futureProjection={futureProjection} height={340} />
+          <KnotChart tick={knotTick} timeline={knotTimeline} futureProjection={futureProjection} gravityTensor={data?.true_gravity_tensor} height={340} />
         </section>
         {strategy && <section className="mt-5 border border-amber-200/20 bg-amber-100/[0.035] p-4" aria-label="ChartUI strategy contract">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -108,9 +157,10 @@ export default function LiveSymbolPage() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3"><div><p className="font-mono text-[9px] uppercase text-stone-500">Mana reserve</p><div className="mt-2 h-2 bg-black/40"><div className="h-full bg-amber-200 transition-[width] duration-700" style={{ width: `${mana}%` }} /></div><p className="mt-1 font-mono text-xs text-amber-100">{mana}%</p></div><div className="border-l border-white/10 pl-3"><p className="font-mono text-[9px] uppercase text-stone-500">Sync field</p><p className="mt-1 font-mono text-sm text-cyan-100">{strategy.syncLevel}%</p></div><div className="border-l border-white/10 pl-3"><p className="font-mono text-[9px] uppercase text-stone-500">Contest rule</p><p className="mt-1 flex items-center gap-1 font-mono text-sm text-red-100"><Flame className="h-3 w-3" /> {mana > 0 ? 'armed / observe' : 'depleted / pause'}</p></div></div>
         </section>}
-        <TarotScene
-          className="relative mt-5 h-[620px] w-full overflow-hidden border border-cyan-300/20 bg-[#030712] shadow-[0_0_70px_rgba(34,211,238,0.08)]"
-          data={{
+        <section className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_278px]" aria-label="Interactive Square Arc projection">
+          <TarotScene
+            className="relative h-[620px] w-full overflow-hidden border border-cyan-300/20 bg-[#030712] shadow-[0_0_70px_rgba(34,211,238,0.08)]"
+            data={{
             cardName: selectedArcana,
             symbol,
             knotType: data?.knot_type,
@@ -128,8 +178,19 @@ export default function LiveSymbolPage() {
             oracleBranches: data?.oracle_branches,
             resonance,
             transitionRoute,
+            squareArcTargets,
+            currentPrice: squareArcPrice,
+            squareArcStandardDeviation,
           }}
-        />
+          />
+          <div className="grid gap-3">
+            <KnotGlyphPalette />
+            <ArcanaTacticPalette />
+          </div>
+        </section>
+        <p className={`mt-3 font-mono text-[9px] uppercase tracking-[0.2em] ${squareArcError ? 'text-red-300' : 'text-cyan-200/70'}`}>
+          {squareArcError ?? `Square Arc field / ${selectedKnots.length} Major Arcana knots linked / ${squareArcTargets.length * 2 || 0} target boxes`}
+        </p>
         {burstEvent && <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-fuchsia-200">Knot burst detected / elastic threshold exceeded</p>}
         <p className="mt-4 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-stone-600"><CircleDot className="h-3 w-3" /> Selected symbol stream / one-second physics refresh {visuals?.i_ching_hexagram_symbol ? `/ ${visuals.i_ching_hexagram_symbol}` : ''}</p>
       </div>
