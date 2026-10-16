@@ -1,5 +1,6 @@
 'use client';
 
+import { debugMetrics } from '@/lib/debugMetrics';
 import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
 import { drawGravityHoneycomb, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
@@ -862,7 +863,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   setSegment(crossingStore, 1, gx + ca * shift + sa * reach, gy + sa * shift - ca * reach, gx + ca * shift - sa * reach, gy + sa * shift + ca * reach);
   setSegment(crossingStore, 2, gx - reach, gy - vectorLength * 0.2, gx + reach, gy - vectorLength * 0.2);
   setSegment(crossingStore, 3, gx + vectorLength * 0.2, gy - reach, gx + vectorLength * 0.2, gy + reach);
-  findCrossings(crossingStore);
+  debugMetrics.chartCrossings = findCrossings(crossingStore);
   drawSegmentsWithGaps(ctx, crossingStore, currentVolatility * 3 + 2, width, height);
   ctx.restore();
 
@@ -920,6 +921,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     timelineRef.current = timeline;
     futureProjectionRef.current = futureProjection;
     gravityTensorRef.current = gravityTensor;
+    debugMetrics.gravityMax = gravityTensor ? Math.max(Math.abs(gravityTensor.magnitude) || 0, Math.hypot(gravityTensor.gradient.x, gravityTensor.gradient.y) || 0, ...gravityTensor.centers.map((c) => Math.abs(c.strength) || 0)) : 0;
     guideTrackingRef.current = guideTracking;
     selectedKnotIdsRef.current = selectedKnotIds;
     if (tick) writeTick(bufferRef.current, tick);

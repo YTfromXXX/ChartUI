@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import DebugHUDOverlay from '@/components/DebugHUDOverlay';
 import KnotChart from '@/components/2d/KnotChart';
 import PortfolioRadar from '@/components/3d/PortfolioRadar';
 import { useStressTestStream } from '@/hooks/useStressTestStream';
 import { demoPortfolio } from '@/lib/portfolio';
-import type { StressMode } from '@/lib/stressTestStream';
+import { syntheticGravityTensor, type StressMode } from '@/lib/stressTestStream';
 
 const MODES: StressMode[] = ['knot-overload', 'sdf-breakthrough', 'long-term-spiral'];
 
@@ -17,6 +18,7 @@ export default function StressTestPage() {
 
   return (
     <main className="min-h-screen bg-[#02060b] p-6 text-stone-100">
+      <DebugHUDOverlay crossingThreshold={400} />
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         {MODES.map((item) => (
           <button key={item} onClick={() => setMode(item)} className={`rounded border px-3 py-1 ${item === mode ? 'border-cyan-300 text-cyan-200' : 'border-white/20'}`}>
@@ -30,7 +32,7 @@ export default function StressTestPage() {
       {mode === 'sdf-breakthrough' ? (
         <PortfolioRadar portfolio={flow.portfolio ?? demoPortfolio} className="h-[560px] w-full" />
       ) : (
-        <KnotChart tick={knot.tick} history={knot.history} height={480} className="h-[480px] w-full" />
+        <KnotChart tick={knot.tick} gravityTensor={syntheticGravityTensor(knot.tick)} history={knot.history} height={480} className="h-[480px] w-full" />
       )}
     </main>
   );

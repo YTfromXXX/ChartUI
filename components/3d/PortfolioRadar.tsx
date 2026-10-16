@@ -3,10 +3,11 @@
 import { OrbitControls } from '@react-three/drei';
 import { Canvas, extend, useFrame, type ThreeElement } from '@react-three/fiber';
 import { shaderMaterial } from '@react-three/drei';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { angularGaussianBump, fitSphericalHarmonics, planeDistances } from '@/lib/distortionField';
 import { cellAngles } from '@/lib/projectionGrid';
+import { debugMetrics, reportBarrier } from '@/lib/debugMetrics';
 import { positionDirection, type PortfolioProfile } from '@/lib/portfolio';
 
 // ==========================================
@@ -227,6 +228,15 @@ function FluidParticles({ portfolio }: { portfolio: PortfolioProfile }) {
   }, []);
   const positions = useMemo(() => new Float32Array(FLUID_PARTICLES * 3), []);
 
+  useEffect(() => {
+    debugMetrics.particles = FLUID_PARTICLES;
+    return () => {
+      debugMetrics.particles = 0;
+      debugMetrics.minDk = 1;
+      debugMetrics.pressure = 0;
+    };
+  }, []);
+
   useFrame((_, delta) => {
     const m = materialRef.current;
     if (!m) return;
@@ -276,6 +286,10 @@ function usePortfolioCoefficients(portfolio: PortfolioProfile) {
 function DistortedEnergySphere({ portfolio }: { portfolio: PortfolioProfile }) {
   const materialRef = useRef<any>(null);
   const coefficients = usePortfolioCoefficients(portfolio);
+
+  useEffect(() => {
+    reportBarrier(planeDistances(coefficients, 1));
+  }, [coefficients]);
 
   useFrame((_, delta) => {
     if (!materialRef.current) return;

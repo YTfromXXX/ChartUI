@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KnotTick } from '@/components/2d/KnotChart';
 import type { PortfolioProfile } from '@/lib/portfolio';
+import { debugMetrics } from '@/lib/debugMetrics';
 import {
+  countDelayCrossings,
   createStressState,
   flowsToPortfolio,
   nextOverloadTick,
@@ -48,6 +50,7 @@ export function useStressTestStream({ mode, enabled = true, seed = 7, intervalMs
     setHistory([]);
     setPortfolio(undefined);
     setStep(0);
+    debugMetrics.streamCrossings = 0;
   }, [seed]);
 
   useEffect(() => {
@@ -68,6 +71,7 @@ export function useStressTestStream({ mode, enabled = true, seed = 7, intervalMs
         if (ring.length > maxTicks) ring.shift();
         setTick(next);
         setHistory(ring.slice());
+        debugMetrics.streamCrossings = countDelayCrossings(ring);
       }
       setStep(current + 1);
     }, intervalMs);

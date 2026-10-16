@@ -1,5 +1,6 @@
 // TypeScript mirror of tests/backend/mocks/geometric_stress_generator.py.
 import type { KnotTick } from '@/components/2d/KnotChart';
+import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import type { PortfolioProfile } from '@/lib/portfolio';
 
 export type StressMode = 'knot-overload' | 'sdf-breakthrough' | 'long-term-spiral';
@@ -81,5 +82,45 @@ export function flowsToPortfolio(flows: readonly number[]): PortfolioProfile {
       phase: flow >= 0 ? 'FIRE' : 'WATER',
       volatility: Math.abs(flow),
     })),
+  };
+}
+
+/** Crossings of the delay-embedded knot diagram (price[i], price[i+1]) path: a
+ * whipsaw stream wraps this curve around itself, so the count saturates fast. */
+export function countDelayCrossings(history: readonly KnotTick[], cap = 100000): number {
+  const n = history.length - 1;
+  let count = 0;
+  for (let i = 0; i < n - 1; i += 1) {
+    const ax = history[i].price;
+    const ay = history[i + 1].price;
+    const adx = history[i + 1].price - ax;
+    const ady = history[i + 2 < history.length ? i + 2 : i + 1].price - ay;
+    for (let j = i + 2; j < n - 1; j += 1) {
+      const bx = history[j].price;
+      const by = history[j + 1].price;
+      const bdx = history[j + 1].price - bx;
+      const bdy = history[j + 2 < history.length ? j + 2 : j + 1].price - by;
+      const denom = adx * bdy - ady * bdx;
+      if (Math.abs(denom) < 1e-12) continue;
+      const t = ((bx - ax) * bdy - (by - ay) * bdx) / denom;
+      const u = ((bx - ax) * ady - (by - ay) * adx) / denom;
+      if (t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6 && (count += 1) >= cap) return cap;
+    }
+  }
+  return count;
+}
+
+/** Gravity tensor synthesised from a tick so the honeycomb has something to bend around. */
+export function syntheticGravityTensor(tick: KnotTick | undefined): TrueGravityTensor | undefined {
+  if (!tick) return undefined;
+  const force = Math.sin(tick.angle) * tick.tension;
+  return {
+    net_force: force,
+    magnitude: Math.abs(force) + tick.volatility,
+    gradient: { x: Math.cos(tick.angle) * tick.volatility, y: force },
+    centers: [
+      { side: 'bid', price: tick.price * 0.99, strength: 0.002 + tick.volatility * 0.02, normalized_position: 0.3 },
+      { side: 'ask', price: tick.price * 1.01, strength: 0.002 + tick.tension * 0.02, normalized_position: 0.7 },
+    ],
   };
 }
