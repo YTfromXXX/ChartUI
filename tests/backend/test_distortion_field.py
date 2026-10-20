@@ -216,3 +216,22 @@ def test_long_term_spiral_scale_grows_monotonically_and_flow_fit_stays_bounded()
     flows = [b - a for a, b in zip(prices[::252], prices[252::252])]
     coefficients = coefficients_from_fund_flows(flows)
     assert all(math.isfinite(v) and abs(v) < 1.0 for v in coefficients.values())
+
+
+from distortion_field import clamp_cell_velocity, cell_speed_cap  # noqa: E402
+
+
+def test_cell_speed_caps_are_bounded_and_lower_at_poles():
+    caps = [cell_speed_cap(i) for i in range(PLANE_COUNT)]
+    assert all(0.0 < c <= 4.0 for c in caps)
+    assert cell_speed_cap(0) < cell_speed_cap(2 * 8)  # pole row < equatorial row
+
+
+def test_clamp_cell_velocity_survives_5000x_mass_and_non_finite_input():
+    for index in range(PLANE_COUNT):
+        huge = clamp_cell_velocity((5000.0, -5000.0, 5000.0), index)
+        assert _speed(huge) == pytest.approx(cell_speed_cap(index))
+        for bad in ((float("nan"), 0.0, 0.0), (float("inf"), 1.0, 0.0), (1e300, 1e300, 1e300)):
+            assert clamp_cell_velocity(bad, index) == (0.0, 0.0, 0.0)
+        small = clamp_cell_velocity((0.1, 0.0, 0.0), index)
+        assert small == (0.1, 0.0, 0.0)

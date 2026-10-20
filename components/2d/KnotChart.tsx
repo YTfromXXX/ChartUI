@@ -34,6 +34,24 @@ export type KnotTimelineLayer = {
 };
 
 export type GuidePointer = { x: number; y: number };
+
+/** Per-market physics of the knot: stroke thickness, high-frequency vibration,
+ * angular rigidity (0 = fluid, 1 = rigid polyhedron) and directional box stretch. */
+export type KnotFieldStyle = {
+  strokeScale?: number;
+  vibration?: number;
+  rigidity?: number;
+  projectionStretch?: number;
+};
+
+const NEUTRAL_STYLE: Required<KnotFieldStyle> = { strokeScale: 1, vibration: 0, rigidity: 0, projectionStretch: 0 };
+let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
+
+function rigidAngle(angle: number, rigidity: number) {
+  if (rigidity <= 0) return angle;
+  const step = Math.PI / 12;
+  return angle + (Math.round(angle / step) * step - angle) * rigidity;
+}
 export type ProjectionGesture =
   | { type: 'toggle-selection-lock' }
   | { type: 'time-scale'; delta: number }
@@ -67,6 +85,7 @@ export type KnotChartProps = {
   intrusionRotation?: number;
   patternOffset?: number;
   onGesture?: (gesture: ProjectionGesture) => void;
+  fieldStyle?: KnotFieldStyle;
 };
 
 type CanvasSize = { width: number; height: number; dpr: number };
@@ -691,11 +710,12 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   const vertical = Math.max(0, Math.min(1, projection.vertical_pressure));
   const horizontal = Math.max(0, Math.min(1, projection.horizontal_pressure));
   const futureWidth = Math.min(width * 0.3, 154);
-  const pulse = 1 + Math.sin(frame * 0.06) * 0.045;
+  const pulse = 1 + Math.sin(frame * 0.06) * 0.045 * (1 - activeStyle.rigidity);
+  const stretch = 1 + activeStyle.projectionStretch;
   const scaleX = (0.92 + horizontal * 0.5 - vertical * 0.16) * pulse;
-  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse;
+  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse * stretch;
   const undistortedAnchorX = targetX + futureWidth * 0.56;
-  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22;
+  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22 * (1 + activeStyle.projectionStretch);
   const anchor = gravityDrift(undistortedAnchorX, undistortedAnchorY, width, height, gravityTensor);
   const topology = projection.topology.toLowerCase();
   const color = topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
@@ -710,7 +730,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   projection.coordinates.forEach((point, index) => {
     const pathPoint = gravityDrift(
       targetX + futureWidth * ((index + 1) / Math.max(1, projection.coordinates.length)) * (0.65 + point.x * 0.35),
-      targetY + (point.y - 0.5) * height * 0.32,
+      targetY + (point.y - 0.5) * height * 0.32 * stretch,
       width,
       height,
       gravityTensor,
@@ -777,7 +797,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const currentIndex = readIndex(buffer, buffer.count - 1);
   const currentPrice = buffer.prices[currentIndex];
   const currentVolatility = buffer.volatilities[currentIndex];
-  const currentAngle = buffer.angles[currentIndex];
+  const currentAngle = rigidAngle(buffer.angles[currentIndex], activeStyle.rigidity);
   const currentMagicLength = buffer.lengths[currentIndex];
   const currentTension = buffer.tensions[currentIndex];
   const plotLeft = 20;
@@ -804,7 +824,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
 
   ctx.save();
   ctx.strokeStyle = '#dbeafe';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = activeStyle.strokeScale;
   ctx.globalAlpha = 0.3;
   ctx.beginPath();
   for (let ordinal = 0; ordinal < buffer.count; ordinal += 1) {
@@ -827,7 +847,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
     const jump = buffer.jumps[index] === 1 || Math.abs(buffer.prices[nextIndex] - buffer.prices[index]) > priceRange * 0.28;
     ctx.save();
     ctx.strokeStyle = jump ? '#fb7185' : '#67e8f9';
-    ctx.lineWidth = jump ? 1.8 : 1.2;
+    ctx.lineWidth = (jump ? 1.8 : 1.2) * activeStyle.strokeScale;
     if (jump) {
       const gap = Math.max(2, 12 / Math.max(0.2, buffer.tensions[index] + 0.2));
       ctx.setLineDash([gap, gap * 1.35]);
@@ -845,7 +865,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.save();
   ctx.strokeStyle = '#f8d66d';
   ctx.fillStyle = 'rgba(248, 214, 109, 0.12)';
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.4 * activeStyle.strokeScale;
   ctx.beginPath();
   ctx.arc(gravityTarget.x, gravityTarget.y, currentRadius, -Math.PI * 0.8, Math.PI * 0.6);
   ctx.stroke();
@@ -859,10 +879,12 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const gy = gravityTarget.y;
   const shift = vectorLength * 0.35;
   const reach = vectorLength * 0.85;
-  setSegment(crossingStore, 0, gx - ca * vectorLength, gy - sa * vectorLength, endX, endY);
-  setSegment(crossingStore, 1, gx + ca * shift + sa * reach, gy + sa * shift - ca * reach, gx + ca * shift - sa * reach, gy + sa * shift + ca * reach);
-  setSegment(crossingStore, 2, gx - reach, gy - vectorLength * 0.2, gx + reach, gy - vectorLength * 0.2);
-  setSegment(crossingStore, 3, gx + vectorLength * 0.2, gy - reach, gx + vectorLength * 0.2, gy + reach);
+  const vib = activeStyle.vibration;
+  const jitter = (phase: number) => (vib > 0 ? Math.sin(frame * 1.7 + phase) * vib * 2.2 + Math.sin(frame * 3.1 + phase * 2.3) * vib : 0);
+  setSegment(crossingStore, 0, gx - ca * vectorLength + jitter(0), gy - sa * vectorLength + jitter(1), endX + jitter(2), endY + jitter(3));
+  setSegment(crossingStore, 1, gx + ca * shift + sa * reach + jitter(4), gy + sa * shift - ca * reach + jitter(5), gx + ca * shift - sa * reach + jitter(6), gy + sa * shift + ca * reach + jitter(7));
+  setSegment(crossingStore, 2, gx - reach + jitter(8), gy - vectorLength * 0.2 + jitter(9), gx + reach + jitter(10), gy - vectorLength * 0.2 + jitter(11));
+  setSegment(crossingStore, 3, gx + vectorLength * 0.2 + jitter(12), gy - reach + jitter(13), gx + vectorLength * 0.2 + jitter(14), gy + reach + jitter(15));
   debugMetrics.chartCrossings = findCrossings(crossingStore);
   drawSegmentsWithGaps(ctx, crossingStore, currentVolatility * 3 + 2, width, height);
   ctx.restore();
@@ -892,7 +914,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture, fieldStyle }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
@@ -905,6 +927,8 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
   const historyRef = useRef<readonly KnotTick[] | undefined>(undefined);
   const bufferRef = useRef<KnotBuffer>(createBuffer(Math.max(16, maxTicks)));
   const sizeRef = useRef<CanvasSize>({ width: 640, height, dpr: 1 });
+  const fieldStyleRef = useRef<Required<KnotFieldStyle>>(NEUTRAL_STYLE);
+  fieldStyleRef.current = fieldStyle ? { ...NEUTRAL_STYLE, ...fieldStyle } : NEUTRAL_STYLE;
 
   useEffect(() => {
     const buffer = bufferRef.current;
@@ -959,6 +983,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     resize();
     const draw = () => {
       if (!running) return;
+      activeStyle = fieldStyleRef.current;
       renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, futureProjectionRef.current, gravityTensorRef.current, guideTrackingRef.current ? guidePointerRef.current : undefined, selectedKnotIdsRef.current, gridTimeScale, shellScale, intrusionRotation, patternOffset, frame);
       frame += 1;
       animationFrame = window.requestAnimationFrame(draw);

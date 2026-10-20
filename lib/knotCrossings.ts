@@ -1,7 +1,7 @@
 // Crossing detection + over/under bookkeeping for the 2D knot diagram.
 // Mirrors knot_crossings.py (the tested reference implementation).
 
-export const MAX_SEGMENTS = 8;
+export const MAX_SEGMENTS = 96;
 export const MAX_CROSSINGS = MAX_SEGMENTS * MAX_SEGMENTS;
 const INTERIOR_EPS = 1e-6;
 
@@ -19,6 +19,7 @@ export interface CrossingStore {
   order: Float32Array;
   // Alexander-style crossing sign (+1 / -1) per crossing
   signs: Int8Array;
+  rank: Uint16Array;
 }
 
 export function createCrossingStore(): CrossingStore {
@@ -31,6 +32,7 @@ export function createCrossingStore(): CrossingStore {
     under: new Int8Array(MAX_CROSSINGS),
     order: new Float32Array(MAX_CROSSINGS),
     signs: new Int8Array(MAX_CROSSINGS),
+    rank: new Uint16Array(MAX_CROSSINGS),
   };
 }
 
@@ -61,6 +63,7 @@ export function findCrossings(store: CrossingStore): number {
       if (Math.abs(denom) < 1e-9) continue;
       const t = ((bx - ax) * bdy - (by - ay) * bdx) / denom;
       const u = ((bx - ax) * ady - (by - ay) * adx) / denom;
+      if (count >= MAX_CROSSINGS) break;
       if (t <= INTERIOR_EPS || t >= 1 - INTERIOR_EPS || u <= INTERIOR_EPS || u >= 1 - INTERIOR_EPS) continue;
       store.points[count * 2] = ax + adx * t;
       store.points[count * 2 + 1] = ay + ady * t;
@@ -81,18 +84,18 @@ export function findCrossings(store: CrossingStore): number {
 // the global crossing order so the pattern is stable frame to frame.
 function assignOverUnder(store: CrossingStore) {
   const n = store.count;
-  for (let i = 0; i < n; i += 1) {
-    let rank = 0;
-    const key = store.order[i];
-    for (let j = 0; j < n; j += 1) {
-      if (j !== i && (store.order[j] < key || (store.order[j] === key && j < i))) rank += 1;
-    }
-    if (rank % 2 === 1) {
-      const tmp = store.over[i];
-      store.over[i] = store.under[i];
-      store.under[i] = tmp;
-      store.signs[i] = -store.signs[i] as 1 | -1;
-    }
+  const rank = store.rank;
+  const order = store.order;
+  for (let i = 0; i < n; i += 1) rank[i] = i;
+  // O(n log n) ordering (ties broken by index) instead of the O(n^2) rank scan.
+  const view = rank.subarray(0, n);
+  view.sort((x, y) => order[x] - order[y] || x - y);
+  for (let position = 1; position < n; position += 2) {
+    const i = view[position];
+    const tmp = store.over[i];
+    store.over[i] = store.under[i];
+    store.under[i] = tmp;
+    store.signs[i] = -store.signs[i];
   }
 }
 
@@ -108,17 +111,25 @@ export function snapHalfPixel(value: number): number {
   return Math.round(value - 0.5) + 0.5;
 }
 
-// Even-odd clip: full-canvas rect minus 2*epsilon squares (aligned to the over
-// line) around every crossing where `segment` passes under.
-export function clipUnderGaps(ctx: CanvasRenderingContext2D, store: CrossingStore, segment: number, epsilon: number, width: number, height: number): boolean {
-  let any = false;
+// Batched render: ONE evenodd clip (canvas rect minus every 2*epsilon gap
+// square, built as a single combined Path2D), ONE stroke of every segment, then
+// ONE stroke of the short "over" stubs that bridge each gap. The background is
+// never erased, so this replaces per-crossing clearRect/destination-out work.
+export function drawSegmentsWithGaps(ctx: CanvasRenderingContext2D, store: CrossingStore, epsilon: number, width: number, height: number) {
+  if (store.segmentCount === 0) return;
+  const lines = new Path2D();
+  for (let seg = 0; seg < store.segmentCount; seg += 1) {
+    lines.moveTo(store.segments[seg * 4], store.segments[seg * 4 + 1]);
+    lines.lineTo(store.segments[seg * 4 + 2], store.segments[seg * 4 + 3]);
+  }
+  if (store.count === 0) {
+    ctx.stroke(lines);
+    return;
+  }
+  const gapPath = new Path2D();
+  gapPath.rect(0, 0, width, height);
+  const stubs = new Path2D();
   for (let i = 0; i < store.count; i += 1) {
-    if (store.under[i] !== segment) continue;
-    if (!any) {
-      ctx.beginPath();
-      ctx.rect(0, 0, width, height);
-      any = true;
-    }
     const o = store.over[i] * 4;
     const dx = store.segments[o + 2] - store.segments[o];
     const dy = store.segments[o + 3] - store.segments[o + 1];
@@ -127,24 +138,20 @@ export function clipUnderGaps(ctx: CanvasRenderingContext2D, store: CrossingStor
     const uy = (dy / len) * epsilon;
     const cx = store.points[i * 2];
     const cy = store.points[i * 2 + 1];
-    ctx.moveTo(cx - ux + uy, cy - uy - ux);
-    ctx.lineTo(cx + ux + uy, cy + uy - ux);
-    ctx.lineTo(cx + ux - uy, cy + uy + ux);
-    ctx.lineTo(cx - ux - uy, cy - uy + ux);
-    ctx.closePath();
+    gapPath.moveTo(cx - ux + uy, cy - uy - ux);
+    gapPath.lineTo(cx + ux + uy, cy + uy - ux);
+    gapPath.lineTo(cx + ux - uy, cy + uy + ux);
+    gapPath.lineTo(cx - ux - uy, cy - uy + ux);
+    gapPath.closePath();
+    stubs.moveTo(cx - ux, cy - uy);
+    stubs.lineTo(cx + ux, cy + uy);
   }
-  if (any) ctx.clip('evenodd');
-  return any;
-}
-
-export function drawSegmentsWithGaps(ctx: CanvasRenderingContext2D, store: CrossingStore, epsilon: number, width: number, height: number) {
-  for (let seg = 0; seg < store.segmentCount; seg += 1) {
-    ctx.save();
-    clipUnderGaps(ctx, store, seg, epsilon, width, height);
-    ctx.beginPath();
-    ctx.moveTo(store.segments[seg * 4], store.segments[seg * 4 + 1]);
-    ctx.lineTo(store.segments[seg * 4 + 2], store.segments[seg * 4 + 3]);
-    ctx.stroke();
-    ctx.restore();
-  }
+  ctx.save();
+  ctx.clip(gapPath, 'evenodd');
+  ctx.stroke(lines);
+  ctx.restore();
+  ctx.save();
+  ctx.lineCap = 'butt';
+  ctx.stroke(stubs);
+  ctx.restore();
 }

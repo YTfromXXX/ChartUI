@@ -322,3 +322,27 @@ def advect_particle(
         u = boundary_response(u, n)
         new = [p + n_i * (-d + 0.01) for p, n_i in zip(new, n)]
     return (new[0], new[1], new[2]), (u[0], u[1], u[2]), hit
+
+
+def cell_speed_cap(index: int) -> float:
+    """Hard per-grid-cell flow ceiling; mirrors `cellSpeedCap` in fluidGPGPU.ts.
+
+    Poles are capped lower than the equator because the 8x6 grid pinches there.
+    """
+
+    if not 0 <= index < PLANE_COUNT:
+        raise ValueError(f"plane index out of range: {index}")
+    row, column = divmod(index, GRID_COLUMNS)
+    theta_row = (row + 0.5) / GRID_ROWS * pi
+    return min(MAX_FLOW_SPEED, (1.4 + 1.8 * sin(theta_row)) * (1.0 if column % 2 == 0 else 0.9))
+
+
+def clamp_cell_velocity(velocity: Sequence[float], index: int) -> tuple[float, float, float]:
+    """NaN/Inf-safe per-cell clamp: invalid vectors collapse to rest."""
+
+    if any(not isfinite(c) for c in velocity) or sum(c * c for c in velocity) > 1e8:
+        return 0.0, 0.0, 0.0
+    cap = cell_speed_cap(index)
+    speed = sqrt(sum(c * c for c in velocity))
+    scale = cap / speed if speed > cap else 1.0
+    return velocity[0] * scale, velocity[1] * scale, velocity[2] * scale
