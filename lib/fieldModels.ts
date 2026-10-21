@@ -8,9 +8,71 @@ export type FieldStep = {
   gravityTensor: TrueGravityTensor;
   projection: KnotFutureProjection;
   style: KnotFieldStyle;
+  diagnostics?: FieldDiagnostics;
+};
+
+export type FieldDiagnostics = {
+  tension: number;
+  angularVelocity: number;
+  mass: number;
+  phase: number;
+  dailyStep: number;
+  poissonJump: boolean;
+  animalSync?: boolean;
+  kuramotoOrder?: number;
+  meanCorrelation?: number;
+  trendAgreement?: number;
+  directionalStrength?: number;
+  basketReturn?: number;
+  cryptoDampedDisplacement?: number;
+  cryptoDampedVelocity?: number;
+  cryptoFractionalNoise?: number;
+  cryptoHighFrequency?: number;
+  metaRelativeAssets?: MetaRelativeAssetDiagnostic[];
+  metaMeanCorrelation?: number;
+  metaRelativeDispersion?: number;
+};
+
+export type MetaRelativeAssetDiagnostic = {
+  symbol: string;
+  assetClass: 'equity' | 'currency';
+  normalizedIndex: number;
+  peerRelativePercent: number;
+  rollingCorrelation: number;
 };
 
 export type FieldSimulator = (now: number, anchorPrice?: number) => FieldStep;
+
+export type RelativeAsset = {
+  symbol: string;
+  assetClass: 'equity' | 'currency';
+  group: string;
+  weight: number;
+  usdDirection: 1 | -1;
+};
+
+export type RelativeAnalysisDesign = {
+  baseIndex: number;
+  returnWindow: number;
+  correlationWindow: number;
+  normalizeToBasket: true;
+  comparisonBasis: 'oriented-log-return-excess';
+  assets: readonly RelativeAsset[];
+};
+
+export type ButterworthCoefficients = {
+  b0: number;
+  b1: number;
+  b2: number;
+  a1: number;
+  a2: number;
+};
+
+export type ButterworthFilter = {
+  coefficients: ButterworthCoefficients;
+  push(value: number): number;
+  reset(value?: number): void;
+};
 
 export type FieldConfig = {
   kind: FieldKind;
@@ -21,28 +83,89 @@ export type FieldConfig = {
   basePrice: number;
   feedLabel: string;
   physics: string[];
+  relativeAnalysis?: RelativeAnalysisDesign;
+};
+
+export const ANIMAL_INITIAL_UNIVERSE = [
+  { symbol: 'SOYBEAN', label: 'Soybeans', group: 'grains' },
+  { symbol: 'WHEAT', label: 'Wheat', group: 'grains' },
+  { symbol: 'CORN', label: 'Corn', group: 'grains' },
+  { symbol: 'WTI', label: 'WTI crude oil', group: 'energy' },
+  { symbol: 'NATGAS', label: 'Natural gas', group: 'energy' },
+] as const;
+
+export const ANIMAL_CORRELATION_MATRIX = [
+  [1, 0.82, 0.79, 0.34, 0.21],
+  [0.82, 1, 0.84, 0.31, 0.18],
+  [0.79, 0.84, 1, 0.37, 0.25],
+  [0.34, 0.31, 0.37, 1, 0.66],
+  [0.21, 0.18, 0.25, 0.66, 1],
+] as const;
+
+const ANIMAL_ASSET_WEIGHTS = [0.22, 0.19, 0.21, 0.23, 0.15] as const;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+export type AnimalSyncDiagnostics = {
+  orderParameter: number;
+  meanCorrelation: number;
+  trendAgreement: number;
+  directionalStrength: number;
+  alert: boolean;
+};
+
+export const META_RELATIVE_ANALYSIS: RelativeAnalysisDesign = {
+  baseIndex: 100,
+  returnWindow: 1,
+  correlationWindow: 60,
+  normalizeToBasket: true,
+  comparisonBasis: 'oriented-log-return-excess',
+  assets: [
+    { symbol: 'SPX', assetClass: 'equity', group: 'us-equity', weight: 0.3, usdDirection: 1 },
+    { symbol: 'SX5E', assetClass: 'equity', group: 'europe-equity', weight: 0.2, usdDirection: 1 },
+    { symbol: 'NKY', assetClass: 'equity', group: 'asia-equity', weight: 0.2, usdDirection: 1 },
+    { symbol: 'DXY', assetClass: 'currency', group: 'usd', weight: 0.15, usdDirection: 1 },
+    { symbol: 'EURUSD', assetClass: 'currency', group: 'major-fx', weight: 0.075, usdDirection: -1 },
+    { symbol: 'USDJPY', assetClass: 'currency', group: 'major-fx', weight: 0.075, usdDirection: 1 },
+  ],
 };
 
 export const FIELD_CONFIGS: Record<FieldKind, FieldConfig> = {
   metal: {
     kind: 'metal', symbol: 'METALCRASH', title: 'METALCRASH / RARE METAL KNOT', subtitle: 'LME seconds x SMM daily', intervalMs: 1000, basePrice: 9500,
     feedLabel: 'LME 1s + SMM daily (synthetic)',
-    physics: ['Two-frequency layers: LME second noise on a SMM daily step', 'Overnight discontinuous jumps (trade-restriction spikes)'],
+    physics: [
+      'LME-like 1s layer follows an SMM-like daily Heaviside step baseline',
+      'Poisson-distributed discontinuities; low-frequency sine contributes to tension',
+      'Tension–angular-velocity phase plane exposes the geometric response to jumps',
+    ],
   },
   crypto: {
     kind: 'crypto', symbol: 'CRYPTOCRASH', title: 'CRYPTOCRASH / 24-7 TICK KNOT', subtitle: '24/7 ticks, spoofed book', intervalMs: 120, basePrice: 65000,
-    feedLabel: 'high-frequency ticks (BTC-USD anchored when live)',
-    physics: ['Flickering spoof walls: strongest gravity distortion', 'Constant high-frequency knot vibration'],
+    feedLabel: 'synthetic 120ms ticks (BTC-USD anchored when available)',
+    physics: [
+      'Hurst H=0.35 finite-memory fractional Gaussian noise drives log-price returns',
+      'Damped spoof-book oscillator (ζ=0.48, f₀=1.25 Hz) models order creation/cancellation',
+      'High-frequency sine/cosine injection sustains layer-by-layer knot vibration',
+    ],
   },
   animal: {
     kind: 'animal', symbol: 'ANIMALCRASH', title: 'ANIMALCRASH / HERD SENTIMENT KNOT', subtitle: 'crowd swell, trend lock', intervalMs: 400, basePrice: 0.042,
     feedLabel: 'SNS sentiment swell (synthetic)',
-    physics: ['OU sentiment swell drives the price', 'Trend lock: one thick bundle and a one-sided stretched prediction box'],
+    physics: [
+      'Soybeans, wheat, corn, WTI crude, and natural gas; deterministic synthetic basket',
+      'Rolling Pearson correlation + aligned trend strength feed a five-oscillator Kuramoto model',
+      'Synchronization is latched with hysteresis; the golden-angle log spiral projects directional reach',
+    ],
   },
   meta: {
     kind: 'meta', symbol: 'METACRASH', title: 'METACRASH / MACRO INDEX KNOT', subtitle: 'heavy composite index', intervalMs: 500, basePrice: 5200,
-    feedLabel: 'multi-asset composite index (synthetic)',
-    physics: ['Heaviest mass: minor noise cannot bend the polyhedron', 'Rigid spiral cube: quantized, locked angles'],
+    feedLabel: 'equity + FX relative basket (synthetic)',
+    physics: [
+      'Heaviest mass: minor noise cannot bend the polyhedron; angles remain 15°-quantized',
+      'Relative design: 60-sample rolling correlations on oriented log returns',
+      'Equity and FX constituents are normalized to base 100, then compared against their peer baskets',
+    ],
+    relativeAnalysis: META_RELATIVE_ANALYSIS,
   },
 };
 
@@ -61,6 +184,153 @@ const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(h
 
 function gauss(rand: () => number) {
   return Math.sqrt(-2 * Math.log(Math.max(1e-9, rand()))) * Math.cos(2 * Math.PI * rand());
+}
+
+export function calculateKuramotoOrder(phases: readonly number[]): number {
+  if (phases.length === 0 || phases.some((phase) => !Number.isFinite(phase))) return 0;
+  const real = phases.reduce((sum, phase) => sum + Math.cos(phase), 0) / phases.length;
+  const imaginary = phases.reduce((sum, phase) => sum + Math.sin(phase), 0) / phases.length;
+  return clamp(Math.hypot(real, imaginary), 0, 1);
+}
+
+export function calculatePearsonCorrelation(left: readonly number[], right: readonly number[]): number {
+  if (left.length !== right.length || left.length < 2) return 0;
+  const meanLeft = left.reduce((sum, value) => sum + value, 0) / left.length;
+  const meanRight = right.reduce((sum, value) => sum + value, 0) / right.length;
+  let covariance = 0;
+  let varianceLeft = 0;
+  let varianceRight = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const deltaLeft = left[index] - meanLeft;
+    const deltaRight = right[index] - meanRight;
+    covariance += deltaLeft * deltaRight;
+    varianceLeft += deltaLeft * deltaLeft;
+    varianceRight += deltaRight * deltaRight;
+  }
+  const denominator = Math.sqrt(varianceLeft * varianceRight);
+  return denominator > 1e-12 ? clamp(covariance / denominator, -1, 1) : 0;
+}
+
+export function createButterworthLowPass(cutoffHz: number, sampleRateHz: number): ButterworthFilter {
+  if (!Number.isFinite(cutoffHz) || !Number.isFinite(sampleRateHz) || cutoffHz <= 0 || sampleRateHz <= 0 || cutoffHz >= sampleRateHz / 2) {
+    throw new RangeError('Butterworth cutoff must be greater than zero and below the Nyquist frequency');
+  }
+  const omega = 2 * Math.PI * cutoffHz / sampleRateHz;
+  const cosine = Math.cos(omega);
+  const alpha = Math.sin(omega) / (2 * (1 / Math.sqrt(2)));
+  const a0 = 1 + alpha;
+  const coefficients: ButterworthCoefficients = {
+    b0: ((1 - cosine) / 2) / a0,
+    b1: (1 - cosine) / a0,
+    b2: ((1 - cosine) / 2) / a0,
+    a1: (-2 * cosine) / a0,
+    a2: (1 - alpha) / a0,
+  };
+  let x1 = 0;
+  let x2 = 0;
+  let y1 = 0;
+  let y2 = 0;
+  return {
+    coefficients,
+    push(value: number) {
+      if (!Number.isFinite(value)) throw new RangeError('Butterworth input must be finite');
+      const result = coefficients.b0 * value + coefficients.b1 * x1 + coefficients.b2 * x2
+        - coefficients.a1 * y1 - coefficients.a2 * y2;
+      if (!Number.isFinite(result)) throw new RangeError('Butterworth filter state became non-finite');
+      x2 = x1;
+      x1 = value;
+      y2 = y1;
+      y1 = result;
+      return y1;
+    },
+    reset(value = 0) {
+      if (!Number.isFinite(value)) throw new RangeError('Butterworth reset value must be finite');
+      x1 = value;
+      x2 = value;
+      y1 = value;
+      y2 = value;
+    },
+  };
+}
+
+export function fractionalGaussianNoise(innovations: readonly number[], hurst = 0.35, memory = 32): number[] {
+  if (!Number.isFinite(hurst) || hurst <= 0 || hurst >= 1) {
+    throw new RangeError('Hurst exponent must be between zero and one');
+  }
+  if (!Number.isInteger(memory) || memory < 1) throw new RangeError('fBm memory must be a positive integer');
+  const weights = [1];
+  for (let lag = 1; lag < memory; lag += 1) {
+    weights.push(Math.pow(lag + 1, hurst - 0.5) - Math.pow(lag, hurst - 0.5));
+  }
+  const norm = Math.sqrt(weights.reduce((sum, weight) => sum + weight * weight, 0));
+  return innovations.map((_, index) => {
+    let value = 0;
+    for (let lag = 0; lag < Math.min(memory, index + 1); lag += 1) {
+      value += weights[lag] * innovations[index - lag];
+    }
+    return value / norm;
+  });
+}
+
+export function quantizeAngleFloor(angle: number, step = Math.PI / 12): number {
+  if (!Number.isFinite(angle) || !Number.isFinite(step) || step <= 0) {
+    throw new RangeError('Angle and quantization step must be finite; step must be positive');
+  }
+  return Math.floor(angle / step) * step;
+}
+
+export function calculateAnimalCorrelationMatrix(returns: readonly (readonly number[])[]): number[][] {
+  const count = ANIMAL_INITIAL_UNIVERSE.length;
+  return Array.from({ length: count }, (_, left) => Array.from({ length: count }, (_, right) => {
+    if (left === right) return 1;
+    const observed = calculatePearsonCorrelation(returns[left] ?? [], returns[right] ?? []);
+    if ((returns[left]?.length ?? 0) < 3 || (returns[right]?.length ?? 0) < 3) {
+      return ANIMAL_CORRELATION_MATRIX[left][right];
+    }
+    return clamp(0.35 * ANIMAL_CORRELATION_MATRIX[left][right] + 0.65 * observed, -1, 1);
+  }));
+}
+
+export function analyzeAnimalSynchronization(
+  returns: readonly (readonly number[])[],
+  phases: readonly number[],
+  trendDirections: readonly number[],
+  directionalStrengths: readonly number[],
+  wasSynchronized = false,
+): AnimalSyncDiagnostics {
+  const count = Math.min(ANIMAL_INITIAL_UNIVERSE.length, returns.length, phases.length, trendDirections.length, directionalStrengths.length);
+  if (count === 0) return { orderParameter: 0, meanCorrelation: 0, trendAgreement: 0, directionalStrength: 0, alert: false };
+
+  const correlationMatrix = calculateAnimalCorrelationMatrix(returns);
+  const pairCorrelations: number[] = [];
+  for (let left = 0; left < count; left += 1) {
+    for (let right = left + 1; right < count; right += 1) {
+      pairCorrelations.push(correlationMatrix[left][right]);
+    }
+  }
+  const meanCorrelation = pairCorrelations.length
+    ? pairCorrelations.reduce((sum, value) => sum + value, 0) / pairCorrelations.length
+    : 0;
+  const orderParameter = calculateKuramotoOrder(phases.slice(0, count));
+  const directionSum = trendDirections.slice(0, count).reduce((sum, direction) => sum + Math.sign(direction), 0);
+  const trendAgreement = Math.abs(directionSum) / count;
+  const directionalStrength = directionalStrengths.slice(0, count).reduce((sum, value) => sum + clamp(value, 0, 1), 0) / count;
+  const aligned = trendAgreement >= 0.8 && directionalStrength >= 0.18;
+  const activationThreshold = wasSynchronized ? 0.7 : 0.82;
+  const alert = aligned && meanCorrelation >= 0.55 && orderParameter >= activationThreshold;
+
+  return { orderParameter, meanCorrelation, trendAgreement, directionalStrength, alert };
+}
+
+export function samplePoissonWaitSeconds(rand: () => number, intensityPerSecond: number): number {
+  if (!(intensityPerSecond > 0) || !Number.isFinite(intensityPerSecond)) {
+    throw new RangeError('Poisson intensity must be finite and greater than zero');
+  }
+  return -Math.log(Math.max(Number.MIN_VALUE, 1 - rand())) / intensityPerSecond;
+}
+
+export function heaviside(value: number): 0 | 1 {
+  return value < 0 ? 0 : 1;
 }
 
 function makeTick(timestamp: number, price: number, previous: number, scale: number, jump: boolean): KnotTick {
@@ -106,38 +376,89 @@ function buildProjection(direction: number, vertical: number, horizontal: number
 
 function metalSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
-  let smm = 9500;
-  let lme = 9500;
-  let step = 0;
-  let nextJump = 70 + Math.floor(rand() * 60);
+  const initialPrice = FIELD_CONFIGS.metal.basePrice;
+  const poissonIntensity = 1 / 90;
+  const simulatedDaySeconds = 30;
+  const sinePeriodSeconds = 240;
+  let smm = initialPrice;
+  let lme = initialPrice;
+  let elapsedSeconds = 0;
+  let previousTimestamp: number | undefined;
+  let dayIndex = 0;
+  let nextJumpAt = samplePoissonWaitSeconds(rand, poissonIntensity);
   let jumpFlash = 0;
+  let previousAngle = 0;
   return (now) => {
-    step += 1;
-    // SMM prints once per compressed "day"; LME ticks every second around it.
-    if (step % 30 === 0) smm *= 1 + gauss(rand) * 0.004;
-    let jumped = false;
-    if (step >= nextJump) {
-      const size = (0.03 + rand() * 0.04) * (rand() < 0.5 ? -1 : 1);
-      smm *= 1 + size;
-      lme *= 1 + size;
-      nextJump = step + 70 + Math.floor(rand() * 90);
-      jumped = true;
-      jumpFlash = 1;
+    const dt = previousTimestamp === undefined ? 1 : clamp((now - previousTimestamp) / 1000, 0.001, 10);
+    previousTimestamp = now;
+    elapsedSeconds += dt;
+
+    // SMM-like settlement updates only when the Heaviside day boundary advances.
+    const nextDayIndex = Math.floor(elapsedSeconds / simulatedDaySeconds);
+    let dailyStep = 0;
+    while (dayIndex < nextDayIndex) {
+      dayIndex += 1;
+      const boundary = dayIndex * simulatedDaySeconds;
+      if (heaviside(elapsedSeconds - boundary)) {
+        const sinePhase = (2 * Math.PI * boundary) / sinePeriodSeconds;
+        dailyStep = gauss(rand) * 0.003 + Math.sin(sinePhase) * 0.0015;
+        smm *= Math.exp(dailyStep);
+      }
     }
+
+    let jumped = false;
+    while (elapsedSeconds >= nextJumpAt) {
+      const jumpSize = (0.02 + rand() * 0.035) * (rand() < 0.5 ? -1 : 1);
+      smm *= 1 + jumpSize;
+      nextJumpAt += samplePoissonWaitSeconds(rand, poissonIntensity);
+      jumped = true;
+      jumpFlash = Math.min(1, jumpFlash + Math.abs(jumpSize) / 0.04);
+    }
+
     const previous = lme;
-    lme += (smm - lme) * 0.08 + gauss(rand) * smm * 0.0007;
-    jumpFlash *= 0.93;
-    const tick = makeTick(now, lme, previous, 0.003, jumped);
+    const lowFrequencyPhase = (2 * Math.PI * elapsedSeconds) / sinePeriodSeconds;
+    const lowFrequencyWave = Math.sin(lowFrequencyPhase);
+    const meanReversion = (smm - lme) * (1 - Math.exp(-0.08 * dt));
+    const highFrequencyNoise = gauss(rand) * smm * 0.00045 * Math.sqrt(dt);
+    lme = Math.max(smm * 0.05, lme + meanReversion + highFrequencyNoise);
+
     const basis = (smm - lme) / smm;
+    const tension = clamp(0.42 + 0.22 * lowFrequencyWave + Math.abs(basis) * 8 + jumpFlash * 0.3, 0, 1);
+    const relativeVelocity = Math.log(lme / previous) / dt;
+    const angle = Math.atan2(relativeVelocity * 120, 0.25 + Math.cos(lowFrequencyPhase));
+    let angleDelta = angle - previousAngle;
+    if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+    if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+    const angularVelocity = angleDelta / dt;
+    previousAngle = angle;
+    const tick: KnotTick = {
+      ...makeTick(now, lme, previous, 0.003, jumped),
+      angle,
+      tension,
+      volatility: clamp(Math.abs(relativeVelocity) * 120, 0, 1),
+      magicLength: clamp(Math.abs(angularVelocity) * 0.2, 0.1, 3),
+    };
+
     const walls: Wall[] = [
       { side: 'bid', offset: -0.5 + basis * 20, strength: 0.7 + jumpFlash },
       { side: 'ask', offset: 0.45 + basis * 20, strength: 0.6 + jumpFlash * (basis > 0 ? 0.2 : 1) },
     ];
+    const diagnostics: FieldDiagnostics = {
+      tension,
+      angularVelocity,
+      mass: clamp(0.8 + Math.abs(basis) * 12 + jumpFlash * 0.6, 0, 3),
+      phase: lowFrequencyPhase % (2 * Math.PI),
+      dailyStep,
+      poissonJump: jumped,
+    };
+    jumpFlash *= Math.exp(-dt / 8);
+
     return {
       tick,
       gravityTensor: buildGravity(lme, lme * 0.01, walls),
       projection: buildProjection(Math.sign(smm - lme) || 1, 0.45 + jumpFlash * 0.45, 0.35, 0.07 + jumpFlash * 0.05, jumpFlash > 0.4 ? 'trefoil' : 'spiral'),
       style: { strokeScale: 1 + jumpFlash * 0.6, vibration: 0.15, rigidity: 0.2, projectionStretch: jumpFlash * 0.5 },
+      diagnostics,
     };
   };
 }
@@ -146,92 +467,326 @@ function cryptoSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
   let price = FIELD_CONFIGS.crypto.basePrice;
   let frame = 0;
+  const innovations: number[] = [];
+  let oscillatorDisplacement = 0;
+  let oscillatorVelocity = 0;
+  let previousTimestamp: number | undefined;
   return (now, anchor) => {
     frame += 1;
+    const dt = previousTimestamp === undefined
+      ? FIELD_CONFIGS.crypto.intervalMs / 1000
+      : clamp((now - previousTimestamp) / 1000, 0.04, 0.5);
+    previousTimestamp = now;
     const previous = price;
-    if (anchor && Number.isFinite(anchor)) price += (anchor - price) * 0.05;
-    price += gauss(rand) * price * 0.00045 + Math.sin(frame * 0.9) * price * 0.00012;
-    const tick = makeTick(now, price, previous, 0.0009, false);
-    // Spoof walls appear and vanish every few frames, so the tensor never settles.
+    const innovation = gauss(rand);
+    innovations.push(innovation);
+    if (innovations.length > 32) innovations.shift();
+    const fractionalNoise = fractionalGaussianNoise(innovations, 0.35, 32).at(-1) ?? innovation;
+    const highFrequency = Math.sin(frame * 2.17) + 0.65 * Math.cos(frame * 1.43);
+    const anchorDrift = anchor && Number.isFinite(anchor) && anchor > 0
+      ? clamp(Math.log(anchor / price) * 0.035, -0.002, 0.002)
+      : 0;
+
+    // Spoof order creation/cancellation is a damped oscillator, not white-noise walls.
+    const naturalFrequency = 2 * Math.PI * 1.25;
+    const dampingRatio = 0.48;
+    const impulse = rand() < 0.16 ? (rand() < 0.5 ? -1 : 1) * (0.7 + rand() * 1.3) : 0;
+    const oscillatorAcceleration = impulse
+      - 2 * dampingRatio * naturalFrequency * oscillatorVelocity
+      - naturalFrequency * naturalFrequency * oscillatorDisplacement;
+    oscillatorVelocity = clamp(oscillatorVelocity + oscillatorAcceleration * dt, -5, 5);
+    oscillatorDisplacement = clamp(oscillatorDisplacement + oscillatorVelocity * dt, -1.5, 1.5);
+
+    const logReturn = clamp(
+      anchorDrift
+        + fractionalNoise * 0.00019 * Math.sqrt(dt / 0.12)
+        + highFrequency * 0.000035
+        + oscillatorDisplacement * 0.000035,
+      -0.015,
+      0.015,
+    );
+    price = Math.max(1, price * Math.exp(logReturn));
+
+    const tick = {
+      ...makeTick(now, price, previous, 0.00075, false),
+      angle: Math.atan2(logReturn * 750, 0.4 + Math.cos(frame * 1.43)),
+      volatility: clamp(Math.abs(logReturn) * 450, 0, 1),
+      tension: clamp(0.18 + Math.abs(fractionalNoise) * 0.1 + Math.abs(highFrequency) * 0.16 + Math.abs(oscillatorDisplacement) * 0.2, 0, 1),
+      magicLength: clamp(0.2 + Math.abs(oscillatorVelocity) * 0.08 + Math.abs(fractionalNoise) * 0.2, 0.1, 3),
+    };
+
+    // Order creation and cancellation exchange dominance as the oscillator changes phase.
     const walls: Wall[] = Array.from({ length: 4 }, (_, index) => ({
       side: index % 2 === 0 ? 'bid' : 'ask',
-      offset: (index % 2 === 0 ? -1 : 1) * (0.2 + rand() * 0.7),
-      strength: rand() < 0.45 ? 0.2 : 1.1 + rand() * 1.4,
+      offset: (index % 2 === 0 ? -1 : 1) * (0.2 + Math.abs(oscillatorDisplacement) * 0.35 + index * 0.12),
+      strength: clamp(
+        0.35
+          + (index % 2 === (oscillatorDisplacement >= 0 ? 0 : 1) ? 1.2 : 0.2)
+          + Math.max(0, oscillatorVelocity * (index % 2 === 0 ? 1 : -1)) * 0.35,
+        0.12,
+        3.5,
+      ),
     }));
     const net = walls.reduce((sum, wall) => sum + (wall.side === 'bid' ? 1 : -1) * wall.strength, 0);
+    const diagnostics: FieldDiagnostics = {
+      tension: tick.tension,
+      angularVelocity: logReturn / dt,
+      mass: clamp(0.8 + Math.abs(net) * 0.24, 0, 3),
+      phase: Math.atan2(oscillatorVelocity, oscillatorDisplacement || 1e-9),
+      dailyStep: 0,
+      poissonJump: false,
+      cryptoDampedDisplacement: oscillatorDisplacement,
+      cryptoDampedVelocity: oscillatorVelocity,
+      cryptoFractionalNoise: fractionalNoise,
+      cryptoHighFrequency: highFrequency,
+    };
     return {
       tick,
       gravityTensor: buildGravity(price, price * 0.006, walls),
-      projection: buildProjection(net >= 0 ? 1 : -1, 0.6 + rand() * 0.35, 0.3 + rand() * 0.4, 0.09, rand() < 0.5 ? 'figure_eight' : 'trefoil'),
-      style: { strokeScale: 0.9, vibration: 1.1 + Math.abs(net) * 0.25, rigidity: 0, projectionStretch: 0.1 },
+      projection: buildProjection(net >= 0 ? 1 : -1, 0.58 + Math.min(0.38, Math.abs(net) * 0.04), 0.3 + Math.abs(oscillatorDisplacement) * 0.12, 0.09, oscillatorDisplacement > 0.35 ? 'figure_eight' : 'trefoil'),
+      style: { strokeScale: 0.9, vibration: 1.15 + Math.abs(oscillatorVelocity) * 0.1 + Math.abs(highFrequency) * 0.15, rigidity: 0, projectionStretch: 0.1 },
+      diagnostics,
     };
   };
 }
 
 function animalSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
-  let price = FIELD_CONFIGS.animal.basePrice;
-  let sentiment = 0;
-  let lock = 0;
-  let lockDirection = 0;
-  let lockStrength = 0;
+  const count = ANIMAL_INITIAL_UNIVERSE.length;
+  const prices = ANIMAL_INITIAL_UNIVERSE.map(() => FIELD_CONFIGS.animal.basePrice);
+  const phases = ANIMAL_INITIAL_UNIVERSE.map((_, index) => index * 0.72);
+  const frequencies = ANIMAL_INITIAL_UNIVERSE.map(() => (rand() - 0.5) * 0.12);
+  const returnHistory: number[][] = ANIMAL_INITIAL_UNIVERSE.map(() => []);
+  const trendHistory: number[][] = ANIMAL_INITIAL_UNIVERSE.map(() => []);
+  let synchronized = false;
+  let previousBasket = FIELD_CONFIGS.animal.basePrice;
+  let previousAngle = 0;
+  let previousTimestamp: number | undefined;
   return (now) => {
-    sentiment += -sentiment * 0.04 + gauss(rand) * 0.12;
-    if (lock <= 0 && Math.abs(sentiment) > 0.55) {
-      lock = 40 + Math.floor(rand() * 40);
-      lockDirection = Math.sign(sentiment);
-    }
-    if (lock > 0) {
-      lock -= 1;
-      sentiment = lockDirection * Math.max(Math.abs(sentiment), 0.7);
-      lockStrength += (1 - lockStrength) * 0.15;
-    } else {
-      lockStrength *= 0.9;
-    }
-    const previous = price;
-    price *= 1 + sentiment * 0.0035 + gauss(rand) * 0.0006 * (1 - lockStrength);
-    const tick = makeTick(now, price, previous, 0.004, false);
-    const walls: Wall[] = [
-      { side: 'bid', offset: -0.4, strength: 0.6 + Math.max(0, sentiment) * 1.2 },
-      { side: 'ask', offset: 0.4, strength: 0.6 + Math.max(0, -sentiment) * 1.2 },
+    const dt = previousTimestamp === undefined ? FIELD_CONFIGS.animal.intervalMs / 1000 : clamp((now - previousTimestamp) / 1000, 0.05, 3);
+    previousTimestamp = now;
+    const sentiment = clamp(0.68 * Math.sin(now / 11500) + 0.32 * Math.sin(now / 37000 + 1.3), -1, 1);
+    const commonGrain = gauss(rand) * 0.00055 + sentiment * 0.00035;
+    const commonEnergy = gauss(rand) * 0.00065 + sentiment * 0.00025;
+    const innovations = [
+      0.84 * commonGrain + 0.16 * commonEnergy + gauss(rand) * 0.00024,
+      0.88 * commonGrain + gauss(rand) * 0.00022,
+      0.86 * commonGrain + 0.12 * commonEnergy + gauss(rand) * 0.0002,
+      0.76 * commonEnergy + 0.08 * commonGrain + gauss(rand) * 0.00028,
+      0.72 * commonEnergy + gauss(rand) * 0.00034,
     ];
+    const basketWeight = ANIMAL_ASSET_WEIGHTS.reduce((sum, weight) => sum + weight, 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const returnValue = innovations[index] + sentiment * (index < 3 ? 0.00028 : 0.0002);
+      prices[index] *= Math.exp(returnValue);
+      returnHistory[index].push(returnValue);
+      if (returnHistory[index].length > 48) returnHistory[index].shift();
+      trendHistory[index].push(returnValue);
+      if (trendHistory[index].length > 20) trendHistory[index].shift();
+
+      const targetFrequency = Math.sign(returnValue) * Math.min(1, Math.abs(returnValue) / 0.0005) * 0.42;
+      frequencies[index] += (targetFrequency - frequencies[index]) * Math.min(1, dt * 0.8);
+    }
+
+    const coupling = 0.9;
+    const dynamicCorrelationMatrix = calculateAnimalCorrelationMatrix(returnHistory);
+    const phaseVelocities = phases.map((phase, index) => {
+      const interaction = phases.reduce((sum, otherPhase, otherIndex) => {
+        if (index === otherIndex) return sum;
+        return sum + dynamicCorrelationMatrix[index][otherIndex] * Math.sin(otherPhase - phase);
+      }, 0) / (count - 1);
+      return frequencies[index] + coupling * interaction;
+    });
+    for (let index = 0; index < count; index += 1) {
+      phases[index] = (phases[index] + phaseVelocities[index] * dt + 2 * Math.PI) % (2 * Math.PI);
+    }
+
+    const trendDirections = trendHistory.map((history) => Math.sign(history.reduce((sum, value) => sum + value, 0)));
+    const directionalStrengths = trendHistory.map((history) => {
+      const magnitude = history.reduce((sum, value) => sum + Math.abs(value), 0);
+      return magnitude > 1e-12 ? Math.abs(history.reduce((sum, value) => sum + value, 0)) / magnitude : 0;
+    });
+    const sync = analyzeAnimalSynchronization(
+      returnHistory,
+      phases,
+      trendDirections,
+      directionalStrengths,
+      synchronized,
+    );
+    synchronized = sync.alert;
+    const alignment = trendDirections.reduce((sum, direction) => sum + direction, 0);
+    const direction = Math.sign(alignment) || Math.sign(sentiment) || 1;
+    const syncStrength = clamp((sync.orderParameter - 0.48) / 0.52, 0, 1)
+      * clamp((sync.meanCorrelation + 0.2) / 0.9, 0, 1)
+      * sync.trendAgreement
+      * (0.45 + sync.directionalStrength * 0.55);
+    const weightedLogPrice = prices.reduce((sum, value, index) => sum + Math.log(value / FIELD_CONFIGS.animal.basePrice) * ANIMAL_ASSET_WEIGHTS[index], 0) / basketWeight;
+    const price = FIELD_CONFIGS.animal.basePrice * Math.exp(weightedLogPrice);
+    const relativeMove = Math.log(price / previousBasket);
+    const angularVelocityRaw = phaseVelocities.reduce((sum, value, index) => sum + value * ANIMAL_ASSET_WEIGHTS[index], 0) / basketWeight;
+    const angle = Math.atan2(direction * Math.abs(angularVelocityRaw) * 5 + relativeMove * 80, 0.25 + sync.orderParameter);
+    const tick = {
+      ...makeTick(now, price, previousBasket, 0.003, false),
+      angle,
+      volatility: clamp(Math.abs(relativeMove) * 160, 0, 1),
+      tension: clamp(0.24 + syncStrength * 0.76 + Math.abs(sentiment) * 0.08, 0, 1),
+      magicLength: clamp(0.25 + syncStrength * 2.5, 0.1, 3),
+    };
+    let angleDelta = angle - previousAngle;
+    if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+    if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+    const angularVelocity = angleDelta / dt;
+    previousAngle = angle;
+    previousBasket = price;
+
+    const walls: Wall[] = [
+      { side: 'bid', offset: -0.4, strength: 0.55 + Math.max(0, direction) * syncStrength * 1.8 },
+      { side: 'ask', offset: 0.4, strength: 0.55 + Math.max(0, -direction) * syncStrength * 1.8 },
+    ];
+    const logSpiralReach = 0.035 + syncStrength * 0.17;
+    const coordinates = Array.from({ length: 8 }, (_, index) => {
+      const theta = index * GOLDEN_ANGLE;
+      const radius = 0.018 * Math.exp(0.22 * index) * (0.35 + syncStrength);
+      return {
+        x: clamp(0.5 + Math.cos(theta) * radius, 0.05, 0.95),
+        y: clamp(0.5 - direction * logSpiralReach * (Math.exp(index * 0.12) - 1) / (Math.exp(7 * 0.12) - 1), 0, 1),
+        z: clamp(0.5 + Math.sin(theta) * radius, 0.05, 0.95),
+      };
+    });
+    const diagnostics: FieldDiagnostics = {
+      tension: tick.tension,
+      angularVelocity,
+      mass: clamp(0.6 + syncStrength * 2.4, 0, 3),
+      phase: Math.atan2(
+        phases.reduce((sum, value) => sum + Math.sin(value), 0),
+        phases.reduce((sum, value) => sum + Math.cos(value), 0),
+      ),
+      dailyStep: 0,
+      poissonJump: false,
+      animalSync: sync.alert,
+      kuramotoOrder: sync.orderParameter,
+      meanCorrelation: sync.meanCorrelation,
+      trendAgreement: sync.trendAgreement,
+      directionalStrength: sync.directionalStrength,
+    };
+
     return {
       tick,
       gravityTensor: buildGravity(price, price * 0.02, walls),
-      projection: buildProjection(sentiment >= 0 ? 1 : -1, 0.3 + lockStrength * 0.65, 0.5 - lockStrength * 0.3, 0.07 + lockStrength * 0.16, lockStrength > 0.5 ? 'trefoil' : 'spiral'),
-      style: { strokeScale: 1 + lockStrength * 2.6, vibration: 0.25 * (1 - lockStrength), rigidity: lockStrength * 0.6, projectionStretch: lockStrength * 1.6 },
+      projection: {
+        vertical_pressure: clamp(0.3 + syncStrength * 0.68, 0, 1),
+        horizontal_pressure: clamp(0.54 - syncStrength * 0.34, 0, 1),
+        topology: sync.alert ? 'golden_log_spiral' : 'spiral',
+        topology_label: sync.alert ? 'KURAMOTO SYNC' : 'ECOSYSTEM FLOW',
+        coordinates,
+      },
+      style: {
+        strokeScale: 1 + syncStrength * 2.6,
+        vibration: 0.25 * (1 - syncStrength),
+        rigidity: syncStrength * 0.72,
+        projectionStretch: logSpiralReach * 6,
+        syncAlert: sync.alert,
+        syncStrength,
+      },
+      diagnostics,
     };
   };
 }
 
 function metaSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
-  const components = [0, 0, 0, 0, 0];
+  const design = META_RELATIVE_ANALYSIS;
+  const count = design.assets.length;
+  const levels = design.assets.map(() => design.baseIndex);
+  const orientedReturnHistories: number[][] = design.assets.map(() => []);
+  const filter = createButterworthLowPass(0.08, 2);
   let index = FIELD_CONFIGS.meta.basePrice;
+  let previousFilteredIndex = index;
+  let quantizedAngle = -Math.PI / 2;
+  filter.reset(index);
+
   return (now) => {
-    for (let i = 0; i < components.length; i += 1) components[i] = components[i] * 0.97 + gauss(rand) * 0.0008;
-    const composite = components.reduce((sum, value) => sum + value, 0) / components.length;
-    const previous = index;
-    index *= 1 + composite * 0.25 + 0.00004;
-    const raw = makeTick(now, index, previous, 0.0015, false);
-    // Index moves are heavy: damped and the knot angle is locked to 15 degree steps.
-    const step = Math.PI / 12;
+    const commonEquity = gauss(rand) * 0.00042 + 0.000025;
+    const commonUsd = gauss(rand) * 0.00024;
+    const commonGlobal = gauss(rand) * 0.00017;
+    const orientedReturns = design.assets.map((asset, assetIndex) => {
+      const equityExposure = asset.assetClass === 'equity' ? 1 : 0.12;
+      const currencyExposure = asset.group === 'usd' ? 1 : asset.assetClass === 'currency' ? 0.45 : 0.08;
+      const independent = gauss(rand) * (asset.assetClass === 'equity' ? 0.00027 : 0.0002);
+      const oriented = commonEquity * equityExposure
+        + commonGlobal * (0.3 + assetIndex * 0.04)
+        + commonUsd * currencyExposure
+        + independent;
+      const rawReturn = oriented / asset.usdDirection;
+      levels[assetIndex] = Math.max(1, levels[assetIndex] * Math.exp(rawReturn));
+      orientedReturnHistories[assetIndex].push(oriented);
+      if (orientedReturnHistories[assetIndex].length > design.correlationWindow) orientedReturnHistories[assetIndex].shift();
+      return oriented;
+    });
+
+    const basketReturn = design.assets.reduce((sum, asset, assetIndex) => sum + orientedReturns[assetIndex] * asset.weight, 0);
+    const rawPrevious = index;
+    index = Math.max(1, index * Math.exp(basketReturn));
+    const filteredIndex = filter.push(index);
+    const filteredReturn = Math.log(filteredIndex / previousFilteredIndex);
+    previousFilteredIndex = filteredIndex;
+
+    const correlations = Array.from({ length: count }, (_, left) => Array.from({ length: count }, (_, right) => (
+      left === right ? 1 : calculatePearsonCorrelation(orientedReturnHistories[left], orientedReturnHistories[right])
+    )));
+    const relativeAssets = design.assets.map((asset, assetIndex) => {
+      const peerWeight = design.assets.reduce((sum, peer, peerIndex) => peerIndex === assetIndex ? sum : sum + peer.weight, 0);
+      const peerReturn = design.assets.reduce((sum, peer, peerIndex) => (
+        peerIndex === assetIndex ? sum : sum + orientedReturns[peerIndex] * peer.weight
+      ), 0) / peerWeight;
+      const orientedLevel = design.baseIndex * Math.exp(Math.log(levels[assetIndex] / design.baseIndex) * asset.usdDirection);
+      const peerRelativePercent = (orientedReturns[assetIndex] - peerReturn) * 100;
+      const peerAverageCorrelation = correlations[assetIndex].reduce((sum, value, peerIndex) => peerIndex === assetIndex ? sum : sum + value, 0) / Math.max(1, count - 1);
+      return {
+        symbol: asset.symbol,
+        assetClass: asset.assetClass,
+        normalizedIndex: orientedLevel,
+        peerRelativePercent,
+        rollingCorrelation: peerAverageCorrelation,
+      };
+    });
+    const pairCorrelations = correlations.flatMap((row, left) => row.slice(left + 1));
+    const meanCorrelation = pairCorrelations.length ? pairCorrelations.reduce((sum, value) => sum + value, 0) / pairCorrelations.length : 0;
+    const relativeDispersion = Math.sqrt(relativeAssets.reduce((sum, asset) => sum + asset.peerRelativePercent ** 2, 0) / count);
+
+    const rawAngle = Math.atan2(filteredReturn * 1600, 0.35 + relativeDispersion * 0.08);
+    const floorAngle = quantizeAngleFloor(rawAngle);
+    if (floorAngle !== quantizedAngle) quantizedAngle = floorAngle;
     const tick: KnotTick = {
-      ...raw,
-      angle: Math.round(raw.angle / step) * step,
-      magicLength: raw.magicLength * 0.5,
-      tension: raw.tension * 0.4,
-      volatility: raw.volatility * 0.5,
+      ...makeTick(now, filteredIndex, rawPrevious, 0.0015, false),
+      angle: quantizedAngle,
+      magicLength: clamp(0.3 + relativeDispersion * 0.16, 0.3, 1.2),
+      tension: clamp(Math.abs(filteredReturn) * 180 + relativeDispersion * 0.08, 0.04, 0.55),
+      volatility: clamp(Math.abs(filteredReturn) * 120, 0, 0.45),
     };
     const walls: Wall[] = [
       { side: 'bid', offset: -0.55, strength: 2.2 },
-      { side: 'ask', offset: 0.55, strength: 2.0 + composite * 40 },
+      { side: 'ask', offset: 0.55, strength: 2.0 + clamp(relativeDispersion, 0, 1) * 0.8 },
     ];
+    const diagnostics: FieldDiagnostics = {
+      tension: tick.tension,
+      angularVelocity: filteredReturn / (FIELD_CONFIGS.meta.intervalMs / 1000),
+      mass: clamp(2.5 + relativeDispersion * 0.25, 0, 3),
+      phase: quantizedAngle,
+      dailyStep: 0,
+      poissonJump: false,
+      basketReturn,
+      metaRelativeAssets: relativeAssets,
+      metaMeanCorrelation: meanCorrelation,
+      metaRelativeDispersion: relativeDispersion,
+    };
     return {
       tick,
-      gravityTensor: buildGravity(index, index * 0.012, walls),
-      projection: buildProjection(composite >= 0 ? 1 : -1, 0.42, 0.42, 0.05, 'spiral'),
+      gravityTensor: buildGravity(filteredIndex, filteredIndex * 0.012, walls),
+      projection: buildProjection(Math.sign(filteredReturn) || 1, 0.32 + tick.tension * 0.3, 0.42, 0.05, 'spiral'),
       style: { strokeScale: 1.5, vibration: 0, rigidity: 0.95, projectionStretch: 0 },
+      diagnostics,
     };
   };
 }

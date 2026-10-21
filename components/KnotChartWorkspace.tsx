@@ -9,7 +9,7 @@ import KnotGlyphPalette from '@/components/KnotGlyphPalette';
 import CandySpiralScene from '@/components/3d/CandySpiralScene';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { useMarketStream } from '@/hooks/useMarketStream';
-import { createFieldSimulator, type FieldConfig, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 
 const MAX_TICKS = 256;
 const DEFAULT_SYMBOL = 'BTCUSD';
@@ -20,6 +20,8 @@ const timelineLayers: Array<{ key: keyof KnotTimelineLayerState; label: string; 
   { key: 'target', label: 'T-target', color: '#fb7185', description: 'baseline' },
   { key: 'best', label: 'T-best', color: '#a78bfa', description: 'ideal fractal' },
 ];
+
+type MetalPhaseSample = FieldDiagnostics & { timestamp: number };
 
 type KnotTimelineLayerState = {
   t40m: boolean;
@@ -162,6 +164,8 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const { ticker, isConnected: isExchangeConnected } = useBtcUsdTicker();
   const liveData = field ? undefined : marketDataMap[SYMBOL];
   const [fieldStep, setFieldStep] = useState<FieldStep | undefined>(undefined);
+  const [metalPhaseHistory, setMetalPhaseHistory] = useState<MetalPhaseSample[]>([]);
+  const lastPhaseTimestamp = useRef<number | undefined>(undefined);
   const tickerRef = useRef<number | undefined>(undefined);
   const [history, setHistory] = useState<KnotTick[]>([]);
   const [isRunning, setIsRunning] = useState(true);
@@ -219,6 +223,14 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     if (burstEvent) setBurstCount((current) => current + 1);
   }, [burstEvent]);
 
+  useEffect(() => {
+    const diagnostics = fieldStep?.diagnostics;
+    const timestamp = fieldStep?.tick.timestamp;
+    if (field?.kind !== 'metal' || !diagnostics || timestamp === undefined || timestamp === lastPhaseTimestamp.current) return;
+    lastPhaseTimestamp.current = timestamp;
+    setMetalPhaseHistory((current) => [...current.slice(-119), { ...diagnostics, timestamp }]);
+  }, [field?.kind, fieldStep]);
+
   const latestTick = history.at(-1);
   const timeline = useMemo(() => latestTick ? createTimeline(latestTick, visible) : undefined, [latestTick, visible]);
   const gravityTensor: TrueGravityTensor | undefined = field ? fieldStep?.gravityTensor : liveData?.true_gravity_tensor;
@@ -230,7 +242,9 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
 
   function resetChart() {
     lastTickTimestamp.current = undefined;
+    lastPhaseTimestamp.current = undefined;
     setHistory([]);
+    setMetalPhaseHistory([]);
   }
 
   function updateGuidePointer(pointer: GuidePointer) {
@@ -294,6 +308,107 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 ['burst events', String(burstCount)],
               ].map(([label, value]) => <div key={label} className="border border-white/10 bg-white/[0.025] px-3 py-2"><p className="font-mono text-[8px] uppercase tracking-[0.22em] text-stone-600">{label}</p><p className="mt-1 font-mono text-sm text-cyan-100">{value}</p></div>)}
             </div>
+            {field?.kind === 'metal' && (
+              <section className="mb-4 border border-amber-200/20 bg-[#080b12]/85 px-3 py-2" aria-label="Metal tension angular velocity phase plane">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <div>
+                    <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-amber-100/80">Metal / tension–angular velocity phase plane</p>
+                    <p className="mt-1 font-mono text-[8px] text-stone-600">SMM-like daily Heaviside steps + LME-like 1s reversion / Poisson jump intensity λ = 1/90 s⁻¹</p>
+                  </div>
+                  <p className="font-mono text-[8px] text-stone-500">
+                    T {fieldStep?.diagnostics?.tension.toFixed(2) ?? '--'} / ω {fieldStep?.diagnostics?.angularVelocity.toFixed(3) ?? '--'} rad·s⁻¹
+                    {fieldStep?.diagnostics?.poissonJump && <span className="ml-2 text-rose-300">POISSON JUMP</span>}
+                  </p>
+                </div>
+                <svg viewBox="0 0 600 128" className="mt-2 h-24 w-full" role="img" aria-label="Metal tension versus angular velocity history">
+                  <path d="M28 12V104H586 M28 58H586" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="1" />
+                  <text x="30" y="121" fill="#64748b" fontSize="8">TENSION →</text>
+                  <text x="30" y="10" fill="#64748b" fontSize="8">ANGULAR VELOCITY ω</text>
+                  {metalPhaseHistory.length > 1 && (
+                    <polyline
+                      points={metalPhaseHistory.map((sample) => {
+                        const x = 30 + sample.tension * 550;
+                        const y = 58 - Math.max(-3, Math.min(3, sample.angularVelocity)) * 14;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                      fill="none"
+                      stroke="#fbbf24"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                  {metalPhaseHistory.map((sample) => {
+                    const x = 30 + sample.tension * 550;
+                    const y = 58 - Math.max(-3, Math.min(3, sample.angularVelocity)) * 14;
+                    return <circle key={sample.timestamp} cx={x} cy={y} r={sample.poissonJump ? 3.5 : 1.7} fill={sample.poissonJump ? '#fb7185' : '#67e8f9'} />;
+                  })}
+                </svg>
+              </section>
+            )}
+            {field?.kind === 'animal' && (
+              <section
+                className={`mb-4 border px-3 py-2 ${fieldStep?.diagnostics?.animalSync ? 'border-amber-300/60 bg-amber-200/[0.08]' : 'border-emerald-200/20 bg-[#080b12]/85'}`}
+                aria-label="Animal commodity ecosystem synchronization"
+                aria-live="polite"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className={`font-mono text-[9px] uppercase tracking-[0.2em] ${fieldStep?.diagnostics?.animalSync ? 'text-amber-200' : 'text-emerald-100/80'}`}>
+                    {fieldStep?.diagnostics?.animalSync ? 'Kuramoto sync alert / projection ornament' : 'Commodity ecosystem / phase coherence'}
+                  </p>
+                  <p className="font-mono text-[8px] text-stone-500">
+                    r {fieldStep?.diagnostics?.kuramotoOrder?.toFixed(2) ?? '--'} / corr {fieldStep?.diagnostics?.meanCorrelation?.toFixed(2) ?? '--'} / trend {fieldStep?.diagnostics?.trendAgreement?.toFixed(2) ?? '--'}
+                  </p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {ANIMAL_INITIAL_UNIVERSE.map(({ symbol, group }) => (
+                    <span key={symbol} className="border border-white/10 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-stone-400">
+                      {symbol} / {group}
+                    </span>
+                  ))}
+                  {fieldStep?.diagnostics?.animalSync && (
+                    <span className="border border-amber-200/50 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-amber-100">
+                      synchronized / golden-angle projection
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
+            {field?.kind === 'crypto' && (
+              <section className="mb-4 border border-violet-200/20 bg-[#080b12]/85 px-3 py-2" aria-label="Crypto fBm and spoof oscillator diagnostics">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-violet-100/80">Crypto / fractional noise × damped spoof oscillator</p>
+                  <p className="font-mono text-[8px] text-stone-500">
+                    H 0.35 / ζ 0.48 / f₀ 1.25 Hz
+                  </p>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[8px] text-stone-500 sm:grid-cols-4">
+                  <span>fBm ε / {fieldStep?.diagnostics?.cryptoFractionalNoise?.toFixed(2) ?? '--'}</span>
+                  <span>HF sin/cos / {fieldStep?.diagnostics?.cryptoHighFrequency?.toFixed(2) ?? '--'}</span>
+                  <span>book x / {fieldStep?.diagnostics?.cryptoDampedDisplacement?.toFixed(2) ?? '--'}</span>
+                  <span>book v / {fieldStep?.diagnostics?.cryptoDampedVelocity?.toFixed(2) ?? '--'}</span>
+                </div>
+              </section>
+            )}
+            {field?.kind === 'meta' && (
+              <section className="mb-4 border border-cyan-200/20 bg-[#080b12]/85 px-3 py-2" aria-label="Meta relative equity and currency constituents">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-100/80">Meta / relative constituent matrix · base 100</p>
+                  <p className="font-mono text-[8px] text-stone-500">
+                    corr {fieldStep?.diagnostics?.metaMeanCorrelation?.toFixed(2) ?? '--'} / dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'}
+                  </p>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                  {(fieldStep?.diagnostics?.metaRelativeAssets ?? []).map((asset) => (
+                    <span key={asset.symbol} className="border border-white/10 px-1.5 py-1 font-mono text-[8px] text-stone-400">
+                      <span className="text-stone-200">{asset.symbol}</span> / {asset.assetClass} / {asset.normalizedIndex.toFixed(2)}
+                      <span className={asset.peerRelativePercent >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        {' '}Δpeer {asset.peerRelativePercent >= 0 ? '+' : ''}{asset.peerRelativePercent.toFixed(3)}% / ρ {asset.rollingCorrelation.toFixed(2)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
             {/* View Mode Bar */}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-cyan-500/20 bg-black/40 px-3 py-2 backdrop-blur-sm">
               <div className="flex items-center gap-2">

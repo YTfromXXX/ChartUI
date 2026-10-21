@@ -42,9 +42,18 @@ export type KnotFieldStyle = {
   vibration?: number;
   rigidity?: number;
   projectionStretch?: number;
+  syncAlert?: boolean;
+  syncStrength?: number;
 };
 
-const NEUTRAL_STYLE: Required<KnotFieldStyle> = { strokeScale: 1, vibration: 0, rigidity: 0, projectionStretch: 0 };
+const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
+  strokeScale: 1,
+  vibration: 0,
+  rigidity: 0,
+  projectionStretch: 0,
+  syncAlert: false,
+  syncStrength: 0,
+};
 let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
 
 function rigidAngle(angle: number, rigidity: number) {
@@ -718,11 +727,13 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22 * (1 + activeStyle.projectionStretch);
   const anchor = gravityDrift(undistortedAnchorX, undistortedAnchorY, width, height, gravityTensor);
   const topology = projection.topology.toLowerCase();
-  const color = topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
+  const color = activeStyle.syncAlert
+    ? '#fbbf24'
+    : topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18 + activeStyle.syncStrength * 0.16;
   ctx.lineWidth = 1;
   ctx.setLineDash([2, 5]);
   ctx.beginPath();
@@ -747,7 +758,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   ctx.translate(anchor.x, anchor.y);
   ctx.scale(scaleX, scaleY);
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3 + activeStyle.syncStrength * 0.2;
   ctx.shadowColor = color;
   ctx.shadowBlur = 12;
   ctx.lineWidth = 1.2;
@@ -777,6 +788,24 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   }
   ctx.stroke();
   ctx.restore();
+
+  if (activeStyle.syncAlert) {
+    ctx.save();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.fillStyle = '#fef3c7';
+    ctx.globalAlpha = 0.58 + Math.sin(frame * 0.12) * 0.18;
+    ctx.lineWidth = 1 + activeStyle.syncStrength;
+    ctx.setLineDash([3, 4]);
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 8 + activeStyle.syncStrength * 10;
+    ctx.beginPath();
+    ctx.arc(targetX, targetY, 8 + activeStyle.syncStrength * 12, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '8px monospace';
+    ctx.fillText('HERD SYNC', targetX + 12, targetY - 11);
+    ctx.restore();
+  }
 }
 
 const crossingStore = createCrossingStore();
