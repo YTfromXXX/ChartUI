@@ -44,6 +44,10 @@ export type KnotFieldStyle = {
   projectionStretch?: number;
   syncAlert?: boolean;
   syncStrength?: number;
+  invasionStrength?: number;
+  candySpinModifier?: number;
+  matrixDistance?: number;
+  resonanceArcanaId?: number;
 };
 
 const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
@@ -53,6 +57,10 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   projectionStretch: 0,
   syncAlert: false,
   syncStrength: 0,
+  invasionStrength: 0,
+  candySpinModifier: 1,
+  matrixDistance: 0,
+  resonanceArcanaId: -1,
 };
 let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
 

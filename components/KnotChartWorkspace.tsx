@@ -7,9 +7,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import KnotChart, { type KnotFieldStyle, type GuidePointer, type KnotTick, type KnotTimelineLayer, type ProjectionGesture } from '@/components/2d/KnotChart';
 import KnotGlyphPalette from '@/components/KnotGlyphPalette';
 import CandySpiralScene from '@/components/3d/CandySpiralScene';
+import MatrixGridExplorer from '@/components/MatrixGridExplorer';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { useMarketStream } from '@/hooks/useMarketStream';
-import { ANIMAL_INITIAL_UNIVERSE, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, analyzeMatrixPair, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { useKnotSelection } from '@/hooks/useKnotSelection';
+import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
 const MAX_TICKS = 256;
 const DEFAULT_SYMBOL = 'BTCUSD';
@@ -191,7 +194,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     if (!field || !isRunning) return;
     const simulate = createFieldSimulator(field.kind);
     const id = window.setInterval(() => {
-      const step = simulate(Date.now(), field.kind === 'crypto' ? tickerRef.current : undefined);
+      const step = simulate(Date.now(), field.kind === 'crypto' || field.kind === 'meta' ? tickerRef.current : undefined);
       setFieldStep(step);
     }, field.intervalMs);
     return () => window.clearInterval(id);
@@ -236,6 +239,53 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const gravityTensor: TrueGravityTensor | undefined = field ? fieldStep?.gravityTensor : liveData?.true_gravity_tensor;
   const futureProjection = field ? fieldStep?.projection : liveData?.spiral_cube;
   const fieldStyle: KnotFieldStyle | undefined = field ? fieldStep?.style : undefined;
+  const matrixAnalysis = useMemo(() => {
+    const currentPrice = latestTick?.price ?? field?.basePrice ?? 65000;
+    const currentVolatility = latestTick?.volatility ?? 0.25;
+    const currentTension = latestTick?.tension ?? 0.25;
+    const diagnostics = fieldStep?.diagnostics;
+    const mass = diagnostics?.mass ?? 0.8;
+    const usdIndex = fieldStep?.diagnostics?.usdIndex ?? 100;
+    const [asset, assetState, source] = field?.kind === 'metal'
+      ? [
+        'XAU',
+        { value: diagnostics?.xauUsdPrice ?? 2650, referenceValue: 2650, volatility: diagnostics?.xauVolatility ?? 0, tension: diagnostics?.xauTension ?? 0.42, mass: 1.1 },
+        'synthetic XAU/USD proxy',
+      ] as const
+      : field?.kind === 'animal'
+        ? [
+          'ANIMAL BASKET',
+          { value: currentPrice, referenceValue: field.basePrice, volatility: currentVolatility, tension: currentTension, mass },
+          'synthetic five-commodity basket',
+        ] as const
+        : field?.kind === 'meta'
+          ? [
+            'BTC',
+            { value: diagnostics?.btcProxyPrice ?? ticker?.price ?? 65000, referenceValue: 65000, volatility: diagnostics?.btcVolatility ?? 0, tension: diagnostics?.btcTension ?? 0.28, mass: 0.95 },
+            diagnostics?.btcProxyPrice && !ticker ? 'synthetic BTC proxy' : 'Coinbase BTC-USD when available',
+          ] as const
+          : field?.kind === 'crypto'
+            ? [
+              'BTC',
+              { value: ticker?.price ?? currentPrice, referenceValue: 65000, volatility: currentVolatility, tension: currentTension, mass },
+              ticker ? 'Coinbase BTC-USD' : 'synthetic BTC proxy',
+            ] as const
+            : [
+              'BTC',
+              { value: currentPrice, referenceValue: 65000, volatility: currentVolatility, tension: currentTension, mass },
+              'BTC chart state',
+            ] as const;
+    return {
+      analysis: analyzeMatrixPair(asset, assetState, 'USD', {
+        value: usdIndex,
+        referenceValue: 100,
+        volatility: diagnostics?.usdVolatility ?? 0.18,
+        tension: field?.kind === 'meta' ? 0.36 : 0.3,
+        mass: field?.kind === 'meta' ? 2.5 : 2.3,
+      }),
+      source,
+    };
+  }, [field, fieldStep, latestTick, ticker]);
   const isConnected = field ? true : isBackendConnected || isExchangeConnected;
   const memoryBytes = MAX_TICKS * (8 * 3 + 4 * 4 + 1);
   const bufferPercent = Math.round((history.length / MAX_TICKS) * 100);
@@ -257,7 +307,21 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   }
 
   function toggleKnot(id: number) {
-    if (!selectionLocked) setSelectedKnotIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+    if (selectionLocked) return;
+    const isSelected = selectedKnotIds.includes(id);
+    if (!isSelected && latestTick) {
+      const arcana = matrixAnalysis.analysis.resonance.arcana;
+      useKnotSelection.getState().recordKnotTrace(id, {
+        timestamp: Date.now(),
+        assetPair: `${matrixAnalysis.analysis.asset}/${matrixAnalysis.analysis.counterAsset}`,
+        matrixDistance: matrixAnalysis.analysis.distance,
+        resonanceArcanaId: arcana.id,
+        resonanceArcanaName: arcana.name,
+        tension: latestTick.tension,
+        price: latestTick.price,
+      });
+    }
+    setSelectedKnotIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
 
   function handleGesture(gesture: ProjectionGesture) {
@@ -300,6 +364,19 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
 
         <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_280px]">
           <section className="flex min-h-[calc(100vh-75px)] flex-col p-4 sm:p-6 lg:p-8">
+            <MatrixGridExplorer
+              analysis={matrixAnalysis.analysis}
+              label={field?.kind === 'metal' ? 'XAU / USD MATRIX DISTANCE' : `${matrixAnalysis.analysis.asset} / USD MATRIX DISTANCE`}
+              source={matrixAnalysis.source}
+              height={188}
+            />
+            {field?.kind === 'metal' && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-amber-200/15 bg-amber-100/[0.025] px-3 py-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
+                <span className="text-amber-100/75">Metal data catalog / {METAL_INSTRUMENT_CATALOG.length} benchmark symbols</span>
+                <span>Exchange stream + OTC daily assessments + 17 rare-earth benchmarks</span>
+                <span className="text-rose-200/75">Licensed feeds not connected / synthetic preview</span>
+              </div>
+            )}
             <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 ['price', latestTick?.price.toFixed(2) ?? '--'],
@@ -394,9 +471,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-100/80">Meta / relative constituent matrix · base 100</p>
                   <p className="font-mono text-[8px] text-stone-500">
-                    corr {fieldStep?.diagnostics?.metaMeanCorrelation?.toFixed(2) ?? '--'} / dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'}
+                    BTC/USD D {fieldStep?.diagnostics?.matrixDistance?.toFixed(2) ?? '--'} / Δθ {((fieldStep?.diagnostics?.metaMicroTremor ?? 0) * 180 / Math.PI).toFixed(2)}° / corr {fieldStep?.diagnostics?.metaMeanCorrelation?.toFixed(2) ?? '--'}
                   </p>
                 </div>
+                <p className="mt-1 font-mono text-[8px] text-stone-600">Relative dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'} / 15° floor quantization with distance-gated micro-tremor</p>
                 <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                   {(fieldStep?.diagnostics?.metaRelativeAssets ?? []).map((asset) => (
                     <span key={asset.symbol} className="border border-white/10 px-1.5 py-1 font-mono text-[8px] text-stone-400">
@@ -464,12 +542,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
                 </div>
                 <div className="mt-4">
-                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} />
+                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={fieldStyle} />
                 </div>
               </div>
             ) : viewMode === '3d' ? (
               <div className="space-y-4">
-                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} />
+                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={fieldStyle} />
               </div>
             ) : (
               <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">

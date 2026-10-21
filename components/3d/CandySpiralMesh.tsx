@@ -3,6 +3,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import type { KnotFieldStyle } from '@/components/2d/KnotChart';
 import {
   LAYER_COLORS,
   LAYER_CONFIG,
@@ -14,6 +15,7 @@ type CyberpunkPriceSphereProps = {
   price?: number;
   symbol?: string;
   wuxingPhase?: string;
+  eyeMode?: boolean;
 };
 
 /**
@@ -25,6 +27,7 @@ export function CyberpunkPriceSphere({
   price,
   symbol = 'BTCUSD',
   wuxingPhase = 'WATER',
+  eyeMode = false,
 }: CyberpunkPriceSphereProps) {
   const outerSphereRef = useRef<THREE.Mesh>(null);
   const innerCellsRef = useRef<THREE.Mesh>(null);
@@ -80,7 +83,8 @@ export function CyberpunkPriceSphere({
           transmission={0.45}
           thickness={0.8}
           transparent
-          opacity={0.65}
+          opacity={eyeMode ? 0.035 : 0.65}
+          side={THREE.DoubleSide}
           flatShading
         />
       </mesh>
@@ -91,7 +95,7 @@ export function CyberpunkPriceSphere({
       </lineSegments>
 
       {/* Outer translucent cyberpunk glass sphere */}
-      <mesh ref={outerSphereRef}>
+      {!eyeMode && <mesh ref={outerSphereRef}>
         <sphereGeometry args={[radius, 48, 48]} />
         <meshPhysicalMaterial
           color="#020d1a"
@@ -108,10 +112,10 @@ export function CyberpunkPriceSphere({
           transparent
           opacity={0.82}
         />
-      </mesh>
+      </mesh>}
 
       {/* Pulsing central core with current price energy */}
-      <mesh ref={coreRef}>
+      {!eyeMode && <mesh ref={coreRef}>
         <icosahedronGeometry args={[radius * 0.35, 2]} />
         <meshStandardMaterial
           color={coreColor}
@@ -120,19 +124,19 @@ export function CyberpunkPriceSphere({
           roughness={0.15}
           metalness={0.9}
         />
-      </mesh>
+      </mesh>}
 
       {/* Cyberpunk scanning latitude ring */}
-      <mesh ref={ring1Ref}>
+      {!eyeMode && <mesh ref={ring1Ref}>
         <torusGeometry args={[radius * 1.18, 0.012, 16, 64]} />
         <meshBasicMaterial color="#00ffff" transparent opacity={0.7} depthWrite={false} />
-      </mesh>
+      </mesh>}
 
       {/* Cyberpunk tilted meridian scanning ring */}
-      <mesh ref={ring2Ref}>
+      {!eyeMode && <mesh ref={ring2Ref}>
         <torusGeometry args={[radius * 1.28, 0.009, 16, 64]} />
         <meshBasicMaterial color="#ffd700" transparent opacity={0.55} depthWrite={false} />
-      </mesh>
+      </mesh>}
     </group>
   );
 }
@@ -143,6 +147,7 @@ type CandyInstancedMeshProps = {
   orbitSpeed?: number;
   spinSpeed?: number;
   onHoverCandy?: (candy: CandyPoint | null) => void;
+  fieldStyle?: KnotFieldStyle;
 };
 
 /**
@@ -157,6 +162,7 @@ export function CandyInstancedMesh({
   orbitSpeed = 0.24,
   spinSpeed = 1.8,
   onHoverCandy,
+  fieldStyle,
 }: CandyInstancedMeshProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const count = candies.length;
@@ -180,8 +186,10 @@ export function CandyInstancedMesh({
 
   // Initialize instance colors based on the 4 timeline layers
   const colorsInitialized = useRef(false);
+  const colorSignature = useRef('');
   useFrame(() => {
-    if (!meshRef.current || colorsInitialized.current || count === 0) return;
+    const signature = `${count}:${fieldStyle?.resonanceArcanaId ?? -1}:${Math.round((fieldStyle?.invasionStrength ?? 0) * 10)}`;
+    if (!meshRef.current || (colorsInitialized.current && colorSignature.current === signature) || count === 0) return;
     const tempColor = new THREE.Color();
     for (let i = 0; i < count; i++) {
       const candy = candies[i];
@@ -193,18 +201,24 @@ export function CandyInstancedMesh({
       } else {
         tempColor.lerp(new THREE.Color('#1e1b4b'), 0.15);
       }
+      if (fieldStyle?.resonanceArcanaId === candy.cell_index % 22) {
+        tempColor.lerp(new THREE.Color((fieldStyle.invasionStrength ?? 0) > 0.72 ? '#fb7185' : '#fbbf24'), 0.35 + (fieldStyle.invasionStrength ?? 0) * 0.5);
+      }
       meshRef.current.setColorAt(i, tempColor);
     }
     if (meshRef.current.instanceColor) {
       meshRef.current.instanceColor.needsUpdate = true;
     }
     colorsInitialized.current = true;
+    colorSignature.current = signature;
   });
 
   // Requirement 4: DNA-like self-rotation + orbital revolution along 4 prediction spirals
   useFrame(({ clock }) => {
     if (!meshRef.current || count === 0) return;
     const elapsed = clock.getElapsedTime();
+    const invasion = THREE.MathUtils.clamp(fieldStyle?.invasionStrength ?? 0, 0, 1);
+    const spinModifier = THREE.MathUtils.clamp(fieldStyle?.candySpinModifier ?? 1, 0.7, 1.6);
 
     for (let i = 0; i < count; i++) {
       const candy = candies[i];
@@ -214,7 +228,8 @@ export function CandyInstancedMesh({
 
       // Orbital phase advances smoothly with elapsed time
       const layerOffset = config.phase;
-      const phi = layerOffset + 2 * Math.PI * 3.0 * t + elapsed * orbitSpeed;
+      const phi = layerOffset + 2 * Math.PI * 3.0 * t + elapsed * orbitSpeed
+        + Math.sin(elapsed * 0.62 + candy.cell_index * 0.21) * invasion * 0.075;
       const zStar = drift * t;
       const radiusXy = Math.sqrt(Math.max(0, 1 - zStar * zStar));
 
@@ -227,7 +242,11 @@ export function CandyInstancedMesh({
 
       // Radial growth factor (distance from center)
       const growth = 1.0 + config.rangeFactor * 0.45 * t;
-      const r = radius * growth;
+      const r = THREE.MathUtils.clamp(
+        radius * growth * (1 + Math.sin(elapsed * 0.8 + candy.cell_index * 0.3) * invasion * 0.035),
+        radius * 0.8,
+        radius * 1.75,
+      );
 
       // Position in world coordinates
       tempPosition.set(nx * r, ny * r, nz * r);
@@ -243,13 +262,14 @@ export function CandyInstancedMesh({
       alignQuat.setFromUnitVectors(upVector, tempNormal);
 
       // DNA-like self-rotation around local normal + tangent twist
-      const localSpinAngle = elapsed * spinSpeed * (1.0 + (candy.cell_index % 4) * 0.25) + candy.t * 8;
+      const localSpinAngle = elapsed * spinSpeed * spinModifier * (1.0 + (candy.cell_index % 4) * 0.25) + candy.t * 8;
       spinQuat.setFromAxisAngle(tempTangent, localSpinAngle);
       tempQuat.multiplyQuaternions(alignQuat, spinQuat);
 
       // Size modulated by prediction probability and slight pulsing
-      const pulse = 1.0 + Math.sin(elapsed * 3.0 + i * 0.15) * 0.08;
-      const scaleVal = (0.75 + candy.probability * 0.5) * pulse;
+      const pulse = 1.0 + Math.sin(elapsed * 3.0 + i * 0.15) * (0.08 + invasion * 0.04);
+      const resonantCandy = fieldStyle?.resonanceArcanaId === candy.cell_index % 22;
+      const scaleVal = (0.75 + candy.probability * 0.5) * pulse * (resonantCandy ? 1 + invasion * 0.16 : 1);
       tempScale.set(scaleVal, scaleVal, scaleVal);
 
       tempMatrix.compose(tempPosition, tempQuat, tempScale);

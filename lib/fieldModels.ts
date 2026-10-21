@@ -1,5 +1,6 @@
 import type { KnotFieldStyle, KnotFutureProjection, KnotTick } from '@/components/2d/KnotChart';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
+import { findResonatingArcana, type ArcanaAttractor, type MatrixPoint, type ResonanceResult } from '@/lib/arcanaMatrix';
 
 export type FieldKind = 'metal' | 'crypto' | 'animal' | 'meta';
 
@@ -31,6 +32,20 @@ export type FieldDiagnostics = {
   metaRelativeAssets?: MetaRelativeAssetDiagnostic[];
   metaMeanCorrelation?: number;
   metaRelativeDispersion?: number;
+  matrixDistance?: number;
+  resonanceArcanaId?: number;
+  resonanceStrength?: number;
+  matrixTension?: number;
+  xauUsdPrice?: number;
+  jumpIntensity?: number;
+  metaMicroTremor?: number;
+  usdIndex?: number;
+  btcProxyPrice?: number;
+  btcVolatility?: number;
+  btcTension?: number;
+  usdVolatility?: number;
+  xauVolatility?: number;
+  xauTension?: number;
 };
 
 export type MetaRelativeAssetDiagnostic = {
@@ -72,6 +87,35 @@ export type ButterworthFilter = {
   coefficients: ButterworthCoefficients;
   push(value: number): number;
   reset(value?: number): void;
+};
+
+export type MatrixPriceState = {
+  value: number;
+  referenceValue: number;
+  volatility?: number;
+  tension?: number;
+  mass?: number;
+};
+
+export type MatrixPosition = MatrixPoint & {
+  asset: string;
+};
+
+export type MatrixPairAnalysis = {
+  asset: string;
+  counterAsset: string;
+  assetPosition: MatrixPosition;
+  counterPosition: MatrixPosition;
+  distance: number;
+  midpoint: MatrixPoint;
+  resonance: ResonanceResult;
+};
+
+export type CandyMatrixInvasion = {
+  distance: number;
+  tension: number;
+  resonanceArcana: ArcanaAttractor;
+  strength: number;
 };
 
 export type FieldConfig = {
@@ -168,6 +212,101 @@ export const FIELD_CONFIGS: Record<FieldKind, FieldConfig> = {
     relativeAnalysis: META_RELATIVE_ANALYSIS,
   },
 };
+
+export function calculateMatrixPosition(asset: string, priceState: MatrixPriceState): MatrixPosition {
+  const value = Number.isFinite(priceState.value) && priceState.value > 0 ? priceState.value : priceState.referenceValue;
+  const reference = Number.isFinite(priceState.referenceValue) && priceState.referenceValue > 0 ? priceState.referenceValue : 1;
+  const logReturn = Math.log(value / reference);
+  const volatility = clamp(priceState.volatility ?? 0.25, 0, 1);
+  const tension = clamp(priceState.tension ?? 0.25, 0, 1);
+  const mass = clamp(priceState.mass ?? 0.5, 0, 3);
+  const x = clamp(Math.tanh(logReturn * 1.8), -1, 1);
+  const y = clamp((volatility - 0.5) * 1.2 + (tension - 0.5) * 0.8, -1, 1);
+  const z = clamp((mass - 1.5) / 1.5, -1, 1);
+  return { asset, x, y, z };
+}
+
+export function analyzeMatrixPair(
+  asset: string,
+  assetState: MatrixPriceState,
+  counterAsset: string,
+  counterState: MatrixPriceState,
+): MatrixPairAnalysis {
+  const assetPosition = calculateMatrixPosition(asset, assetState);
+  const counterPosition = calculateMatrixPosition(counterAsset, counterState);
+  const midpoint = {
+    x: (assetPosition.x + counterPosition.x) / 2,
+    y: (assetPosition.y + counterPosition.y) / 2,
+    z: ((assetPosition.z ?? 0) + (counterPosition.z ?? 0)) / 2,
+  };
+  const distance = Math.hypot(
+    assetPosition.x - counterPosition.x,
+    assetPosition.y - counterPosition.y,
+    (assetPosition.z ?? 0) - (counterPosition.z ?? 0),
+  );
+  return {
+    asset,
+    counterAsset,
+    assetPosition,
+    counterPosition,
+    distance,
+    midpoint,
+    resonance: findResonatingArcana(midpoint),
+  };
+}
+
+export function applyMatrixInvasionToGeometry(
+  field: 'metal' | 'meta',
+  base: { tension: number; rigidity: number; angle: number },
+  analysis: MatrixPairAnalysis,
+  elapsedSeconds: number,
+): { tension: number; rigidity: number; angle: number; invasionStrength: number; microTremor: number } {
+  const distanceFactor = clamp((analysis.distance - 0.45) / 1.15, 0, 1);
+  const resonance = analysis.resonance;
+  const invasionStrength = clamp(distanceFactor * (0.35 + resonance.normalizedStrength * 0.65), 0, 1);
+  const tension = clamp(base.tension + invasionStrength * (0.15 + resonance.arcana.tensionAffinity * 0.45), 0, 1);
+  if (field === 'meta') {
+    const microTremor = distanceFactor > 0.4
+      ? Math.sin(elapsedSeconds * 19 + resonance.arcana.id) * (distanceFactor - 0.4) * 0.1
+      : 0;
+    return {
+      tension,
+      rigidity: clamp(base.rigidity - Math.abs(microTremor) * 1.4, 0.7, 1),
+      angle: base.angle + microTremor,
+      invasionStrength,
+      microTremor,
+    };
+  }
+  return {
+    tension,
+    rigidity: base.rigidity,
+    angle: base.angle,
+    invasionStrength,
+    microTremor: 0,
+  };
+}
+
+export function adaptMetalJumpIntensity(baseIntensity: number, analysis: MatrixPairAnalysis): number {
+  const divergence = clamp(analysis.distance / Math.sqrt(12), 0, 1);
+  const destructive = analysis.resonance.arcana.destructiveAffinity * analysis.resonance.normalizedStrength;
+  return clamp(baseIntensity * (1 + divergence * 2 + destructive * 8), baseIntensity, 1.5);
+}
+
+export function samplePoissonCount(rand: () => number, ratePerSecond: number, deltaSeconds: number): number {
+  if (!Number.isFinite(ratePerSecond) || ratePerSecond < 0 || !Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
+    throw new RangeError('Poisson rate and elapsed time must be finite and non-negative');
+  }
+  const mean = ratePerSecond * deltaSeconds;
+  if (mean === 0) return 0;
+  const threshold = Math.exp(-mean);
+  let product = 1;
+  let events = 0;
+  do {
+    events += 1;
+    product *= Math.max(Number.MIN_VALUE, rand());
+  } while (product > threshold);
+  return events - 1;
+}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -377,15 +516,15 @@ function buildProjection(direction: number, vertical: number, horizontal: number
 function metalSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
   const initialPrice = FIELD_CONFIGS.metal.basePrice;
-  const poissonIntensity = 1 / 90;
+  const basePoissonIntensity = 1 / 90;
   const simulatedDaySeconds = 30;
   const sinePeriodSeconds = 240;
   let smm = initialPrice;
   let lme = initialPrice;
+  let xauUsd = 2650;
   let elapsedSeconds = 0;
   let previousTimestamp: number | undefined;
   let dayIndex = 0;
-  let nextJumpAt = samplePoissonWaitSeconds(rand, poissonIntensity);
   let jumpFlash = 0;
   let previousAngle = 0;
   return (now) => {
@@ -406,24 +545,35 @@ function metalSimulator(seed: number): FieldSimulator {
       }
     }
 
-    let jumped = false;
-    while (elapsedSeconds >= nextJumpAt) {
+    const usdIndex = 100 + 2.5 * Math.sin(elapsedSeconds / 130) + 0.8 * Math.cos(elapsedSeconds / 47);
+    const preEventAnalysis = analyzeMatrixPair(
+      'XAU',
+      { value: xauUsd, referenceValue: 2650, volatility: 0.28 + Math.abs(smm - lme) / smm * 10, tension: 0.42, mass: 1.1 },
+      'USD',
+      { value: usdIndex, referenceValue: 100, volatility: 0.18, tension: 0.3, mass: 2.3 },
+    );
+    const jumpIntensity = adaptMetalJumpIntensity(basePoissonIntensity, preEventAnalysis);
+    const jumpEvents = samplePoissonCount(rand, jumpIntensity, dt);
+    const jumped = jumpEvents > 0;
+    for (let event = 0; event < jumpEvents; event += 1) {
       const jumpSize = (0.02 + rand() * 0.035) * (rand() < 0.5 ? -1 : 1);
       smm *= 1 + jumpSize;
-      nextJumpAt += samplePoissonWaitSeconds(rand, poissonIntensity);
-      jumped = true;
       jumpFlash = Math.min(1, jumpFlash + Math.abs(jumpSize) / 0.04);
     }
 
     const previous = lme;
+    const previousXau = xauUsd;
     const lowFrequencyPhase = (2 * Math.PI * elapsedSeconds) / sinePeriodSeconds;
     const lowFrequencyWave = Math.sin(lowFrequencyPhase);
     const meanReversion = (smm - lme) * (1 - Math.exp(-0.08 * dt));
     const highFrequencyNoise = gauss(rand) * smm * 0.00045 * Math.sqrt(dt);
     lme = Math.max(smm * 0.05, lme + meanReversion + highFrequencyNoise);
+    const lmeReturn = Math.log(lme / previous);
+    xauUsd = Math.max(100, xauUsd * Math.exp(lmeReturn * 0.32 + gauss(rand) * 0.00012 * Math.sqrt(dt)));
+    const goldReturn = Math.log(xauUsd / previousXau);
 
     const basis = (smm - lme) / smm;
-    const tension = clamp(0.42 + 0.22 * lowFrequencyWave + Math.abs(basis) * 8 + jumpFlash * 0.3, 0, 1);
+    const baseTension = clamp(0.42 + 0.22 * lowFrequencyWave + Math.abs(basis) * 8 + jumpFlash * 0.3, 0, 1);
     const relativeVelocity = Math.log(lme / previous) / dt;
     const angle = Math.atan2(relativeVelocity * 120, 0.25 + Math.cos(lowFrequencyPhase));
     let angleDelta = angle - previousAngle;
@@ -431,9 +581,22 @@ function metalSimulator(seed: number): FieldSimulator {
     if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
     const angularVelocity = angleDelta / dt;
     previousAngle = angle;
+    const matrixAnalysis = analyzeMatrixPair(
+      'XAU',
+      { value: xauUsd, referenceValue: 2650, volatility: clamp(Math.abs(goldReturn) * 80, 0, 1), tension: baseTension, mass: 1.1 },
+      'USD',
+      { value: usdIndex, referenceValue: 100, volatility: 0.18, tension: 0.3, mass: 2.3 },
+    );
+    const invasion = applyMatrixInvasionToGeometry(
+      'metal',
+      { tension: baseTension, rigidity: 0.2, angle },
+      matrixAnalysis,
+      elapsedSeconds,
+    );
+    const tension = invasion.tension;
     const tick: KnotTick = {
       ...makeTick(now, lme, previous, 0.003, jumped),
-      angle,
+      angle: invasion.angle,
       tension,
       volatility: clamp(Math.abs(relativeVelocity) * 120, 0, 1),
       magicLength: clamp(Math.abs(angularVelocity) * 0.2, 0.1, 3),
@@ -450,6 +613,15 @@ function metalSimulator(seed: number): FieldSimulator {
       phase: lowFrequencyPhase % (2 * Math.PI),
       dailyStep,
       poissonJump: jumped,
+      matrixDistance: matrixAnalysis.distance,
+      resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+      resonanceStrength: matrixAnalysis.resonance.normalizedStrength,
+      matrixTension: invasion.tension,
+      xauUsdPrice: xauUsd,
+      jumpIntensity,
+      usdIndex,
+      xauVolatility: clamp(Math.abs(goldReturn) * 80, 0, 1),
+      xauTension: baseTension,
     };
     jumpFlash *= Math.exp(-dt / 8);
 
@@ -457,7 +629,16 @@ function metalSimulator(seed: number): FieldSimulator {
       tick,
       gravityTensor: buildGravity(lme, lme * 0.01, walls),
       projection: buildProjection(Math.sign(smm - lme) || 1, 0.45 + jumpFlash * 0.45, 0.35, 0.07 + jumpFlash * 0.05, jumpFlash > 0.4 ? 'trefoil' : 'spiral'),
-      style: { strokeScale: 1 + jumpFlash * 0.6, vibration: 0.15, rigidity: 0.2, projectionStretch: jumpFlash * 0.5 },
+      style: {
+        strokeScale: 1 + jumpFlash * 0.6,
+        vibration: 0.15 + invasion.invasionStrength * 0.2,
+        rigidity: invasion.rigidity,
+        projectionStretch: jumpFlash * 0.5,
+        invasionStrength: invasion.invasionStrength,
+        candySpinModifier: 1 + matrixAnalysis.distance * 0.2,
+        matrixDistance: matrixAnalysis.distance,
+        resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+      },
       diagnostics,
     };
   };
@@ -704,12 +885,18 @@ function metaSimulator(seed: number): FieldSimulator {
   let index = FIELD_CONFIGS.meta.basePrice;
   let previousFilteredIndex = index;
   let quantizedAngle = -Math.PI / 2;
+  let syntheticBtcPrice = 65000;
   filter.reset(index);
 
-  return (now) => {
+  return (now, btcAnchor) => {
     const commonEquity = gauss(rand) * 0.00042 + 0.000025;
     const commonUsd = gauss(rand) * 0.00024;
     const commonGlobal = gauss(rand) * 0.00017;
+    const usdIndex = clamp(100 * Math.exp(commonUsd), 80, 120);
+    syntheticBtcPrice *= Math.exp(commonGlobal + gauss(rand) * 0.00045);
+    if (btcAnchor && Number.isFinite(btcAnchor) && btcAnchor > 0) {
+      syntheticBtcPrice += (btcAnchor - syntheticBtcPrice) * 0.2;
+    }
     const orientedReturns = design.assets.map((asset, assetIndex) => {
       const equityExposure = asset.assetClass === 'equity' ? 1 : 0.12;
       const currencyExposure = asset.group === 'usd' ? 1 : asset.assetClass === 'currency' ? 0.45 : 0.08;
@@ -758,11 +945,23 @@ function metaSimulator(seed: number): FieldSimulator {
     const rawAngle = Math.atan2(filteredReturn * 1600, 0.35 + relativeDispersion * 0.08);
     const floorAngle = quantizeAngleFloor(rawAngle);
     if (floorAngle !== quantizedAngle) quantizedAngle = floorAngle;
+    const matrixAnalysis = analyzeMatrixPair(
+      'BTC',
+      { value: syntheticBtcPrice, referenceValue: 65000, volatility: clamp(Math.abs(commonGlobal) * 500, 0, 1), tension: 0.28 + relativeDispersion * 0.04, mass: 0.95 },
+      'USD',
+      { value: usdIndex, referenceValue: 100, volatility: Math.abs(commonUsd) * 400, tension: 0.36, mass: 2.5 },
+    );
+    const invasion = applyMatrixInvasionToGeometry(
+      'meta',
+      { tension: 0.28 + relativeDispersion * 0.04, rigidity: 0.95, angle: quantizedAngle },
+      matrixAnalysis,
+      now / 1000,
+    );
     const tick: KnotTick = {
       ...makeTick(now, filteredIndex, rawPrevious, 0.0015, false),
-      angle: quantizedAngle,
+      angle: invasion.angle,
       magicLength: clamp(0.3 + relativeDispersion * 0.16, 0.3, 1.2),
-      tension: clamp(Math.abs(filteredReturn) * 180 + relativeDispersion * 0.08, 0.04, 0.55),
+      tension: clamp(Math.abs(filteredReturn) * 180 + relativeDispersion * 0.08 + invasion.invasionStrength * 0.12, 0.04, 0.7),
       volatility: clamp(Math.abs(filteredReturn) * 120, 0, 0.45),
     };
     const walls: Wall[] = [
@@ -772,20 +971,39 @@ function metaSimulator(seed: number): FieldSimulator {
     const diagnostics: FieldDiagnostics = {
       tension: tick.tension,
       angularVelocity: filteredReturn / (FIELD_CONFIGS.meta.intervalMs / 1000),
-      mass: clamp(2.5 + relativeDispersion * 0.25, 0, 3),
-      phase: quantizedAngle,
+      mass: clamp(2.5 + relativeDispersion * 0.25 + invasion.invasionStrength * 0.15, 0, 3),
+      phase: invasion.angle,
       dailyStep: 0,
       poissonJump: false,
       basketReturn,
       metaRelativeAssets: relativeAssets,
       metaMeanCorrelation: meanCorrelation,
       metaRelativeDispersion: relativeDispersion,
+      matrixDistance: matrixAnalysis.distance,
+      resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+      resonanceStrength: matrixAnalysis.resonance.normalizedStrength,
+      matrixTension: invasion.tension,
+      metaMicroTremor: invasion.microTremor,
+      usdIndex,
+      btcProxyPrice: syntheticBtcPrice,
+      btcVolatility: clamp(Math.abs(commonGlobal) * 500, 0, 1),
+      btcTension: 0.28 + relativeDispersion * 0.04,
+      usdVolatility: Math.abs(commonUsd) * 400,
     };
     return {
       tick,
       gravityTensor: buildGravity(filteredIndex, filteredIndex * 0.012, walls),
       projection: buildProjection(Math.sign(filteredReturn) || 1, 0.32 + tick.tension * 0.3, 0.42, 0.05, 'spiral'),
-      style: { strokeScale: 1.5, vibration: 0, rigidity: 0.95, projectionStretch: 0 },
+      style: {
+        strokeScale: 1.5,
+        vibration: Math.abs(invasion.microTremor) * 18,
+        rigidity: invasion.rigidity,
+        projectionStretch: 0,
+        invasionStrength: invasion.invasionStrength,
+        candySpinModifier: 1 + invasion.invasionStrength * 0.15,
+        matrixDistance: matrixAnalysis.distance,
+        resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+      },
       diagnostics,
     };
   };

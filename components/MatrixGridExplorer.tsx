@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { MAJOR_ARCANA_KNOTS } from '@/hooks/useKnotSelection';
+import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
+import type { MatrixPairAnalysis } from '@/lib/fieldModels';
 
 type ExplorerCategory = 'Grain' | 'Metal' | 'Stock' | 'Currency' | 'Crypto' | 'Index';
 
@@ -89,7 +91,60 @@ function drawKnotGlyph(context: CanvasRenderingContext2D, x: number, y: number, 
   context.restore();
 }
 
-export default function MatrixGridExplorer({ height = 360 }: { height?: number }) {
+function MatrixDistanceOverlay({ analysis, label, source }: { analysis: MatrixPairAnalysis; label: string; source: string }) {
+  const toX = (value: number) => 12 + ((value + 1) / 2) * 356;
+  const toY = (value: number) => 10 + ((value + 1) / 2) * 104;
+  const attractor = analysis.resonance.arcana;
+  return (
+    <div className="absolute inset-x-2 bottom-2 z-10 border border-violet-200/25 bg-[#020611]/90 p-2 backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.1em]">
+        <span className="text-violet-100">{label} / {source}</span>
+        <span className="text-stone-400">D {analysis.distance.toFixed(3)} / {attractor.roman} {attractor.name}</span>
+      </div>
+      <svg viewBox="0 0 380 124" className="mt-1 h-20 w-full" role="img" aria-label={`${analysis.asset} to ${analysis.counterAsset} matrix distance ${analysis.distance.toFixed(3)}, resonance ${attractor.name}`}>
+        <defs>
+          <pattern id="arcana-matrix-grid" width="23" height="13" patternUnits="userSpaceOnUse">
+            <path d="M23 0H0V13" fill="none" stroke="rgba(148,163,184,0.13)" strokeWidth="0.55" />
+          </pattern>
+        </defs>
+        <rect x="12" y="10" width="356" height="104" fill="url(#arcana-matrix-grid)" />
+        {ARCANA_ATTRACTORS.map((node) => {
+          const x = toX(node.x);
+          const y = toY(node.y);
+          const active = node.id === attractor.id;
+          return (
+            <g key={node.id}>
+              {active && <circle cx={x} cy={y} r="7" fill="rgba(196,181,253,0.16)" stroke="#c4b5fd" strokeOpacity="0.7" />}
+              <circle cx={x} cy={y} r={active ? 2.8 : 1.6} fill={active ? (node.destructiveAffinity >= 0.7 ? '#fb7185' : '#c4b5fd') : '#64748b'} />
+              {(active || [0, 4, 13, 16].includes(node.id)) && <text x={x + 4} y={y - 3} fill={active ? '#f8fafc' : '#64748b'} fontSize="5">{node.roman}</text>}
+            </g>
+          );
+        })}
+        <line
+          x1={toX(analysis.assetPosition.x)}
+          y1={toY(analysis.assetPosition.y)}
+          x2={toX(analysis.counterPosition.x)}
+          y2={toY(analysis.counterPosition.y)}
+          stroke={attractor.destructiveAffinity >= 0.7 ? '#fb7185' : '#22d3ee'}
+          strokeWidth="1.2"
+          strokeDasharray="3 3"
+        />
+        <circle cx={toX(analysis.assetPosition.x)} cy={toY(analysis.assetPosition.y)} r="3.3" fill="#22d3ee" />
+        <circle cx={toX(analysis.counterPosition.x)} cy={toY(analysis.counterPosition.y)} r="3.3" fill="#fbbf24" />
+        <circle cx={toX(analysis.midpoint.x)} cy={toY(analysis.midpoint.y)} r="2.2" fill="#fff" />
+        <text x={toX(analysis.assetPosition.x) + 5} y={toY(analysis.assetPosition.y) + 8} fill="#a5f3fc" fontSize="6">{analysis.asset}</text>
+        <text x={toX(analysis.counterPosition.x) + 5} y={toY(analysis.counterPosition.y) + 8} fill="#fde68a" fontSize="6">{analysis.counterAsset}</text>
+      </svg>
+    </div>
+  );
+}
+
+export default function MatrixGridExplorer({ height = 360, analysis, label = 'Matrix resonance', source = 'Synthetic' }: {
+  height?: number;
+  analysis?: MatrixPairAnalysis;
+  label?: string;
+  source?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailRef = useRef<TrailPoint[]>([]);
   const materializedRef = useRef<Map<string, MaterializedEntry>>(new Map());
@@ -253,6 +308,7 @@ export default function MatrixGridExplorer({ height = 360 }: { height?: number }
     <div className="relative overflow-hidden border border-violet-200/15 bg-[#04030a]" style={{ height }}>
       <canvas ref={canvasRef} className="h-full w-full touch-none" aria-label="Matrix grid explorer / symbol sensor field" />
       <p className="pointer-events-none absolute left-3 top-2 font-mono text-[8px] uppercase tracking-[0.24em] text-violet-200/45">Explorer / sensor sweep to materialize knots</p>
+      {analysis && <MatrixDistanceOverlay analysis={analysis} label={label} source={source} />}
     </div>
   );
 }
