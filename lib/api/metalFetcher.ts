@@ -27,6 +27,8 @@ type RapidApiResponse = {
   goldPrice?: unknown;
   xauUsd?: unknown;
   xau_usd?: unknown;
+  usdXau?: unknown;
+  USDXAU?: unknown;
   base?: string;
   rates?: Record<string, unknown>;
   data?: Record<string, unknown>;
@@ -52,6 +54,8 @@ function parseRapidApiPrice(payload: RapidApiResponse): number | undefined {
     toPositivePrice(payload.goldPrice),
     toPositivePrice(payload.xauUsd),
     toPositivePrice(payload.xau_usd),
+    toPositivePrice(payload.usdXau),
+    toPositivePrice(payload.USDXAU),
     recordPrice(payload.data),
     recordPrice(payload.result),
     recordPrice(gold),
@@ -68,8 +72,15 @@ function parseRapidApiPrice(payload: RapidApiResponse): number | undefined {
 }
 
 async function fetchRapidApiMetalPrice(apiKey: string): Promise<MetalFeedQuote> {
-  const host = process.env.RAPIDAPI_HOST?.trim().toLowerCase();
-  const endpoint = process.env.RAPIDAPI_URL?.trim();
+  const providerSetting = cleanEnvValue(process.env.RAPIDAPI_METAL_SENTINEL_FEED_PROVIDER)?.toLowerCase();
+  const providerHost = providerSetting?.endsWith('.p.rapidapi.com') ? providerSetting : undefined;
+  const host = (
+    cleanEnvValue(process.env.RAPIDAPI_METAL_SENTINEL_HOST)
+    ?? providerHost
+    ?? cleanEnvValue(process.env.RAPIDAPI_HOST)
+  )?.toLowerCase();
+  const endpoint = cleanEnvValue(process.env.RAPIDAPI_METAL_SENTINEL_URL)
+    ?? cleanEnvValue(process.env.RAPIDAPI_URL);
   if (!host || !endpoint) throw new MetalFeedError('not_configured');
   let url: URL;
   try {
@@ -118,18 +129,27 @@ async function fetchRapidApiMetalPrice(apiKey: string): Promise<MetalFeedQuote> 
   return { price, timestamp, provider: 'rapidapi-metals', source: 'LIVE' };
 }
 
+function cleanEnvValue(value: string | undefined): string | undefined {
+  const unquoted = value?.trim().replace(/^(['"])(.*)\1$/, '$2');
+  const withoutComment = unquoted?.split(/\s+#/, 1)[0]?.trim();
+  return withoutComment || undefined;
+}
+
 export async function fetchMetalPrice(): Promise<MetalFeedQuote> {
-  const configuredProvider = process.env.METAL_FEED_PROVIDER?.trim().toLowerCase();
-  if (!configuredProvider) throw new MetalFeedError('not_configured');
-  if (configuredProvider === 'rapidapi-metals') {
-    const apiKey = process.env.RAPIDAPI_KEY?.trim();
+  const configuredProvider = cleanEnvValue(process.env.RAPIDAPI_METAL_SENTINEL_FEED_PROVIDER)
+    ?? cleanEnvValue(process.env.METAL_FEED_PROVIDER);
+  const normalizedProvider = configuredProvider?.toLowerCase();
+  if (!normalizedProvider) throw new MetalFeedError('not_configured');
+  if (normalizedProvider === 'rapidapi-metals' || normalizedProvider.endsWith('.p.rapidapi.com')) {
+    const apiKey = cleanEnvValue(process.env.RAPIDAPI_METAL_SENTINEL_API_KEY)
+      ?? cleanEnvValue(process.env.RAPIDAPI_KEY);
     if (!apiKey) throw new MetalFeedError('not_configured');
     return fetchRapidApiMetalPrice(apiKey);
   }
 
-  const apiKey = process.env.METALS_API_KEY?.trim();
+  const apiKey = cleanEnvValue(process.env.METALS_API_KEY);
   if (!apiKey) throw new MetalFeedError('not_configured');
-  if (!['metals-api', 'metalsapi', 'metals_api', 'metalsapi.com'].includes(configuredProvider)) {
+  if (!['metals-api', 'metalsapi', 'metals_api', 'metalsapi.com'].includes(normalizedProvider)) {
     throw new MetalFeedError('unsupported_provider');
   }
 

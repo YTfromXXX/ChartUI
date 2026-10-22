@@ -267,7 +267,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       ? [
         'XAU',
         { value: metalPrice, referenceValue: 2650, volatility: metalVolatility, tension: metalFeed.quote ? Math.min(1, 0.42 + metalVolatility * 0.3) : diagnostics?.xauTension ?? 0.42, mass: 1.1 },
-        metalFeed.quote?.source === 'LIVE' ? 'LIVE / Metals-API' : `SYNTHETIC / ${metalFeed.fallbackReason ?? metalFeed.quote?.fallbackReason ?? 'field model'}`,
+        metalFeed.quote?.source === 'LIVE' ? `LIVE / ${metalFeed.quote.provider}` : `SYNTHETIC / ${metalFeed.fallbackReason ?? metalFeed.quote?.fallbackReason ?? 'field model'}`,
       ] as const
       : field?.kind === 'animal'
         ? [

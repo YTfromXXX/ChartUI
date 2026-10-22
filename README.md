@@ -80,8 +80,11 @@ The repository contains a FastAPI backend and a Next.js frontend.
 	Metal pages use the server-only `/api/metal-feed` adapter. To enable a RapidAPI
 	feed, set `METAL_FEED_PROVIDER=rapidapi-metals`, `RAPIDAPI_KEY`,
 	`RAPIDAPI_HOST`, and `RAPIDAPI_URL` in the Next.js server environment (for
-	example, `.env.local`, which must not be committed). The host and HTTPS endpoint
-	must match the API listing selected in RapidAPI; response prices may be provided
+	example, `.env.local`, which must not be committed). The Metal Sentinel aliases
+	`RAPIDAPI_METAL_SENTINEL_API_KEY`, `RAPIDAPI_METAL_SENTINEL_FEED_PROVIDER`,
+	`RAPIDAPI_METAL_SENTINEL_HOST`, and `RAPIDAPI_METAL_SENTINEL_URL` are also
+	accepted. The host and HTTPS endpoint must match the API listing selected in
+	RapidAPI; response prices may be provided
 	as `price`, `xauUsd`, `data.price`, or a USD/XAU rates object. The key is only
 	read on the server and is never included in client bundles or API responses.
 	Quotes are polled every 30 seconds. Missing configuration, upstream errors, and
