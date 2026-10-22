@@ -48,6 +48,20 @@ export type KnotFieldStyle = {
   candySpinModifier?: number;
   matrixDistance?: number;
   resonanceArcanaId?: number;
+  metalJump?: boolean;
+  metalLayerGrowth?: number;
+  metalMicroTremor?: number;
+  candyMass?: number;
+  candyAngularVelocity?: number;
+  candyVibrationFrequency?: number;
+  candyRadialScale?: number;
+  candyPhaseOffset?: number;
+  candyHueShift?: number;
+  candyEmissive?: number;
+  animalPulseStrength?: number;
+  animalPulsePhase?: number;
+  animalBraidStrength?: number;
+  animalAttractorArcanaId?: number;
 };
 
 const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
@@ -61,6 +75,20 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   candySpinModifier: 1,
   matrixDistance: 0,
   resonanceArcanaId: -1,
+  metalJump: false,
+  metalLayerGrowth: 0,
+  metalMicroTremor: 0,
+  candyMass: 1,
+  candyAngularVelocity: 0,
+  candyVibrationFrequency: 1,
+  candyRadialScale: 1,
+  candyPhaseOffset: 0,
+  candyHueShift: 0,
+  candyEmissive: 0.8,
+  animalPulseStrength: 0,
+  animalPulsePhase: 0,
+  animalBraidStrength: 0,
+  animalAttractorArcanaId: -1,
 };
 let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
 

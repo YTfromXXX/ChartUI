@@ -1,6 +1,12 @@
 import type { KnotFieldStyle, KnotFutureProjection, KnotTick } from '@/components/2d/KnotChart';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
-import { findResonatingArcana, type ArcanaAttractor, type MatrixPoint, type ResonanceResult } from '@/lib/arcanaMatrix';
+import { ARCANA_ATTRACTORS, findResonatingArcana, type ArcanaAttractor, type MatrixPoint, type ResonanceResult } from '@/lib/arcanaMatrix';
+import {
+  calculateSyntheticIndex,
+  createSyntheticMarketDataContract,
+  SYNTHETIC_INDEX_DEFINITIONS,
+  type MarketDataContract,
+} from '@/lib/marketCatalog';
 
 export type FieldKind = 'metal' | 'crypto' | 'animal' | 'meta';
 
@@ -21,6 +27,15 @@ export type FieldDiagnostics = {
   poissonJump: boolean;
   animalSync?: boolean;
   kuramotoOrder?: number;
+  kuramotoMeanPhase?: number;
+  animalPhases?: number[];
+  animalCorrelationMatrix?: number[][];
+  animalAttractorArcanaId?: number;
+  animalAttractorDistance?: number;
+  animalAttractorStrength?: number;
+  animalCentroid?: MatrixPoint;
+  animalBraidTension?: number;
+  animalSynapseStrength?: number;
   meanCorrelation?: number;
   trendAgreement?: number;
   directionalStrength?: number;
@@ -46,6 +61,10 @@ export type FieldDiagnostics = {
   usdVolatility?: number;
   xauVolatility?: number;
   xauTension?: number;
+  resonanceForcedJump?: boolean;
+  resonanceTargetArcanaId?: number;
+  resonanceTargetDistance?: number;
+  dataContract?: MarketDataContract;
 };
 
 export type MetaRelativeAssetDiagnostic = {
@@ -118,6 +137,16 @@ export type CandyMatrixInvasion = {
   strength: number;
 };
 
+export type MetalResonanceCheck = {
+  shouldForceJump: boolean;
+  arcana: ArcanaAttractor;
+  distance: number;
+  threshold: number;
+};
+
+const METAL_DESTRUCTIVE_ATTRACTORS = ARCANA_ATTRACTORS.filter((arcana) => arcana.id === 13 || arcana.id === 16);
+const ANIMAL_SYNC_ATTRACTORS = ARCANA_ATTRACTORS.filter((arcana) => arcana.id === 10 || arcana.id === 21);
+
 export type FieldConfig = {
   kind: FieldKind;
   symbol: string;
@@ -146,15 +175,27 @@ export const ANIMAL_CORRELATION_MATRIX = [
   [0.21, 0.18, 0.25, 0.66, 1],
 ] as const;
 
-const ANIMAL_ASSET_WEIGHTS = [0.22, 0.19, 0.21, 0.23, 0.15] as const;
+const ANIMAL_INDEX_DEFINITION = SYNTHETIC_INDEX_DEFINITIONS.ANIMAL_BASKET;
+const META_INDEX_DEFINITION = SYNTHETIC_INDEX_DEFINITIONS.META_RELATIVE_BASKET;
+const ANIMAL_ASSET_WEIGHTS = ANIMAL_INDEX_DEFINITION.constituents.map((constituent) => constituent.weight);
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 export type AnimalSyncDiagnostics = {
   orderParameter: number;
+  meanPhase: number;
   meanCorrelation: number;
   trendAgreement: number;
   directionalStrength: number;
   alert: boolean;
+  phases: number[];
+  correlationMatrix: number[][];
+};
+
+export type AnimalKuramotoDiagnostics = {
+  orderParameter: number;
+  meanPhase: number;
+  phases: number[];
+  correlationMatrix: number[][];
 };
 
 export const META_RELATIVE_ANALYSIS: RelativeAnalysisDesign = {
@@ -290,6 +331,31 @@ export function adaptMetalJumpIntensity(baseIntensity: number, analysis: MatrixP
   const divergence = clamp(analysis.distance / Math.sqrt(12), 0, 1);
   const destructive = analysis.resonance.arcana.destructiveAffinity * analysis.resonance.normalizedStrength;
   return clamp(baseIntensity * (1 + divergence * 2 + destructive * 8), baseIntensity, 1.5);
+}
+
+export function checkMetalResonance(
+  analysis: MatrixPairAnalysis,
+  threshold = 0.28,
+): MetalResonanceCheck {
+  let closest = METAL_DESTRUCTIVE_ATTRACTORS[0];
+  let distance = Number.POSITIVE_INFINITY;
+  for (const attractor of METAL_DESTRUCTIVE_ATTRACTORS) {
+    const current = Math.hypot(
+      analysis.midpoint.x - attractor.x,
+      analysis.midpoint.y - attractor.y,
+      (analysis.midpoint.z ?? 0) - attractor.z,
+    );
+    if (current < distance) {
+      closest = attractor;
+      distance = current;
+    }
+  }
+  return {
+    shouldForceJump: distance <= threshold,
+    arcana: closest,
+    distance,
+    threshold,
+  };
 }
 
 export function samplePoissonCount(rand: () => number, ratePerSecond: number, deltaSeconds: number): number {
@@ -430,17 +496,59 @@ export function calculateAnimalCorrelationMatrix(returns: readonly (readonly num
   }));
 }
 
+export function calculateKuramotoSynchronization(priceVectors: readonly (readonly number[])[]): AnimalKuramotoDiagnostics {
+  const returnVectors = priceVectors.map((prices) => {
+    const returns: number[] = [];
+    for (let index = 1; index < prices.length; index += 1) {
+      const previous = prices[index - 1];
+      const current = prices[index];
+      if (Number.isFinite(previous) && previous > 0 && Number.isFinite(current) && current > 0) {
+        returns.push(Math.log(current / previous));
+      }
+    }
+    return returns.slice(-48);
+  });
+  const phases = returnVectors.map((returns) => {
+    if (returns.length < 2) return 0;
+    const current = returns.at(-1) ?? 0;
+    const previous = returns.at(-2) ?? 0;
+    return Math.atan2(current, previous);
+  });
+  const real = phases.length ? phases.reduce((sum, phase) => sum + Math.cos(phase), 0) / phases.length : 0;
+  const imaginary = phases.length ? phases.reduce((sum, phase) => sum + Math.sin(phase), 0) / phases.length : 0;
+  const hasMotion = returnVectors.some((returns) => returns.slice(-2).some((value) => Math.abs(value) > 1e-12));
+  const hasEnoughHistory = returnVectors.length >= ANIMAL_INITIAL_UNIVERSE.length
+    && returnVectors.every((returns) => returns.length >= 2);
+  return {
+    orderParameter: hasMotion && hasEnoughHistory ? clamp(Math.hypot(real, imaginary), 0, 1) : 0,
+    meanPhase: hasMotion && hasEnoughHistory ? Math.atan2(imaginary, real) : 0,
+    phases,
+    correlationMatrix: calculateAnimalCorrelationMatrix(returnVectors),
+  };
+}
+
 export function analyzeAnimalSynchronization(
   returns: readonly (readonly number[])[],
   phases: readonly number[],
   trendDirections: readonly number[],
   directionalStrengths: readonly number[],
   wasSynchronized = false,
+  priceVectors?: readonly (readonly number[])[],
 ): AnimalSyncDiagnostics {
   const count = Math.min(ANIMAL_INITIAL_UNIVERSE.length, returns.length, phases.length, trendDirections.length, directionalStrengths.length);
-  if (count === 0) return { orderParameter: 0, meanCorrelation: 0, trendAgreement: 0, directionalStrength: 0, alert: false };
+  if (count === 0) return {
+    orderParameter: 0,
+    meanPhase: 0,
+    meanCorrelation: 0,
+    trendAgreement: 0,
+    directionalStrength: 0,
+    alert: false,
+    phases: [],
+    correlationMatrix: [],
+  };
 
-  const correlationMatrix = calculateAnimalCorrelationMatrix(returns);
+  const kuramoto = priceVectors ? calculateKuramotoSynchronization(priceVectors) : undefined;
+  const correlationMatrix = kuramoto?.correlationMatrix ?? calculateAnimalCorrelationMatrix(returns);
   const pairCorrelations: number[] = [];
   for (let left = 0; left < count; left += 1) {
     for (let right = left + 1; right < count; right += 1) {
@@ -450,7 +558,12 @@ export function analyzeAnimalSynchronization(
   const meanCorrelation = pairCorrelations.length
     ? pairCorrelations.reduce((sum, value) => sum + value, 0) / pairCorrelations.length
     : 0;
-  const orderParameter = calculateKuramotoOrder(phases.slice(0, count));
+  const measuredPhases = kuramoto?.phases.slice(0, count) ?? phases.slice(0, count);
+  const orderParameter = kuramoto?.orderParameter ?? calculateKuramotoOrder(measuredPhases);
+  const meanPhase = kuramoto?.meanPhase ?? Math.atan2(
+    measuredPhases.reduce((sum, phase) => sum + Math.sin(phase), 0),
+    measuredPhases.reduce((sum, phase) => sum + Math.cos(phase), 0),
+  );
   const directionSum = trendDirections.slice(0, count).reduce((sum, direction) => sum + Math.sign(direction), 0);
   const trendAgreement = Math.abs(directionSum) / count;
   const directionalStrength = directionalStrengths.slice(0, count).reduce((sum, value) => sum + clamp(value, 0, 1), 0) / count;
@@ -458,7 +571,16 @@ export function analyzeAnimalSynchronization(
   const activationThreshold = wasSynchronized ? 0.7 : 0.82;
   const alert = aligned && meanCorrelation >= 0.55 && orderParameter >= activationThreshold;
 
-  return { orderParameter, meanCorrelation, trendAgreement, directionalStrength, alert };
+  return {
+    orderParameter,
+    meanPhase,
+    meanCorrelation,
+    trendAgreement,
+    directionalStrength,
+    alert,
+    phases: measuredPhases,
+    correlationMatrix,
+  };
 }
 
 export function samplePoissonWaitSeconds(rand: () => number, intensityPerSecond: number): number {
@@ -553,7 +675,9 @@ function metalSimulator(seed: number): FieldSimulator {
       { value: usdIndex, referenceValue: 100, volatility: 0.18, tension: 0.3, mass: 2.3 },
     );
     const jumpIntensity = adaptMetalJumpIntensity(basePoissonIntensity, preEventAnalysis);
-    const jumpEvents = samplePoissonCount(rand, jumpIntensity, dt);
+    const resonanceCheck = checkMetalResonance(preEventAnalysis);
+    const poissonEvents = samplePoissonCount(rand, jumpIntensity, dt);
+    const jumpEvents = resonanceCheck.shouldForceJump ? Math.max(1, poissonEvents) : poissonEvents;
     const jumped = jumpEvents > 0;
     for (let event = 0; event < jumpEvents; event += 1) {
       const jumpSize = (0.02 + rand() * 0.035) * (rand() < 0.5 ? -1 : 1);
@@ -619,6 +743,9 @@ function metalSimulator(seed: number): FieldSimulator {
       matrixTension: invasion.tension,
       xauUsdPrice: xauUsd,
       jumpIntensity,
+      resonanceForcedJump: resonanceCheck.shouldForceJump,
+      resonanceTargetArcanaId: resonanceCheck.arcana.id,
+      resonanceTargetDistance: resonanceCheck.distance,
       usdIndex,
       xauVolatility: clamp(Math.abs(goldReturn) * 80, 0, 1),
       xauTension: baseTension,
@@ -638,6 +765,15 @@ function metalSimulator(seed: number): FieldSimulator {
         candySpinModifier: 1 + matrixAnalysis.distance * 0.2,
         matrixDistance: matrixAnalysis.distance,
         resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+        metalJump: jumped,
+        metalLayerGrowth: dailyStep,
+        candyMass: 0.85 + clamp(0.8 + Math.abs(basis) * 12 + jumpFlash * 0.6, 0, 3) * 0.12,
+        candyAngularVelocity: angularVelocity,
+        candyVibrationFrequency: 1 + Math.min(1.5, Math.abs(angularVelocity) * 0.04),
+        candyRadialScale: clamp(1 + jumpFlash * 0.06 + invasion.invasionStrength * 0.025, 0.92, 1.12),
+        candyPhaseOffset: lowFrequencyPhase * 0.08,
+        candyHueShift: 0.1 + invasion.invasionStrength * 0.025,
+        candyEmissive: 0.5 + jumpFlash * 0.8 + invasion.invasionStrength * 0.2,
       },
       diagnostics,
     };
@@ -725,7 +861,19 @@ function cryptoSimulator(seed: number): FieldSimulator {
       tick,
       gravityTensor: buildGravity(price, price * 0.006, walls),
       projection: buildProjection(net >= 0 ? 1 : -1, 0.58 + Math.min(0.38, Math.abs(net) * 0.04), 0.3 + Math.abs(oscillatorDisplacement) * 0.12, 0.09, oscillatorDisplacement > 0.35 ? 'figure_eight' : 'trefoil'),
-      style: { strokeScale: 0.9, vibration: 1.15 + Math.abs(oscillatorVelocity) * 0.1 + Math.abs(highFrequency) * 0.15, rigidity: 0, projectionStretch: 0.1 },
+      style: {
+        strokeScale: 0.9,
+        vibration: 1.15 + Math.abs(oscillatorVelocity) * 0.1 + Math.abs(highFrequency) * 0.15,
+        rigidity: 0,
+        projectionStretch: 0.1,
+        candyMass: 0.8 + clamp(0.8 + Math.abs(net) * 0.24, 0, 3) * 0.12,
+        candyAngularVelocity: logReturn / dt,
+        candyVibrationFrequency: 1.2 + Math.abs(highFrequency) * 1.4 + Math.abs(oscillatorVelocity) * 0.1,
+        candyRadialScale: clamp(1 + oscillatorDisplacement * 0.035, 0.94, 1.06),
+        candyPhaseOffset: Math.atan2(oscillatorVelocity, oscillatorDisplacement || 1e-9) * 0.04,
+        candyHueShift: 0.76,
+        candyEmissive: 0.95 + Math.abs(highFrequency) * 0.35,
+      },
       diagnostics,
     };
   };
@@ -735,6 +883,7 @@ function animalSimulator(seed: number): FieldSimulator {
   const rand = mulberry32(seed);
   const count = ANIMAL_INITIAL_UNIVERSE.length;
   const prices = ANIMAL_INITIAL_UNIVERSE.map(() => FIELD_CONFIGS.animal.basePrice);
+  const priceHistories: number[][] = ANIMAL_INITIAL_UNIVERSE.map(() => [FIELD_CONFIGS.animal.basePrice]);
   const phases = ANIMAL_INITIAL_UNIVERSE.map((_, index) => index * 0.72);
   const frequencies = ANIMAL_INITIAL_UNIVERSE.map(() => (rand() - 0.5) * 0.12);
   const returnHistory: number[][] = ANIMAL_INITIAL_UNIVERSE.map(() => []);
@@ -757,10 +906,13 @@ function animalSimulator(seed: number): FieldSimulator {
       0.72 * commonEnergy + gauss(rand) * 0.00034,
     ];
     const basketWeight = ANIMAL_ASSET_WEIGHTS.reduce((sum, weight) => sum + weight, 0);
+    const previousConstituentPrices = [...prices];
 
     for (let index = 0; index < count; index += 1) {
       const returnValue = innovations[index] + sentiment * (index < 3 ? 0.00028 : 0.0002);
       prices[index] *= Math.exp(returnValue);
+      priceHistories[index].push(prices[index]);
+      if (priceHistories[index].length > 49) priceHistories[index].shift();
       returnHistory[index].push(returnValue);
       if (returnHistory[index].length > 48) returnHistory[index].shift();
       trendHistory[index].push(returnValue);
@@ -794,6 +946,7 @@ function animalSimulator(seed: number): FieldSimulator {
       trendDirections,
       directionalStrengths,
       synchronized,
+      priceHistories,
     );
     synchronized = sync.alert;
     const alignment = trendDirections.reduce((sum, direction) => sum + direction, 0);
@@ -802,8 +955,36 @@ function animalSimulator(seed: number): FieldSimulator {
       * clamp((sync.meanCorrelation + 0.2) / 0.9, 0, 1)
       * sync.trendAgreement
       * (0.45 + sync.directionalStrength * 0.55);
-    const weightedLogPrice = prices.reduce((sum, value, index) => sum + Math.log(value / FIELD_CONFIGS.animal.basePrice) * ANIMAL_ASSET_WEIGHTS[index], 0) / basketWeight;
-    const price = FIELD_CONFIGS.animal.basePrice * Math.exp(weightedLogPrice);
+    const attractor = ANIMAL_SYNC_ATTRACTORS.find((item) => item.id === (Math.cos(sync.meanPhase) >= 0 ? 10 : 21)) ?? ANIMAL_SYNC_ATTRACTORS[0];
+    const rawCentroid: MatrixPoint = {
+      x: 0.72 * sync.orderParameter * Math.cos(sync.meanPhase),
+      y: 0.72 * sync.orderParameter * Math.sin(sync.meanPhase),
+      z: clamp((directionalStrengths.reduce((sum, strength, index) => sum + strength * trendDirections[index], 0) / count) * 0.35, -0.35, 0.35),
+    };
+    const animalAttractorStrength = clamp((sync.orderParameter - 0.85) / 0.15, 0, 1);
+    const animalCentroid: MatrixPoint = {
+      x: rawCentroid.x + (attractor.x - rawCentroid.x) * animalAttractorStrength,
+      y: rawCentroid.y + (attractor.y - rawCentroid.y) * animalAttractorStrength,
+      z: (rawCentroid.z ?? 0) + (attractor.z - (rawCentroid.z ?? 0)) * animalAttractorStrength,
+    };
+    const animalAttractorDistance = Math.hypot(
+      animalCentroid.x - attractor.x,
+      animalCentroid.y - attractor.y,
+      (animalCentroid.z ?? 0) - attractor.z,
+    );
+    const animalBraidTension = clamp(sync.orderParameter * sync.meanCorrelation * sync.trendAgreement, 0, 1);
+    const animalIndex = calculateSyntheticIndex(
+      ANIMAL_INDEX_DEFINITION,
+      Object.fromEntries(ANIMAL_INDEX_DEFINITION.constituents.map((constituent, index) => [
+        constituent.symbol,
+        { currentPrice: prices[index], previousPrice: previousConstituentPrices[index], observedAt: now },
+      ])),
+      previousBasket,
+      now,
+    );
+    if (!animalIndex) throw new Error('Animal simulation did not produce a valid synthetic index observation');
+    const price = animalIndex.value;
+    const dataContract = createSyntheticMarketDataContract(ANIMAL_INDEX_DEFINITION, animalIndex, now);
     const relativeMove = Math.log(price / previousBasket);
     const angularVelocityRaw = phaseVelocities.reduce((sum, value, index) => sum + value * ANIMAL_ASSET_WEIGHTS[index], 0) / basketWeight;
     const angle = Math.atan2(direction * Math.abs(angularVelocityRaw) * 5 + relativeMove * 80, 0.25 + sync.orderParameter);
@@ -847,9 +1028,19 @@ function animalSimulator(seed: number): FieldSimulator {
       poissonJump: false,
       animalSync: sync.alert,
       kuramotoOrder: sync.orderParameter,
+      kuramotoMeanPhase: sync.meanPhase,
+      animalPhases: sync.phases,
+      animalCorrelationMatrix: sync.correlationMatrix,
+      animalAttractorArcanaId: attractor.id,
+      animalAttractorDistance,
+      animalAttractorStrength,
+      animalCentroid,
+      animalBraidTension,
+      animalSynapseStrength: animalBraidTension,
       meanCorrelation: sync.meanCorrelation,
       trendAgreement: sync.trendAgreement,
       directionalStrength: sync.directionalStrength,
+      dataContract,
     };
 
     return {
@@ -869,6 +1060,17 @@ function animalSimulator(seed: number): FieldSimulator {
         projectionStretch: logSpiralReach * 6,
         syncAlert: sync.alert,
         syncStrength,
+        candyMass: 0.8 + syncStrength * 0.75,
+        candyAngularVelocity: angularVelocity,
+        candyVibrationFrequency: 0.65 + (1 - syncStrength) * 0.7,
+        candyRadialScale: clamp(1 + syncStrength * 0.09 + sync.directionalStrength * 0.03, 0.96, 1.15),
+        candyPhaseOffset: phases.reduce((sum, value) => sum + Math.sin(value), 0) / count * 0.08,
+        candyHueShift: sync.alert ? 0.12 : 0.25,
+        candyEmissive: 0.55 + syncStrength * 0.7,
+        animalPulseStrength: animalAttractorStrength,
+        animalPulsePhase: sync.meanPhase,
+        animalBraidStrength: animalBraidTension,
+        animalAttractorArcanaId: attractor.id,
       },
       diagnostics,
     };
@@ -897,6 +1099,7 @@ function metaSimulator(seed: number): FieldSimulator {
     if (btcAnchor && Number.isFinite(btcAnchor) && btcAnchor > 0) {
       syntheticBtcPrice += (btcAnchor - syntheticBtcPrice) * 0.2;
     }
+    const previousLevels = [...levels];
     const orientedReturns = design.assets.map((asset, assetIndex) => {
       const equityExposure = asset.assetClass === 'equity' ? 1 : 0.12;
       const currencyExposure = asset.group === 'usd' ? 1 : asset.assetClass === 'currency' ? 0.45 : 0.08;
@@ -912,9 +1115,24 @@ function metaSimulator(seed: number): FieldSimulator {
       return oriented;
     });
 
-    const basketReturn = design.assets.reduce((sum, asset, assetIndex) => sum + orientedReturns[assetIndex] * asset.weight, 0);
+    const metaIndex = calculateSyntheticIndex(
+      META_INDEX_DEFINITION,
+      Object.fromEntries(design.assets.map((asset, assetIndex) => [
+        asset.symbol,
+        {
+          currentPrice: levels[assetIndex],
+          previousPrice: previousLevels[assetIndex],
+          observedAt: now,
+        },
+      ])),
+      index,
+      now,
+    );
+    if (!metaIndex) throw new Error('Meta simulation did not produce a valid synthetic index observation');
+    const basketReturn = metaIndex.returnLog;
     const rawPrevious = index;
-    index = Math.max(1, index * Math.exp(basketReturn));
+    index = metaIndex.value;
+    const dataContract = createSyntheticMarketDataContract(META_INDEX_DEFINITION, metaIndex, now);
     const filteredIndex = filter.push(index);
     const filteredReturn = Math.log(filteredIndex / previousFilteredIndex);
     previousFilteredIndex = filteredIndex;
@@ -989,6 +1207,7 @@ function metaSimulator(seed: number): FieldSimulator {
       btcVolatility: clamp(Math.abs(commonGlobal) * 500, 0, 1),
       btcTension: 0.28 + relativeDispersion * 0.04,
       usdVolatility: Math.abs(commonUsd) * 400,
+      dataContract,
     };
     return {
       tick,
@@ -1003,6 +1222,13 @@ function metaSimulator(seed: number): FieldSimulator {
         candySpinModifier: 1 + invasion.invasionStrength * 0.15,
         matrixDistance: matrixAnalysis.distance,
         resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
+        candyMass: 1.35 + relativeDispersion * 0.25,
+        candyAngularVelocity: filteredReturn / (FIELD_CONFIGS.meta.intervalMs / 1000),
+        candyVibrationFrequency: 0.45,
+        candyRadialScale: clamp(0.98 + invasion.rigidity * 0.025 + Math.abs(invasion.microTremor) * 0.05, 0.98, 1.06),
+        candyPhaseOffset: invasion.angle * 0.025,
+        candyHueShift: 0.58,
+        candyEmissive: 0.38 + invasion.invasionStrength * 0.3,
       },
       diagnostics,
     };

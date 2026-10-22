@@ -9,10 +9,11 @@ import KnotGlyphPalette from '@/components/KnotGlyphPalette';
 import CandySpiralScene from '@/components/3d/CandySpiralScene';
 import MatrixGridExplorer from '@/components/MatrixGridExplorer';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
+import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
-import { useMetalFeed } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, analyzeMatrixPair, applyMatrixInvasionToGeometry, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
-import { useKnotSelection } from '@/hooks/useKnotSelection';
+import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { useKnotSelection, type AnimalSyncTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
 const MAX_TICKS = 256;
@@ -179,6 +180,11 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [isGuideTracking, setIsGuideTracking] = useState(false);
   const [guidePointer, setGuidePointer] = useState<GuidePointer>({ x: 0.72, y: 0.22 });
   const [selectedKnotIds, setSelectedKnotIds] = useState<number[]>([]);
+  const metalFractureCount = useKnotSelection((state) => state.metalFractures.length);
+  const animalSyncEventCount = useKnotSelection((state) => state.animalSyncEvents.length);
+  const animalSyncEvents = useKnotSelection((state) => state.animalSyncEvents);
+  const [animalReplayEvent, setAnimalReplayEvent] = useState<AnimalSyncTrace | undefined>(undefined);
+  const [metalFeedJumpEvent, setMetalFeedJumpEvent] = useState(false);
   const [selectionLocked, setSelectionLocked] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(0);
   const [gridTimeScale, setGridTimeScale] = useState(1);
@@ -188,6 +194,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [viewMode, setViewMode] = useState<'2d' | '3d' | 'split'>('split');
   const lastTickTimestamp = useRef<number | undefined>(undefined);
   const lastMetalDebugTimestamp = useRef<number | undefined>(undefined);
+  const lastProcessedMetalQuote = useRef<MetalQuote | undefined>(undefined);
+  const lastMetalQuoteTimestamp = useRef<number | undefined>(undefined);
+  const metalJumpResetTimer = useRef<number | undefined>(undefined);
+  const animalResonanceRecorded = useRef(false);
 
   useEffect(() => {
     tickerRef.current = ticker?.price;
@@ -248,6 +258,52 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     setMetalPhaseHistory((current) => [...current.slice(-119), { ...diagnostics, timestamp }]);
   }, [field?.kind, fieldStep]);
 
+  useEffect(() => {
+    if (field?.kind !== 'animal') {
+      animalResonanceRecorded.current = false;
+      return;
+    }
+    const diagnostics = fieldStep?.diagnostics;
+    if (!diagnostics
+      || (diagnostics.kuramotoOrder ?? 0) < 0.95
+      || (diagnostics.animalAttractorDistance ?? Number.POSITIVE_INFINITY) > 0.08
+      || !diagnostics.animalCentroid
+      || !diagnostics.animalCorrelationMatrix
+      || !diagnostics.animalPhases) {
+      if ((diagnostics?.kuramotoOrder ?? 0) < 0.9) animalResonanceRecorded.current = false;
+      return;
+    }
+    if (animalResonanceRecorded.current) return;
+    const arcana = ARCANA_ATTRACTORS.find((item) => item.id === diagnostics.animalAttractorArcanaId);
+    if (!arcana || (arcana.id !== 10 && arcana.id !== 21)) return;
+    useKnotSelection.getState().recordAnimalSyncEvent({
+      timestamp: fieldStep.tick.timestamp ?? Date.now(),
+      price: fieldStep.tick.price,
+      orderParameter: diagnostics.kuramotoOrder ?? 0,
+      meanPhase: diagnostics.kuramotoMeanPhase ?? 0,
+      phases: diagnostics.animalPhases,
+      correlationMatrix: diagnostics.animalCorrelationMatrix,
+      braidTension: diagnostics.animalBraidTension ?? 0,
+      attractorStrength: diagnostics.animalAttractorStrength ?? 0,
+      arcanaId: arcana.id,
+      arcanaName: arcana.name,
+      arcanaPosition: { x: arcana.x, y: arcana.y, z: arcana.z },
+      centroid: {
+        x: diagnostics.animalCentroid.x,
+        y: diagnostics.animalCentroid.y,
+        z: diagnostics.animalCentroid.z ?? 0,
+      },
+    });
+    animalResonanceRecorded.current = true;
+    console.info('[animal-synapse-resonance]', {
+      orderParameter: diagnostics.kuramotoOrder,
+      meanPhase: diagnostics.kuramotoMeanPhase,
+      arcana: arcana.roman,
+      braidTension: diagnostics.animalBraidTension,
+      timestamp: fieldStep.tick.timestamp,
+    });
+  }, [field?.kind, fieldStep]);
+
   const latestTick = history.at(-1);
   const timeline = useMemo(() => latestTick ? createTimeline(latestTick, visible) : undefined, [latestTick, visible]);
   const gravityTensor: TrueGravityTensor | undefined = field ? fieldStep?.gravityTensor : liveData?.true_gravity_tensor;
@@ -303,6 +359,16 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       source,
     };
   }, [field, fieldStep, latestTick, metalFeed, ticker]);
+  const metalResonance = useMemo(
+    () => field?.kind === 'metal' ? checkMetalResonance(matrixAnalysis.analysis) : undefined,
+    [field?.kind, matrixAnalysis],
+  );
+  const metalJumpIntensity = useMemo(
+    () => field?.kind === 'metal' ? adaptMetalJumpIntensity(1 / 90, matrixAnalysis.analysis) : 0,
+    [field?.kind, matrixAnalysis],
+  );
+  const metalJumpActive = field?.kind === 'metal'
+    && (Boolean(fieldStep?.diagnostics?.poissonJump) || metalFeedJumpEvent);
   const fieldStyle: KnotFieldStyle | undefined = useMemo(() => {
     if (!field || !fieldStep) return undefined;
     if (field.kind !== 'metal') return fieldStep.style;
@@ -321,8 +387,76 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       candySpinModifier: 1 + matrixAnalysis.analysis.distance * 0.2,
       matrixDistance: matrixAnalysis.analysis.distance,
       resonanceArcanaId: matrixAnalysis.analysis.resonance.arcana.id,
+      metalJump: metalJumpActive,
+      metalLayerGrowth: diagnostics?.dailyStep ?? 0,
+      metalMicroTremor: metalFeed.quote?.source === 'LIVE'
+        ? Math.min(1, Math.abs(metalFeed.angularVelocity) * 4)
+        : 0,
     };
-  }, [field, fieldStep, latestTick, matrixAnalysis]);
+  }, [field, fieldStep, latestTick, matrixAnalysis, metalFeed, metalJumpActive]);
+  const visualFieldStyle = useMemo(() => {
+    if (field?.kind !== 'animal' || !animalReplayEvent || !fieldStyle) return fieldStyle;
+    return {
+      ...fieldStyle,
+      animalPulseStrength: animalReplayEvent.orderParameter,
+      animalPulsePhase: animalReplayEvent.meanPhase,
+      animalBraidStrength: animalReplayEvent.braidTension,
+      animalAttractorArcanaId: animalReplayEvent.arcanaId,
+    };
+  }, [animalReplayEvent, field?.kind, fieldStyle]);
+  useEffect(() => {
+    const quote = metalFeed.quote;
+    const resonance = metalResonance;
+    if (field?.kind !== 'metal' || quote?.source !== 'LIVE' || quote === lastProcessedMetalQuote.current) return;
+    lastProcessedMetalQuote.current = quote;
+    const previousTimestamp = lastMetalQuoteTimestamp.current;
+    const receivedAt = Date.now();
+    lastMetalQuoteTimestamp.current = receivedAt;
+    const elapsedSeconds = previousTimestamp === undefined
+      ? 0
+      : Math.min(120, Math.max(0, (receivedAt - previousTimestamp) / 1000));
+    const poissonEvents = samplePoissonCount(Math.random, metalJumpIntensity, elapsedSeconds);
+    const forcedByResonance = Boolean(resonance?.shouldForceJump);
+    if (!forcedByResonance && poissonEvents === 0) return;
+
+    setMetalFeedJumpEvent(true);
+    if (metalJumpResetTimer.current !== undefined) window.clearTimeout(metalJumpResetTimer.current);
+    metalJumpResetTimer.current = window.setTimeout(() => setMetalFeedJumpEvent(false), 2500);
+    const analysis = matrixAnalysis.analysis;
+    const arcana = forcedByResonance ? resonance!.arcana : analysis.resonance.arcana;
+    const crossingPathOffset = Math.hypot(
+      analysis.assetPosition.x - analysis.counterPosition.x,
+      analysis.assetPosition.y - analysis.counterPosition.y,
+    );
+    useKnotSelection.getState().recordMetalFracture({
+      timestamp: quote.timestamp,
+      price: quote.price,
+      source: quote.provider,
+      matrixDistance: analysis.distance,
+      distanceTensor: {
+        x: analysis.assetPosition.x - analysis.counterPosition.x,
+        y: analysis.assetPosition.y - analysis.counterPosition.y,
+        z: (analysis.assetPosition.z ?? 0) - (analysis.counterPosition.z ?? 0),
+      },
+      crossingPathOffset,
+      arcanaId: arcana.id,
+      arcanaName: arcana.name,
+      arcanaSymbol: arcana.roman,
+      arcanaPosition: { x: arcana.x, y: arcana.y, z: arcana.z },
+    });
+    console.warn('[metal-resonance-fracture]', {
+      price: quote.price,
+      matrixDistance: analysis.distance,
+      arcana: arcana.roman,
+      jumpIntensity: metalJumpIntensity,
+      poissonEvents,
+      forcedByResonance,
+      crossingPathOffset,
+    });
+  }, [field?.kind, matrixAnalysis, metalFeed.quote, metalJumpIntensity, metalResonance]);
+  useEffect(() => () => {
+    if (metalJumpResetTimer.current !== undefined) window.clearTimeout(metalJumpResetTimer.current);
+  }, []);
   useEffect(() => {
     const quote = metalFeed.quote;
     if (field?.kind !== 'metal' || quote?.source !== 'LIVE' || quote.timestamp === lastMetalDebugTimestamp.current) return;
@@ -337,8 +471,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       invasionStrength: fieldStyle?.invasionStrength ?? 0,
       candySpinModifier: fieldStyle?.candySpinModifier ?? 1,
       radialDeformationCoefficient: 0.035 * (fieldStyle?.invasionStrength ?? 0),
+      jumpIntensity: metalJumpIntensity,
+      forcedResonanceJump: metalResonance?.shouldForceJump ?? false,
     });
-  }, [field?.kind, fieldStyle, matrixAnalysis, metalFeed]);
+  }, [field?.kind, fieldStyle, matrixAnalysis, metalFeed, metalJumpIntensity, metalResonance]);
   const isConnected = field ? true : isBackendConnected || isExchangeConnected;
   const streamLabel = field?.kind === 'metal'
     ? `XAU/USD ${metalFeed.quote?.source ?? 'SYNTHETIC'}`
@@ -427,6 +563,9 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               label={field?.kind === 'metal' ? 'XAU / USD MATRIX DISTANCE' : `${matrixAnalysis.analysis.asset} / USD MATRIX DISTANCE`}
               source={matrixAnalysis.source}
               height={188}
+              animalCentroid={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalCentroid : undefined}
+              animalAttractorArcanaId={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalAttractorArcanaId : undefined}
+              animalAttractorStrength={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalAttractorStrength : undefined}
             />
             {field?.kind === 'metal' && (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-amber-200/15 bg-amber-100/[0.025] px-3 py-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
@@ -435,6 +574,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 <span className={metalFeed.quote?.source === 'LIVE' ? 'text-emerald-200/80' : 'text-rose-200/75'}>
                   {metalFeed.quote?.source ?? 'SYNTHETIC'} / XAU {metalFeed.quote?.price.toFixed(2) ?? fieldStep?.diagnostics?.xauUsdPrice?.toFixed(2) ?? '--'} USD
                   {metalFeed.fallbackReason && ` / ${metalFeed.fallbackReason}`}
+                </span>
+                <span className={metalResonance?.shouldForceJump ? 'text-rose-200' : 'text-stone-500'}>
+                  λ {metalJumpIntensity.toFixed(4)} / {metalResonance?.arcana.roman} {metalResonance?.arcana.name}
+                  {metalResonance?.shouldForceJump ? ' / FRACTURE' : ''} / INVENTORY {metalFractureCount}
                 </span>
               </div>
             )}
@@ -494,7 +637,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                     {fieldStep?.diagnostics?.animalSync ? 'Kuramoto sync alert / projection ornament' : 'Commodity ecosystem / phase coherence'}
                   </p>
                   <p className="font-mono text-[8px] text-stone-500">
-                    r {fieldStep?.diagnostics?.kuramotoOrder?.toFixed(2) ?? '--'} / corr {fieldStep?.diagnostics?.meanCorrelation?.toFixed(2) ?? '--'} / trend {fieldStep?.diagnostics?.trendAgreement?.toFixed(2) ?? '--'}
+                    r {fieldStep?.diagnostics?.kuramotoOrder?.toFixed(2) ?? '--'}
+                    {' '} / ψ {fieldStep?.diagnostics?.kuramotoMeanPhase?.toFixed(2) ?? '--'}
+                    {' '} / corr {fieldStep?.diagnostics?.meanCorrelation?.toFixed(2) ?? '--'}
+                    {' '} / braid T {fieldStep?.diagnostics?.animalBraidTension?.toFixed(2) ?? '--'}
                   </p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -508,7 +654,50 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                       synchronized / golden-angle projection
                     </span>
                   )}
+                  {fieldStep?.diagnostics?.animalAttractorArcanaId !== undefined && (
+                    <span className={`border px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] ${
+                      (fieldStep.diagnostics.animalAttractorDistance ?? 1) < 0.08
+                        ? 'border-cyan-200/60 text-cyan-100'
+                        : 'border-white/10 text-stone-500'
+                    }`}>
+                      attractor {fieldStep.diagnostics.animalAttractorArcanaId === 10 ? 'X / wheel' : 'XXI / world'}
+                      {' '} / D {fieldStep.diagnostics.animalAttractorDistance?.toFixed(3) ?? '--'}
+                    </span>
+                  )}
+                  <span className="border border-white/10 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-stone-500">
+                    synapse inventory / {animalSyncEventCount}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={animalSyncEvents.length === 0}
+                    onClick={() => setAnimalReplayEvent((current) => current ? undefined : animalSyncEvents.at(-1))}
+                    className="border border-cyan-200/25 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-cyan-100 enabled:hover:bg-cyan-300/10 disabled:opacity-40"
+                  >
+                    {animalReplayEvent ? 'Stop sync replay' : 'Replay latest sync'}
+                  </button>
                 </div>
+                {animalReplayEvent && (
+                  <div className="mt-2 border border-cyan-200/20 bg-cyan-200/[0.035] p-2 font-mono text-[8px] text-cyan-50/70" aria-live="polite">
+                    <p>
+                      REPLAY / {new Date(animalReplayEvent.timestamp).toLocaleString()} / r {animalReplayEvent.orderParameter.toFixed(3)}
+                      {' '} / ψ {animalReplayEvent.meanPhase.toFixed(3)} / {animalReplayEvent.arcanaId === 10 ? 'X WHEEL' : 'XXI WORLD'}
+                      {' '} / braid T {animalReplayEvent.braidTension.toFixed(3)}
+                    </p>
+                    <p className="mt-1 text-stone-500">
+                      PHASES [{animalReplayEvent.phases.map((phase) => phase.toFixed(2)).join(' · ')}]
+                      {' '} / CORR [{animalReplayEvent.correlationMatrix.map((row) => row.map((value) => value.toFixed(1)).join(',')).join(' / ')}]
+                    </p>
+                  </div>
+                )}
+                {fieldStep?.diagnostics?.dataContract && (
+                  <p className="mt-2 border-t border-white/10 pt-2 font-mono text-[8px] text-stone-500">
+                    {fieldStep.diagnostics.dataContract.symbol} / {fieldStep.diagnostics.dataContract.source.provider}
+                    {' '}· {fieldStep.diagnostics.dataContract.timeframe}
+                    {' '}· coverage {Math.round((fieldStep.diagnostics.dataContract.composition?.coverage ?? 0) * 100)}%
+                    {' '}· {fieldStep.diagnostics.dataContract.composition?.contributors.length ?? 0} constituents
+                    {' '}· {fieldStep.diagnostics.dataContract.composition?.version}
+                  </p>
+                )}
               </section>
             )}
             {field?.kind === 'crypto' && (
@@ -536,6 +725,15 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   </p>
                 </div>
                 <p className="mt-1 font-mono text-[8px] text-stone-600">Relative dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'} / 15° floor quantization with distance-gated micro-tremor</p>
+                {fieldStep?.diagnostics?.dataContract && (
+                  <p className="mt-1 font-mono text-[8px] text-stone-500">
+                    {fieldStep.diagnostics.dataContract.symbol} / {fieldStep.diagnostics.dataContract.source.provider}
+                    {' '}· {fieldStep.diagnostics.dataContract.timeframe}
+                    {' '}· coverage {Math.round((fieldStep.diagnostics.dataContract.composition?.coverage ?? 0) * 100)}%
+                    {' '}· {fieldStep.diagnostics.dataContract.composition?.contributors.length ?? 0} constituents
+                    {' '}· {fieldStep.diagnostics.dataContract.composition?.version}
+                  </p>
+                )}
                 <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                   {(fieldStep?.diagnostics?.metaRelativeAssets ?? []).map((asset) => (
                     <span key={asset.symbol} className="border border-white/10 px-1.5 py-1 font-mono text-[8px] text-stone-400">
@@ -595,7 +793,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               <div className="space-y-4">
                 <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
                   <div className="relative h-[560px] min-h-[480px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
-                    <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={fieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
+                    <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                     <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
@@ -603,17 +801,17 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
                 </div>
                 <div className="mt-4">
-                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={fieldStyle} />
+                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={visualFieldStyle} />
                 </div>
               </div>
             ) : viewMode === '3d' ? (
               <div className="space-y-4">
-                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={fieldStyle} />
+                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={visualFieldStyle} />
               </div>
             ) : (
               <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
                 <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
-                <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={fieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
+                <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
                 {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                 <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                 <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>

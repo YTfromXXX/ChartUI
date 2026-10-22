@@ -23,7 +23,14 @@ type MetalsApiResponse = {
 type RapidApiResponse = {
   timestamp?: number | string;
   updated_at?: number | string;
+  symbol?: string;
+  currency?: string;
+  unit?: string;
+  bid?: unknown;
+  ask?: unknown;
+  mid?: unknown;
   price?: unknown;
+  spot_price?: unknown;
   goldPrice?: unknown;
   xauUsd?: unknown;
   xau_usd?: unknown;
@@ -35,39 +42,71 @@ type RapidApiResponse = {
   result?: Record<string, unknown>;
   gold?: Record<string, unknown> | unknown;
   items?: Array<Record<string, unknown>>;
+  results?: Array<Record<string, unknown>>;
 };
+
+type PriceRecord = Record<string, unknown>;
 
 function toPositivePrice(value: unknown): number | undefined {
   const price = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   return Number.isFinite(price) && price > 0 ? price : undefined;
 }
 
-function parseRapidApiPrice(payload: RapidApiResponse): number | undefined {
-  const recordPrice = (value: unknown): number | undefined => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-    const record = value as Record<string, unknown>;
-    return toPositivePrice(record.price ?? record.xauUsd ?? record.xau_usd ?? record.goldPrice ?? record.gold_price);
-  };
-  const gold = payload.gold;
-  const candidates = [
-    toPositivePrice(payload.price),
-    toPositivePrice(payload.goldPrice),
-    toPositivePrice(payload.xauUsd),
-    toPositivePrice(payload.xau_usd),
-    toPositivePrice(payload.usdXau),
-    toPositivePrice(payload.USDXAU),
-    recordPrice(payload.data),
-    recordPrice(payload.result),
-    recordPrice(gold),
-    payload.items?.length ? recordPrice(payload.items[0]) : undefined,
-  ];
-  const directPrice = candidates.find((value): value is number => value !== undefined);
-  if (directPrice !== undefined) return directPrice;
+function asPriceRecord(value: unknown): PriceRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as PriceRecord : undefined;
+}
 
-  const usdPerXau = toPositivePrice(payload.rates?.USD);
-  if (payload.base?.toUpperCase() === 'XAU' && usdPerXau !== undefined) return usdPerXau;
-  const xauPerUsd = toPositivePrice(payload.rates?.XAU);
-  if (payload.base?.toUpperCase() === 'USD' && xauPerUsd !== undefined) return 1 / xauPerUsd;
+function isUsdGoldRecord(record: PriceRecord): boolean {
+  const currency = typeof record.currency === 'string' ? record.currency.trim().toUpperCase() : undefined;
+  if (currency && currency !== 'USD') return false;
+
+  const symbol = typeof record.symbol === 'string' ? record.symbol.trim().toUpperCase() : undefined;
+  if (symbol && !['AU', 'XAU', 'GOLD', 'XAUUSD', 'XAU/USD'].includes(symbol)) return false;
+
+  const unit = typeof record.unit === 'string' ? record.unit.trim().toLowerCase() : undefined;
+  if (unit && !['ounce', 'ounces', 'troy ounce', 'troy ounces', 'oz', 'ozt'].includes(unit)) return false;
+  return true;
+}
+
+function parseQuoteRecord(record: PriceRecord): number | undefined {
+  if (!isUsdGoldRecord(record)) return undefined;
+
+  const mid = toPositivePrice(record.mid);
+  if (mid !== undefined) return mid;
+  const bid = toPositivePrice(record.bid);
+  const ask = toPositivePrice(record.ask);
+  if (bid !== undefined && ask !== undefined) return (bid + ask) / 2;
+
+  for (const key of ['spot_price', 'price', 'goldPrice', 'gold_price', 'xauUsd', 'xau_usd', 'usdXau', 'USDXAU']) {
+    const price = toPositivePrice(record[key]);
+    if (price !== undefined) return price;
+  }
+  return undefined;
+}
+
+function parseRapidApiPrice(payload: RapidApiResponse): number | undefined {
+  const records = [
+    payload as PriceRecord,
+    asPriceRecord(payload.data),
+    asPriceRecord(payload.result),
+    asPriceRecord(payload.gold),
+    payload.results?.[0],
+    payload.items?.[0],
+  ].filter((record): record is PriceRecord => record !== undefined);
+
+  for (const record of records) {
+    const price = parseQuoteRecord(record);
+    if (price !== undefined) return price;
+  }
+
+  const rates = asPriceRecord(payload.rates);
+  if (rates && payload.base?.toUpperCase() === 'XAU') {
+    return toPositivePrice(rates.USD);
+  }
+  if (rates && payload.base?.toUpperCase() === 'USD') {
+    const xauPerUsd = toPositivePrice(rates.XAU);
+    if (xauPerUsd !== undefined) return 1 / xauPerUsd;
+  }
   return undefined;
 }
 
@@ -90,6 +129,12 @@ async function fetchRapidApiMetalPrice(apiKey: string): Promise<MetalFeedQuote> 
   }
   if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== host) {
     throw new MetalFeedError('not_configured');
+  }
+  if (url.pathname.replace(/\/+$/, '').endsWith('/metal-quote') && !url.searchParams.has('symbol')) {
+    url.searchParams.set('symbol', 'AU');
+  }
+  if (url.pathname.replace(/\/+$/, '').endsWith('/metal-quote') && !url.searchParams.has('currency')) {
+    url.searchParams.set('currency', 'USD');
   }
 
   const controller = new AbortController();
@@ -122,7 +167,7 @@ async function fetchRapidApiMetalPrice(apiKey: string): Promise<MetalFeedQuote> 
 
   const price = parseRapidApiPrice(payload);
   if (price === undefined) throw new MetalFeedError('invalid_payload');
-  const rawTimestamp = Number(payload.timestamp ?? payload.updated_at);
+  const rawTimestamp = Number(payload.timestamp ?? payload.updated_at ?? payload.results?.[0]?.timestamp);
   const timestamp = Number.isFinite(rawTimestamp) && rawTimestamp > 0
     ? rawTimestamp < 1e12 ? rawTimestamp * 1000 : rawTimestamp
     : Date.now();
