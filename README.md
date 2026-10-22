@@ -77,6 +77,39 @@ The repository contains a FastAPI backend and a Next.js frontend.
 	The local WebSocket endpoint is configured in `.env.local` as
 	`NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/signals`.
 
+	Metal pages use the server-only `/api/metal-feed` adapter. To enable a RapidAPI
+	feed, set `METAL_FEED_PROVIDER=rapidapi-metals`, `RAPIDAPI_KEY`,
+	`RAPIDAPI_HOST`, and `RAPIDAPI_URL` in the Next.js server environment (for
+	example, `.env.local`, which must not be committed). The host and HTTPS endpoint
+	must match the API listing selected in RapidAPI; response prices may be provided
+	as `price`, `xauUsd`, `data.price`, or a USD/XAU rates object. The key is only
+	read on the server and is never included in client bundles or API responses.
+	Quotes are polled every 30 seconds. Missing configuration, upstream errors, and
+	rate limits return a clearly labeled synthetic quote from the existing Metal
+	field simulator; the UI displays the active source and fallback reason. LIVE
+	quotes log their matrix distance, resonance, price/angular velocity, and candy
+	radial deformation coefficient to the browser console.
+
+	## Tests
+
+Install the Python test runner in the environment that already has the backend
+dependencies installed:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+Run the TypeScript type check and the deterministic backend unit tests together:
+
+```bash
+npm test
+```
+
+To run only the backend tests, use `python -m pytest`. Pytest defaults to
+`tests/backend`; the live MetaTrader integration tests under `tests/integration`
+are intentionally excluded because they require an external terminal and market
+data.
+
 The unified market adapter is available through `market_aggregator.py`. It accepts one
 entry from `UNIFIED_SYMBOLS` and returns a common `time, open, high, low, close, volume`
 DataFrame. MT5, CoinGecko, and yfinance failures are isolated per symbol and return

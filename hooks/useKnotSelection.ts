@@ -11,6 +11,8 @@ export type KnotResonanceTrace = {
   resonanceArcanaName: string;
   tension: number;
   price: number;
+  invasionDistance?: number;
+  resonatingArcana?: string;
 };
 
 type KnotSelectionState = {

@@ -28,7 +28,8 @@ class MT5Executor:
         symbol, action = self.validate_order(symbol, action, lot_size)
         now = time.monotonic()
         with self._lock:
-            if now - self._last_orders.get(symbol, 0) < self.cooldown_seconds:
+            last_order = self._last_orders.get(symbol)
+            if last_order is not None and now - last_order < self.cooldown_seconds:
                 raise RuntimeError(f"duplicate order blocked for {symbol}")
             self._last_orders[symbol] = now
 
@@ -58,7 +59,8 @@ class MT5Executor:
             raise ValueError("limit_price must be greater than zero")
         now = time.monotonic()
         with self._lock:
-            if now - self._last_orders.get(symbol, 0) < self.cooldown_seconds:
+            last_order = self._last_orders.get(symbol)
+            if last_order is not None and now - last_order < self.cooldown_seconds:
                 raise RuntimeError(f"duplicate order blocked for {symbol}")
             self._last_orders[symbol] = now
         if self.dry_run:

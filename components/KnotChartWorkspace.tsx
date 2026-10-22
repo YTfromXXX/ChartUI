@@ -10,7 +10,8 @@ import CandySpiralScene from '@/components/3d/CandySpiralScene';
 import MatrixGridExplorer from '@/components/MatrixGridExplorer';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { useMarketStream } from '@/hooks/useMarketStream';
-import { ANIMAL_INITIAL_UNIVERSE, analyzeMatrixPair, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { useMetalFeed } from '@/hooks/useMetalFeed';
+import { ANIMAL_INITIAL_UNIVERSE, analyzeMatrixPair, applyMatrixInvasionToGeometry, createFieldSimulator, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import { useKnotSelection } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -165,6 +166,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     SYMBOL,
   );
   const { ticker, isConnected: isExchangeConnected } = useBtcUsdTicker();
+  const metalFeed = useMetalFeed(field?.kind === 'metal');
   const liveData = field ? undefined : marketDataMap[SYMBOL];
   const [fieldStep, setFieldStep] = useState<FieldStep | undefined>(undefined);
   const [metalPhaseHistory, setMetalPhaseHistory] = useState<MetalPhaseSample[]>([]);
@@ -185,6 +187,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [patternOffset, setPatternOffset] = useState(0);
   const [viewMode, setViewMode] = useState<'2d' | '3d' | 'split'>('split');
   const lastTickTimestamp = useRef<number | undefined>(undefined);
+  const lastMetalDebugTimestamp = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     tickerRef.current = ticker?.price;
@@ -203,6 +206,17 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   useEffect(() => {
     const backendTick = field ? fieldStep?.tick : liveData ? liveTick(liveData) : undefined;
     const previous = history.at(-1);
+    const metalPrice = field?.kind === 'metal'
+      ? metalFeed.quote?.price ?? fieldStep?.diagnostics?.xauUsdPrice
+      : undefined;
+    const metalTick = backendTick && metalPrice
+      ? {
+        ...backendTick,
+        price: metalPrice,
+        angle: backendTick.angle + Math.atan(metalFeed.angularVelocity) * 0.12,
+        volatility: metalFeed.quote ? metalFeed.volatility : fieldStep?.diagnostics?.xauVolatility ?? backendTick.volatility,
+      }
+      : backendTick;
     const price = ticker?.price;
     const tickerTimestamp = ticker?.timestamp;
     const exchangeTick = typeof price === 'number' && typeof tickerTimestamp === 'number'
@@ -216,11 +230,11 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
         jump: false,
       } satisfies KnotTick
       : undefined;
-    const next = backendTick ?? (field ? undefined : exchangeTick);
+    const next = metalTick ?? (field ? undefined : exchangeTick);
     if (!next || !isRunning || next.timestamp === lastTickTimestamp.current) return;
     lastTickTimestamp.current = next.timestamp;
     setHistory((current) => [...current.slice(-(MAX_TICKS - 1)), next]);
-  }, [field, fieldStep, history, isRunning, liveData, ticker]);
+  }, [field, fieldStep, history, isRunning, liveData, metalFeed, ticker]);
 
   useEffect(() => {
     if (burstEvent) setBurstCount((current) => current + 1);
@@ -238,7 +252,6 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const timeline = useMemo(() => latestTick ? createTimeline(latestTick, visible) : undefined, [latestTick, visible]);
   const gravityTensor: TrueGravityTensor | undefined = field ? fieldStep?.gravityTensor : liveData?.true_gravity_tensor;
   const futureProjection = field ? fieldStep?.projection : liveData?.spiral_cube;
-  const fieldStyle: KnotFieldStyle | undefined = field ? fieldStep?.style : undefined;
   const matrixAnalysis = useMemo(() => {
     const currentPrice = latestTick?.price ?? field?.basePrice ?? 65000;
     const currentVolatility = latestTick?.volatility ?? 0.25;
@@ -246,11 +259,15 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     const diagnostics = fieldStep?.diagnostics;
     const mass = diagnostics?.mass ?? 0.8;
     const usdIndex = fieldStep?.diagnostics?.usdIndex ?? 100;
+    const metalPrice = metalFeed.quote?.price ?? diagnostics?.xauUsdPrice ?? 2650;
+    const metalVolatility = metalFeed.quote
+      ? metalFeed.volatility
+      : diagnostics?.xauVolatility ?? 0;
     const [asset, assetState, source] = field?.kind === 'metal'
       ? [
         'XAU',
-        { value: diagnostics?.xauUsdPrice ?? 2650, referenceValue: 2650, volatility: diagnostics?.xauVolatility ?? 0, tension: diagnostics?.xauTension ?? 0.42, mass: 1.1 },
-        'synthetic XAU/USD proxy',
+        { value: metalPrice, referenceValue: 2650, volatility: metalVolatility, tension: metalFeed.quote ? Math.min(1, 0.42 + metalVolatility * 0.3) : diagnostics?.xauTension ?? 0.42, mass: 1.1 },
+        metalFeed.quote?.source === 'LIVE' ? 'LIVE / Metals-API' : `SYNTHETIC / ${metalFeed.fallbackReason ?? metalFeed.quote?.fallbackReason ?? 'field model'}`,
       ] as const
       : field?.kind === 'animal'
         ? [
@@ -285,8 +302,47 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       }),
       source,
     };
-  }, [field, fieldStep, latestTick, ticker]);
+  }, [field, fieldStep, latestTick, metalFeed, ticker]);
+  const fieldStyle: KnotFieldStyle | undefined = useMemo(() => {
+    if (!field || !fieldStep) return undefined;
+    if (field.kind !== 'metal') return fieldStep.style;
+    const diagnostics = fieldStep.diagnostics;
+    const invasion = applyMatrixInvasionToGeometry(
+      'metal',
+      { tension: metalFeed.quote ? Math.min(1, 0.42 + metalFeed.volatility * 0.3) : diagnostics?.xauTension ?? 0.42, rigidity: fieldStep.style.rigidity ?? 0.2, angle: latestTick?.angle ?? 0 },
+      matrixAnalysis.analysis,
+      (latestTick?.timestamp ?? Date.now()) / 1000,
+    );
+    return {
+      ...fieldStep.style,
+      vibration: 0.15 + invasion.invasionStrength * 0.2,
+      rigidity: invasion.rigidity,
+      invasionStrength: invasion.invasionStrength,
+      candySpinModifier: 1 + matrixAnalysis.analysis.distance * 0.2,
+      matrixDistance: matrixAnalysis.analysis.distance,
+      resonanceArcanaId: matrixAnalysis.analysis.resonance.arcana.id,
+    };
+  }, [field, fieldStep, latestTick, matrixAnalysis]);
+  useEffect(() => {
+    const quote = metalFeed.quote;
+    if (field?.kind !== 'metal' || quote?.source !== 'LIVE' || quote.timestamp === lastMetalDebugTimestamp.current) return;
+    lastMetalDebugTimestamp.current = quote.timestamp;
+    console.info('[metal-live-geometry]', {
+      priceUsdPerOunce: quote.price,
+      provider: quote.provider,
+      matrixDistance: matrixAnalysis.analysis.distance,
+      resonance: matrixAnalysis.analysis.resonance.arcana.name,
+      priceVelocityUsdPerSecond: metalFeed.priceVelocity,
+      angularVelocityRadiansPerSecond: metalFeed.angularVelocity,
+      invasionStrength: fieldStyle?.invasionStrength ?? 0,
+      candySpinModifier: fieldStyle?.candySpinModifier ?? 1,
+      radialDeformationCoefficient: 0.035 * (fieldStyle?.invasionStrength ?? 0),
+    });
+  }, [field?.kind, fieldStyle, matrixAnalysis, metalFeed]);
   const isConnected = field ? true : isBackendConnected || isExchangeConnected;
+  const streamLabel = field?.kind === 'metal'
+    ? `XAU/USD ${metalFeed.quote?.source ?? 'SYNTHETIC'}`
+    : field ? field.feedLabel : liveData ? 'BTCUSD API' : 'BTC-USD exchange';
   const memoryBytes = MAX_TICKS * (8 * 3 + 4 * 4 + 1);
   const bufferPercent = Math.round((history.length / MAX_TICKS) * 100);
 
@@ -319,6 +375,8 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
         resonanceArcanaName: arcana.name,
         tension: latestTick.tension,
         price: latestTick.price,
+        invasionDistance: matrixAnalysis.analysis.distance,
+        resonatingArcana: arcana.name,
       });
     }
     setSelectedKnotIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -359,7 +417,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-100/[0.06] text-amber-200"><Activity className="h-5 w-5" /></div>
             <div><p className="font-mono text-[9px] uppercase tracking-[0.38em] text-cyan-200/60">Native projection workspace</p><h1 className="mt-1 text-xl tracking-[0.14em] text-cyan-50 sm:text-2xl">{field?.title ?? 'BTCUSD / KNOT PROJECTION'}</h1></div>
           </div>
-          <div className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500"><Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link><span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `live / ${field ? field.feedLabel : liveData ? 'BTCUSD API' : 'BTC-USD exchange'}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span></div>
+          <div className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500"><Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link><span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning && (field?.kind !== 'metal' || metalFeed.quote?.source === 'LIVE') ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : field?.kind === 'metal' && isRunning ? 'bg-amber-300' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `${field?.kind === 'metal' && metalFeed.quote?.source !== 'LIVE' ? 'fallback' : 'live'} / ${streamLabel}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span></div>
         </header>
 
         <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -374,7 +432,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-amber-200/15 bg-amber-100/[0.025] px-3 py-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
                 <span className="text-amber-100/75">Metal data catalog / {METAL_INSTRUMENT_CATALOG.length} benchmark symbols</span>
                 <span>Exchange stream + OTC daily assessments + 17 rare-earth benchmarks</span>
-                <span className="text-rose-200/75">Licensed feeds not connected / synthetic preview</span>
+                <span className={metalFeed.quote?.source === 'LIVE' ? 'text-emerald-200/80' : 'text-rose-200/75'}>
+                  {metalFeed.quote?.source ?? 'SYNTHETIC'} / XAU {metalFeed.quote?.price.toFixed(2) ?? fieldStep?.diagnostics?.xauUsdPrice?.toFixed(2) ?? '--'} USD
+                  {metalFeed.fallbackReason && ` / ${metalFeed.fallbackReason}`}
+                </span>
               </div>
             )}
             <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
