@@ -5,6 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { createXRStore, XR } from '@react-three/xr';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import type { KnotFieldStyle } from '@/components/2d/KnotChart';
 import {
   LAYER_COLORS,
   LAYER_CONFIG,
@@ -21,7 +22,37 @@ type CandySpiralSceneProps = {
   className?: string;
   height?: number;
   wuxingPhase?: string;
+  fieldName?: string;
+  fieldStyle?: KnotFieldStyle;
 };
+
+function SpiralEyeCamera({ enabled }: { enabled: boolean }) {
+  const wasEnabled = useRef(false);
+  const savedPosition = useRef(new THREE.Vector3());
+  const savedQuaternion = useRef(new THREE.Quaternion());
+  const lookTarget = useMemo(() => new THREE.Vector3(), []);
+  const eyePosition = useMemo(() => new THREE.Vector3(0, 0, 0), []);
+
+  useFrame(({ camera, clock }) => {
+    if (enabled && !wasEnabled.current) {
+      savedPosition.current.copy(camera.position);
+      savedQuaternion.current.copy(camera.quaternion);
+    }
+    if (enabled) {
+      camera.position.lerp(eyePosition, 0.12);
+      const time = clock.getElapsedTime();
+      const yaw = Math.sin(time * 0.12) * 0.16;
+      lookTarget.set(Math.sin(yaw), Math.sin(time * 0.09) * 0.08, -Math.cos(yaw));
+      camera.lookAt(lookTarget);
+    } else if (wasEnabled.current) {
+      camera.position.lerp(savedPosition.current, 0.15);
+      camera.quaternion.slerp(savedQuaternion.current, 0.15);
+    }
+    wasEnabled.current = enabled;
+  });
+
+  return null;
+}
 
 function SpiralGuideLines({ radius = 2.0 }: { radius?: number }) {
   const lineObjects = useMemo(() => {
@@ -112,12 +143,15 @@ export default function CandySpiralScene({
   className,
   height = 580,
   wuxingPhase = 'WATER',
+  fieldName,
+  fieldStyle,
 }: CandySpiralSceneProps) {
   const [candies, setCandies] = useState<CandyPoint[]>(() => generateLocalCandyPoints(currentPrice, 2.0, 3.0));
   const [hoveredCandy, setHoveredCandy] = useState<CandyPoint | null>(null);
   const [orbitSpeed, setOrbitSpeed] = useState(0.24);
   const [spinSpeed, setSpinSpeed] = useState(1.8);
   const [showSpirals, setShowSpirals] = useState(true);
+  const [spiralEyeMode, setSpiralEyeMode] = useState(false);
   const [isAutoRotate, setIsAutoRotate] = useState(true);
   const [physicsEnabled, setPhysicsEnabled] = useState(false);
   const [isCandyGrabbed, setIsCandyGrabbed] = useState(false);
@@ -205,11 +239,12 @@ export default function CandySpiralScene({
     >
       {/* 3D WebGL Canvas */}
       <Canvas
-        camera={{ position: [0, 1.2, 6.2], fov: 45, near: 0.1, far: 100 }}
+        camera={{ position: [0, 1.2, 6.2], fov: 45, near: 0.01, far: 100 }}
         dpr={[1, 2]}
         gl={{ alpha: true, antialias: true }}
       >
         <XR store={xrStore}>
+          <SpiralEyeCamera enabled={spiralEyeMode && !xrMode} />
           {!(physicsEnabled && xrMode === 'immersive-ar') && <color attach="background" args={['#020611']} />}
           {!(physicsEnabled && xrMode === 'immersive-ar') && <fog attach="fog" args={['#020611', 8, 26]} />}
 
@@ -220,8 +255,8 @@ export default function CandySpiralScene({
           <pointLight position={[0, -6, 2]} intensity={12} distance={15} color="#ec4899" />
 
           <OrbitControls
-            enabled={!xrMode}
-            autoRotate={isAutoRotate && !physicsEnabled}
+            enabled={!xrMode && !spiralEyeMode}
+            autoRotate={isAutoRotate && !physicsEnabled && !spiralEyeMode}
             autoRotateSpeed={0.35}
             enableDamping
             dampingFactor={0.06}
@@ -229,8 +264,8 @@ export default function CandySpiralScene({
             maxDistance={12.0}
           />
 
-          <CyberpunkPriceSphere radius={2.0} price={currentPrice} symbol={symbol} wuxingPhase={wuxingPhase} />
-          <FloatingPriceTag price={currentPrice} radius={2.0} />
+          <CyberpunkPriceSphere radius={2.0} price={currentPrice} symbol={symbol} wuxingPhase={wuxingPhase} eyeMode={spiralEyeMode && !xrMode} />
+          {!spiralEyeMode && <FloatingPriceTag price={currentPrice} radius={2.0} />}
           {showSpirals && <SpiralGuideLines radius={2.0} />}
 
           {physicsEnabled ? (
@@ -246,6 +281,7 @@ export default function CandySpiralScene({
               orbitSpeed={orbitSpeed}
               spinSpeed={spinSpeed}
               onHoverCandy={setHoveredCandy}
+              fieldStyle={fieldStyle}
             />
           )}
         </XR>
@@ -260,6 +296,8 @@ export default function CandySpiralScene({
         <span className="text-[8px] tracking-[0.16em] text-stone-500">
           SURGE / CONTINUATION / RANGE / PLUNGE (4 SPIRALS × 2 POLES)
         </span>
+        {fieldName && <span className="text-[8px] tracking-[0.14em] text-amber-100/70">{fieldName.toUpperCase()} / MATRIX INFLOW {((fieldStyle?.invasionStrength ?? 0) * 100).toFixed(0)}%</span>}
+        {spiralEyeMode && !xrMode && <span className="text-[8px] tracking-[0.14em] text-violet-200">SPIRAL EYE / CORE ORIGIN VIEW</span>}
       </div>
 
       {/* Top right timeline layer pill indicators */}
@@ -280,6 +318,16 @@ export default function CandySpiralScene({
 
       <div className="absolute left-4 top-[4.5rem] z-10 max-w-[min(92%,34rem)] rounded-xl border border-cyan-300/20 bg-[#020611]/85 p-2.5 font-mono text-[9px] text-stone-300 shadow-[0_0_24px_rgba(0,245,255,0.08)] backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSpiralEyeMode((value) => !value)}
+            disabled={Boolean(xrMode)}
+            className={`rounded-lg border px-2.5 py-1.5 uppercase transition ${
+              spiralEyeMode ? 'border-violet-300/60 bg-violet-500/15 text-violet-100' : 'border-white/10 bg-black/50 text-stone-400 hover:border-violet-200/40'
+            } disabled:opacity-40`}
+          >
+            Spiral Eye {spiralEyeMode ? 'ON' : 'OFF'}
+          </button>
           <button
             type="button"
             onClick={togglePhysicsMode}

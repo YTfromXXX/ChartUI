@@ -43,6 +43,7 @@ export default function KnotGlyphPalette({
   locked = false,
 }: KnotGlyphPaletteProps) {
   const selectedKnots = useKnotSelection((state) => state.selectedKnots);
+  const tracesByKnot = useKnotSelection((state) => state.tracesByKnot);
   const toggleKnot = useKnotSelection((state) => state.toggleKnot);
   const clearKnots = useKnotSelection((state) => state.clearKnots);
   const usesGlobalSelection = controlledIds === undefined;
@@ -60,9 +61,11 @@ export default function KnotGlyphPalette({
       {Array.from({ length: 22 }, (_, index) => {
         const id = isArcanaPalette ? index : page * 22 + index + 1;
         const selected = selectedIds.includes(id);
+        const traceCount = tracesByKnot[id]?.length ?? 0;
         return <button key={id} type="button" onClick={() => resolvedToggle(id)} disabled={locked} aria-pressed={selected} title={isArcanaPalette ? MAJOR_ARCANA_KNOTS[index] : undefined} className={`group relative flex h-11 items-center justify-center border transition-colors disabled:cursor-not-allowed ${selected ? 'border-cyan-200/70 bg-cyan-100/[0.09] shadow-[0_0_14px_rgba(34,211,238,0.13)]' : 'border-white/10 bg-black/10 hover:border-violet-200/40'} ${locked ? 'opacity-55' : ''}`}>
           <CandyKnot id={id} />
           <span className="absolute bottom-1 right-1 font-mono text-[7px] text-stone-600 group-hover:text-stone-300">{isArcanaPalette ? String(id).padStart(2, '0') : String(index + 1).padStart(2, '0')}</span>
+          {traceCount > 0 && <span className="absolute left-1 top-1 rounded-sm border border-amber-200/30 bg-amber-200/10 px-1 font-mono text-[6px] text-amber-100" title={`${traceCount} resonance traces`}>T{traceCount}</span>}
           {selected && <Link2 className="absolute left-1 top-1 h-2.5 w-2.5 text-cyan-100" />}
         </button>;
       })}

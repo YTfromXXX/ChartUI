@@ -1,5 +1,7 @@
 'use client';
 
+import { debugMetrics } from '@/lib/debugMetrics';
+import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
 import { drawGravityHoneycomb, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
@@ -32,6 +34,69 @@ export type KnotTimelineLayer = {
 };
 
 export type GuidePointer = { x: number; y: number };
+
+/** Per-market physics of the knot: stroke thickness, high-frequency vibration,
+ * angular rigidity (0 = fluid, 1 = rigid polyhedron) and directional box stretch. */
+export type KnotFieldStyle = {
+  strokeScale?: number;
+  vibration?: number;
+  rigidity?: number;
+  projectionStretch?: number;
+  syncAlert?: boolean;
+  syncStrength?: number;
+  invasionStrength?: number;
+  candySpinModifier?: number;
+  matrixDistance?: number;
+  resonanceArcanaId?: number;
+  metalJump?: boolean;
+  metalLayerGrowth?: number;
+  metalMicroTremor?: number;
+  candyMass?: number;
+  candyAngularVelocity?: number;
+  candyVibrationFrequency?: number;
+  candyRadialScale?: number;
+  candyPhaseOffset?: number;
+  candyHueShift?: number;
+  candyEmissive?: number;
+  animalPulseStrength?: number;
+  animalPulsePhase?: number;
+  animalBraidStrength?: number;
+  animalAttractorArcanaId?: number;
+};
+
+const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
+  strokeScale: 1,
+  vibration: 0,
+  rigidity: 0,
+  projectionStretch: 0,
+  syncAlert: false,
+  syncStrength: 0,
+  invasionStrength: 0,
+  candySpinModifier: 1,
+  matrixDistance: 0,
+  resonanceArcanaId: -1,
+  metalJump: false,
+  metalLayerGrowth: 0,
+  metalMicroTremor: 0,
+  candyMass: 1,
+  candyAngularVelocity: 0,
+  candyVibrationFrequency: 1,
+  candyRadialScale: 1,
+  candyPhaseOffset: 0,
+  candyHueShift: 0,
+  candyEmissive: 0.8,
+  animalPulseStrength: 0,
+  animalPulsePhase: 0,
+  animalBraidStrength: 0,
+  animalAttractorArcanaId: -1,
+};
+let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
+
+function rigidAngle(angle: number, rigidity: number) {
+  if (rigidity <= 0) return angle;
+  const step = Math.PI / 12;
+  return angle + (Math.round(angle / step) * step - angle) * rigidity;
+}
 export type ProjectionGesture =
   | { type: 'toggle-selection-lock' }
   | { type: 'time-scale'; delta: number }
@@ -65,6 +130,7 @@ export type KnotChartProps = {
   intrusionRotation?: number;
   patternOffset?: number;
   onGesture?: (gesture: ProjectionGesture) => void;
+  fieldStyle?: KnotFieldStyle;
 };
 
 type CanvasSize = { width: number; height: number; dpr: number };
@@ -689,18 +755,21 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   const vertical = Math.max(0, Math.min(1, projection.vertical_pressure));
   const horizontal = Math.max(0, Math.min(1, projection.horizontal_pressure));
   const futureWidth = Math.min(width * 0.3, 154);
-  const pulse = 1 + Math.sin(frame * 0.06) * 0.045;
+  const pulse = 1 + Math.sin(frame * 0.06) * 0.045 * (1 - activeStyle.rigidity);
+  const stretch = 1 + activeStyle.projectionStretch;
   const scaleX = (0.92 + horizontal * 0.5 - vertical * 0.16) * pulse;
-  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse;
+  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse * stretch;
   const undistortedAnchorX = targetX + futureWidth * 0.56;
-  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22;
+  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22 * (1 + activeStyle.projectionStretch);
   const anchor = gravityDrift(undistortedAnchorX, undistortedAnchorY, width, height, gravityTensor);
   const topology = projection.topology.toLowerCase();
-  const color = topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
+  const color = activeStyle.syncAlert
+    ? '#fbbf24'
+    : topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18 + activeStyle.syncStrength * 0.16;
   ctx.lineWidth = 1;
   ctx.setLineDash([2, 5]);
   ctx.beginPath();
@@ -708,7 +777,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   projection.coordinates.forEach((point, index) => {
     const pathPoint = gravityDrift(
       targetX + futureWidth * ((index + 1) / Math.max(1, projection.coordinates.length)) * (0.65 + point.x * 0.35),
-      targetY + (point.y - 0.5) * height * 0.32,
+      targetY + (point.y - 0.5) * height * 0.32 * stretch,
       width,
       height,
       gravityTensor,
@@ -725,7 +794,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   ctx.translate(anchor.x, anchor.y);
   ctx.scale(scaleX, scaleY);
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3 + activeStyle.syncStrength * 0.2;
   ctx.shadowColor = color;
   ctx.shadowBlur = 12;
   ctx.lineWidth = 1.2;
@@ -755,7 +824,27 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   }
   ctx.stroke();
   ctx.restore();
+
+  if (activeStyle.syncAlert) {
+    ctx.save();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.fillStyle = '#fef3c7';
+    ctx.globalAlpha = 0.58 + Math.sin(frame * 0.12) * 0.18;
+    ctx.lineWidth = 1 + activeStyle.syncStrength;
+    ctx.setLineDash([3, 4]);
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 8 + activeStyle.syncStrength * 10;
+    ctx.beginPath();
+    ctx.arc(targetX, targetY, 8 + activeStyle.syncStrength * 12, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '8px monospace';
+    ctx.fillText('HERD SYNC', targetX + 12, targetY - 11);
+    ctx.restore();
+  }
 }
+
+const crossingStore = createCrossingStore();
 
 function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: KnotBuffer, timeline: KnotChartProps['timeline'], futureProjection: KnotFutureProjection | undefined, gravityTensor: TrueGravityTensor | undefined, guidePointer: GuidePointer | undefined, selectedKnotIds: readonly number[], gridTimeScale: number, shellScale: number, intrusionRotation: number, patternOffset: number, frame: number) {
   const { width, height } = size;
@@ -773,7 +862,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const currentIndex = readIndex(buffer, buffer.count - 1);
   const currentPrice = buffer.prices[currentIndex];
   const currentVolatility = buffer.volatilities[currentIndex];
-  const currentAngle = buffer.angles[currentIndex];
+  const currentAngle = rigidAngle(buffer.angles[currentIndex], activeStyle.rigidity);
   const currentMagicLength = buffer.lengths[currentIndex];
   const currentTension = buffer.tensions[currentIndex];
   const plotLeft = 20;
@@ -800,7 +889,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
 
   ctx.save();
   ctx.strokeStyle = '#dbeafe';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = activeStyle.strokeScale;
   ctx.globalAlpha = 0.3;
   ctx.beginPath();
   for (let ordinal = 0; ordinal < buffer.count; ordinal += 1) {
@@ -823,7 +912,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
     const jump = buffer.jumps[index] === 1 || Math.abs(buffer.prices[nextIndex] - buffer.prices[index]) > priceRange * 0.28;
     ctx.save();
     ctx.strokeStyle = jump ? '#fb7185' : '#67e8f9';
-    ctx.lineWidth = jump ? 1.8 : 1.2;
+    ctx.lineWidth = (jump ? 1.8 : 1.2) * activeStyle.strokeScale;
     if (jump) {
       const gap = Math.max(2, 12 / Math.max(0.2, buffer.tensions[index] + 0.2));
       ctx.setLineDash([gap, gap * 1.35]);
@@ -841,7 +930,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.save();
   ctx.strokeStyle = '#f8d66d';
   ctx.fillStyle = 'rgba(248, 214, 109, 0.12)';
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.4 * activeStyle.strokeScale;
   ctx.beginPath();
   ctx.arc(gravityTarget.x, gravityTarget.y, currentRadius, -Math.PI * 0.8, Math.PI * 0.6);
   ctx.stroke();
@@ -849,7 +938,20 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const vectorLength = Math.max(10, currentMagicLength * 18 + currentTension * 22);
   const endX = gravityTarget.x + Math.cos(currentAngle) * vectorLength;
   const endY = gravityTarget.y + Math.sin(currentAngle) * vectorLength;
-  drawSplitLine(ctx, gravityTarget.x - Math.cos(currentAngle) * vectorLength, gravityTarget.y - Math.sin(currentAngle) * vectorLength, endX, endY, gravityTarget.x, gravityTarget.y, currentVolatility * 5 + 2);
+  const ca = Math.cos(currentAngle);
+  const sa = Math.sin(currentAngle);
+  const gx = gravityTarget.x;
+  const gy = gravityTarget.y;
+  const shift = vectorLength * 0.35;
+  const reach = vectorLength * 0.85;
+  const vib = activeStyle.vibration;
+  const jitter = (phase: number) => (vib > 0 ? Math.sin(frame * 1.7 + phase) * vib * 2.2 + Math.sin(frame * 3.1 + phase * 2.3) * vib : 0);
+  setSegment(crossingStore, 0, gx - ca * vectorLength + jitter(0), gy - sa * vectorLength + jitter(1), endX + jitter(2), endY + jitter(3));
+  setSegment(crossingStore, 1, gx + ca * shift + sa * reach + jitter(4), gy + sa * shift - ca * reach + jitter(5), gx + ca * shift - sa * reach + jitter(6), gy + sa * shift + ca * reach + jitter(7));
+  setSegment(crossingStore, 2, gx - reach + jitter(8), gy - vectorLength * 0.2 + jitter(9), gx + reach + jitter(10), gy - vectorLength * 0.2 + jitter(11));
+  setSegment(crossingStore, 3, gx + vectorLength * 0.2 + jitter(12), gy - reach + jitter(13), gx + vectorLength * 0.2 + jitter(14), gy + reach + jitter(15));
+  debugMetrics.chartCrossings = findCrossings(crossingStore);
+  drawSegmentsWithGaps(ctx, crossingStore, currentVolatility * 3 + 2, width, height);
   ctx.restore();
 
   for (let distance = 1; distance <= Math.min(buffer.count - 1, 8); distance += 1) {
@@ -877,7 +979,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture, fieldStyle }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
@@ -890,6 +992,8 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
   const historyRef = useRef<readonly KnotTick[] | undefined>(undefined);
   const bufferRef = useRef<KnotBuffer>(createBuffer(Math.max(16, maxTicks)));
   const sizeRef = useRef<CanvasSize>({ width: 640, height, dpr: 1 });
+  const fieldStyleRef = useRef<Required<KnotFieldStyle>>(NEUTRAL_STYLE);
+  fieldStyleRef.current = fieldStyle ? { ...NEUTRAL_STYLE, ...fieldStyle } : NEUTRAL_STYLE;
 
   useEffect(() => {
     const buffer = bufferRef.current;
@@ -906,6 +1010,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     timelineRef.current = timeline;
     futureProjectionRef.current = futureProjection;
     gravityTensorRef.current = gravityTensor;
+    debugMetrics.gravityMax = gravityTensor ? Math.max(Math.abs(gravityTensor.magnitude) || 0, Math.hypot(gravityTensor.gradient.x, gravityTensor.gradient.y) || 0, ...gravityTensor.centers.map((c) => Math.abs(c.strength) || 0)) : 0;
     guideTrackingRef.current = guideTracking;
     selectedKnotIdsRef.current = selectedKnotIds;
     if (tick) writeTick(bufferRef.current, tick);
@@ -943,6 +1048,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     resize();
     const draw = () => {
       if (!running) return;
+      activeStyle = fieldStyleRef.current;
       renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, futureProjectionRef.current, gravityTensorRef.current, guideTrackingRef.current ? guidePointerRef.current : undefined, selectedKnotIdsRef.current, gridTimeScale, shellScale, intrusionRotation, patternOffset, frame);
       frame += 1;
       animationFrame = window.requestAnimationFrame(draw);

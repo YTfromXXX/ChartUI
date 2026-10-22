@@ -1,5 +1,7 @@
 """Tarot market mappings and minor arcana signal classification."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from math import atan, ceil, exp, isfinite, log10, pi, sqrt, tanh
 from typing import Any, Dict, List, Mapping, Sequence, TypedDict
