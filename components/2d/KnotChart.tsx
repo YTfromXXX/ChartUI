@@ -3,7 +3,7 @@
 import { debugMetrics } from '@/lib/debugMetrics';
 import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
-import { drawGravityHoneycomb, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
+import { drawAnimalVoxelHoneycomb, drawGravityHoneycomb, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
 export type KnotTick = {
   timestamp?: number;
@@ -51,6 +51,21 @@ export type KnotFieldStyle = {
   metalJump?: boolean;
   metalLayerGrowth?: number;
   metalMicroTremor?: number;
+  metalFieldActive?: boolean;
+  metalFractureCell?: number;
+  metalFractureLine?: number;
+  metalLightningIntensity?: number;
+  metalLightningTimestamp?: number;
+  bollingerPercentB?: number;
+  bollingerBandwidth?: number;
+  bollingerSigmaUp?: number;
+  bollingerSigmaDown?: number;
+  metalCleaveCrossCell?: number;
+  metalCleaveCrossLine?: number;
+  metalCleaveCrossTimestamp?: number;
+  animalPhaseSigma?: number;
+  animalWormhole?: number;
+  animalCorrelations?: readonly number[];
   candyMass?: number;
   candyAngularVelocity?: number;
   candyVibrationFrequency?: number;
@@ -62,6 +77,26 @@ export type KnotFieldStyle = {
   animalPulsePhase?: number;
   animalBraidStrength?: number;
   animalAttractorArcanaId?: number;
+  cryptoHurstExponent?: number;
+  cryptoNoiseAmplitude?: number;
+  cryptoHighFrequencyNoise?: number;
+  cryptoOscillatorDisplacement?: number;
+  cryptoPairCreation?: number;
+  cryptoPairEventTimestamp?: number;
+  cryptoResonanceStrength?: number;
+  cryptoResonanceArcanaId?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  metaPulsarMass?: number;
+  metaQuantizedAngle?: number;
+  metaQuantizedStep?: boolean;
+  metaQuantizedStepIndex?: number;
+  metaPhaseShift?: boolean;
+  metaXauUsdDistance?: number;
+  metaCrackIntensity?: number;
+  metaRippleStrength?: number;
+  metaRippleTimestamp?: number;
+  metaPreviousArcanaId?: number;
+  metaTargetArcanaId?: number;
 };
 
 const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
@@ -78,6 +113,21 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   metalJump: false,
   metalLayerGrowth: 0,
   metalMicroTremor: 0,
+  metalFieldActive: false,
+  metalFractureCell: 0,
+  metalFractureLine: 0,
+  metalLightningIntensity: 0,
+  metalLightningTimestamp: 0,
+  bollingerPercentB: 0.5,
+  bollingerBandwidth: 0,
+  bollingerSigmaUp: 0,
+  bollingerSigmaDown: 0,
+  metalCleaveCrossCell: 0,
+  metalCleaveCrossLine: 0,
+  metalCleaveCrossTimestamp: 0,
+  animalPhaseSigma: 0,
+  animalWormhole: 0,
+  animalCorrelations: [],
   candyMass: 1,
   candyAngularVelocity: 0,
   candyVibrationFrequency: 1,
@@ -89,8 +139,32 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   animalPulsePhase: 0,
   animalBraidStrength: 0,
   animalAttractorArcanaId: -1,
+  cryptoHurstExponent: 0.35,
+  cryptoNoiseAmplitude: 0,
+  cryptoHighFrequencyNoise: 0,
+  cryptoOscillatorDisplacement: 0,
+  cryptoPairCreation: 0,
+  cryptoPairEventTimestamp: 0,
+  cryptoResonanceStrength: 0,
+  cryptoResonanceArcanaId: -1,
+  cryptoResonancePoint: { x: 0, y: 0, z: 0 },
+  metaPulsarMass: 1,
+  metaQuantizedAngle: 0,
+  metaQuantizedStep: false,
+  metaQuantizedStepIndex: 0,
+  metaPhaseShift: false,
+  metaXauUsdDistance: 0,
+  metaCrackIntensity: 0,
+  metaRippleStrength: 0,
+  metaRippleTimestamp: 0,
+  metaPreviousArcanaId: -1,
+  metaTargetArcanaId: -1,
 };
 let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
+export type CleaveCrossEvent = { cell: number; line: number; timestamp: number };
+let activeCleaveHandler: ((event: CleaveCrossEvent) => void) | undefined;
+let previousMetalTip: { x: number; y: number } | undefined;
+let lastCleaveCrossAt = 0;
 
 function rigidAngle(angle: number, rigidity: number) {
   if (rigidity <= 0) return angle;
@@ -130,6 +204,7 @@ export type KnotChartProps = {
   intrusionRotation?: number;
   patternOffset?: number;
   onGesture?: (gesture: ProjectionGesture) => void;
+  onMetalCleaveCross?: (event: CleaveCrossEvent) => void;
   fieldStyle?: KnotFieldStyle;
 };
 
@@ -878,7 +953,38 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const targetY = Math.max(height * 0.18, Math.min(height * 0.82, rawTargetY));
   const gravityTarget = gravityDrift(targetX, targetY, width, height, gravityTensor);
 
-  drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
+  if (activeStyle.metalFieldActive) {
+    drawMetalCrystalHoneycomb(ctx, width, height, {
+      fractureCell: activeStyle.metalFractureCell,
+      fractureLine: activeStyle.metalFractureLine,
+      flashIntensity: activeStyle.metalLightningIntensity,
+      layerGrowth: activeStyle.metalLayerGrowth,
+      eventTimestamp: activeStyle.metalLightningTimestamp,
+      percentB: activeStyle.bollingerPercentB,
+      crossCell: activeStyle.metalCleaveCrossCell,
+      crossLine: activeStyle.metalCleaveCrossLine,
+      crossTimestamp: activeStyle.metalCleaveCrossTimestamp,
+    });
+    const tip = { x: targetX, y: targetY };
+    const previousTip = previousMetalTip;
+    previousMetalTip = tip;
+    if (previousTip && activeStyle.bollingerPercentB > 0.5) {
+      const crossing = findCleavageCrossing(width, height, previousTip, tip);
+      if (crossing && Date.now() - lastCleaveCrossAt > 400) {
+        lastCleaveCrossAt = Date.now();
+        activeCleaveHandler?.({ cell: crossing.cell, line: crossing.line, timestamp: lastCleaveCrossAt });
+      }
+    }
+  } else if (activeStyle.animalPhaseSigma > 0 || activeStyle.animalPulseStrength > 0) {
+    drawAnimalVoxelHoneycomb(ctx, width, height, {
+      order: activeStyle.animalPulseStrength,
+      phaseSigma: activeStyle.animalPhaseSigma,
+      pulsePhase: activeStyle.animalPulsePhase,
+      alert: activeStyle.animalPulseStrength > 0.85,
+    });
+  } else {
+    drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
+  }
   const pricePhase = ((currentPrice - minPrice) / priceRange) * TAU + currentAngle;
   drawComplexPlaneGuides(ctx, width, height, gravityTarget.x, gravityTarget.y, currentTension, pricePhase, frame, guidePointer, selectedKnotIds, gridTimeScale, shellScale, intrusionRotation, patternOffset);
   if (timeline?.t40m) drawTimelinePath(ctx, width, height, currentTension, timeline.t40m, gravityTarget.x, gravityTarget.y, 0);
@@ -979,7 +1085,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture, fieldStyle }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture, onMetalCleaveCross, fieldStyle }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
@@ -993,6 +1099,8 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
   const bufferRef = useRef<KnotBuffer>(createBuffer(Math.max(16, maxTicks)));
   const sizeRef = useRef<CanvasSize>({ width: 640, height, dpr: 1 });
   const fieldStyleRef = useRef<Required<KnotFieldStyle>>(NEUTRAL_STYLE);
+  const cleaveHandlerRef = useRef(onMetalCleaveCross);
+  cleaveHandlerRef.current = onMetalCleaveCross;
   fieldStyleRef.current = fieldStyle ? { ...NEUTRAL_STYLE, ...fieldStyle } : NEUTRAL_STYLE;
 
   useEffect(() => {
@@ -1049,6 +1157,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     const draw = () => {
       if (!running) return;
       activeStyle = fieldStyleRef.current;
+      activeCleaveHandler = cleaveHandlerRef.current;
       renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, futureProjectionRef.current, gravityTensorRef.current, guideTrackingRef.current ? guidePointerRef.current : undefined, selectedKnotIdsRef.current, gridTimeScale, shellScale, intrusionRotation, patternOffset, frame);
       frame += 1;
       animationFrame = window.requestAnimationFrame(draw);

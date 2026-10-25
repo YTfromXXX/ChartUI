@@ -104,13 +104,16 @@ function drawKnotGlyph(context: CanvasRenderingContext2D, x: number, y: number, 
   context.restore();
 }
 
-function MatrixDistanceOverlay({ analysis, label, source, animalCentroid, animalAttractorArcanaId, animalAttractorStrength }: {
+function MatrixDistanceOverlay({ analysis, label, source, animalCentroid, animalAttractorArcanaId, animalAttractorStrength, cryptoResonancePoint, cryptoResonanceArcanaId, cryptoResonanceStrength }: {
   analysis: MatrixPairAnalysis;
   label: string;
   source: string;
   animalCentroid?: { x: number; y: number; z?: number };
   animalAttractorArcanaId?: number;
   animalAttractorStrength?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  cryptoResonanceArcanaId?: number;
+  cryptoResonanceStrength?: number;
 }) {
   const toX = (value: number) => 12 + ((value + 1) / 2) * 356;
   const toY = (value: number) => 10 + ((value + 1) / 2) * 104;
@@ -171,6 +174,50 @@ function MatrixDistanceOverlay({ analysis, label, source, animalCentroid, animal
             </g>
           );
         })()}
+        {cryptoResonancePoint && cryptoResonanceArcanaId !== undefined && cryptoResonanceArcanaId >= 0 && (() => {
+          const target = ARCANA_ATTRACTORS.find((node) => node.id === cryptoResonanceArcanaId);
+          if (!target) return null;
+          const lensX = toX(cryptoResonancePoint.x);
+          const lensY = toY(cryptoResonancePoint.y);
+          const intensity = Math.max(0, Math.min(1, cryptoResonanceStrength ?? 0));
+          return (
+            <g>
+              {[8, 15, 23, 32].map((baseRadius, ringIndex) => (
+                <circle
+                  key={baseRadius}
+                  cx={lensX}
+                  cy={lensY}
+                  r={baseRadius * (1 + intensity * 0.65)}
+                  fill="none"
+                  stroke={target.id === 1 ? '#38bdf8' : '#c084fc'}
+                  strokeWidth={0.5 + intensity * 0.45}
+                  strokeOpacity={(0.28 - ringIndex * 0.045) * intensity}
+                />
+              ))}
+              {Array.from({ length: 8 }, (_, spoke) => {
+                const angle = (spoke / 8) * Math.PI * 2;
+                const inner = 6;
+                const outer = 27 * (1 + intensity * 0.65);
+                return (
+                  <line
+                    key={spoke}
+                    x1={lensX + Math.cos(angle) * inner}
+                    y1={lensY + Math.sin(angle) * inner}
+                    x2={lensX + Math.cos(angle) * outer}
+                    y2={lensY + Math.sin(angle) * outer}
+                    stroke={target.id === 1 ? '#38bdf8' : '#c084fc'}
+                    strokeOpacity={intensity * 0.3}
+                    strokeWidth="0.6"
+                  />
+                );
+              })}
+              <circle cx={lensX} cy={lensY} r={4 + intensity * 3} fill={target.id === 1 ? '#38bdf8' : '#c084fc'} fillOpacity={0.25 + intensity * 0.35} />
+              <text x={lensX + 7} y={lensY - 6} fill={target.id === 1 ? '#7dd3fc' : '#d8b4fe'} fontSize="6">
+                {target.roman} / {target.name.toUpperCase()}
+              </text>
+            </g>
+          );
+        })()}
         <text x={toX(analysis.assetPosition.x) + 5} y={toY(analysis.assetPosition.y) + 8} fill="#a5f3fc" fontSize="6">{analysis.asset}</text>
         <text x={toX(analysis.counterPosition.x) + 5} y={toY(analysis.counterPosition.y) + 8} fill="#fde68a" fontSize="6">{analysis.counterAsset}</text>
       </svg>
@@ -178,7 +225,7 @@ function MatrixDistanceOverlay({ analysis, label, source, animalCentroid, animal
   );
 }
 
-export default function MatrixGridExplorer({ height = 360, analysis, label = 'Matrix resonance', source = 'Synthetic', animalCentroid, animalAttractorArcanaId, animalAttractorStrength }: {
+export default function MatrixGridExplorer({ height = 360, analysis, label = 'Matrix resonance', source = 'Synthetic', animalCentroid, animalAttractorArcanaId, animalAttractorStrength, cryptoResonancePoint, cryptoResonanceArcanaId, cryptoResonanceStrength }: {
   height?: number;
   analysis?: MatrixPairAnalysis;
   label?: string;
@@ -186,6 +233,9 @@ export default function MatrixGridExplorer({ height = 360, analysis, label = 'Ma
   animalCentroid?: { x: number; y: number; z?: number };
   animalAttractorArcanaId?: number;
   animalAttractorStrength?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  cryptoResonanceArcanaId?: number;
+  cryptoResonanceStrength?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailRef = useRef<TrailPoint[]>([]);
@@ -361,6 +411,9 @@ export default function MatrixGridExplorer({ height = 360, analysis, label = 'Ma
           animalCentroid={animalCentroid}
           animalAttractorArcanaId={animalAttractorArcanaId}
           animalAttractorStrength={animalAttractorStrength}
+          cryptoResonancePoint={cryptoResonancePoint}
+          cryptoResonanceArcanaId={cryptoResonanceArcanaId}
+          cryptoResonanceStrength={cryptoResonanceStrength}
         />
       )}
     </div>

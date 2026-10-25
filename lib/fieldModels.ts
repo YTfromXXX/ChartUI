@@ -44,6 +44,14 @@ export type FieldDiagnostics = {
   cryptoDampedVelocity?: number;
   cryptoFractionalNoise?: number;
   cryptoHighFrequency?: number;
+  cryptoHurstExponent?: number;
+  cryptoNoiseAmplitude?: number;
+  cryptoPairCreation?: boolean;
+  cryptoResonanceArcanaId?: number;
+  cryptoResonanceDistance?: number;
+  cryptoResonanceStrength?: number;
+  cryptoResonancePoint?: MatrixPoint;
+  cryptoPointCloudBounds?: CryptoPointCloudBounds;
   metaRelativeAssets?: MetaRelativeAssetDiagnostic[];
   metaMeanCorrelation?: number;
   metaRelativeDispersion?: number;
@@ -54,6 +62,17 @@ export type FieldDiagnostics = {
   xauUsdPrice?: number;
   jumpIntensity?: number;
   metaMicroTremor?: number;
+  metaPulsarMass?: number;
+  metaQuantizedAngle?: number;
+  metaQuantizedStep?: boolean;
+  metaQuantizedStepIndex?: number;
+  metaPhaseShift?: boolean;
+  metaXauUsdDistance?: number;
+  metaCrackIntensity?: number;
+  metaRippleStrength?: number;
+  metaRippleTimestamp?: number;
+  metaPreviousArcanaId?: number;
+  metaTargetArcanaId?: number;
   usdIndex?: number;
   btcProxyPrice?: number;
   btcVolatility?: number;
@@ -108,6 +127,12 @@ export type ButterworthFilter = {
   reset(value?: number): void;
 };
 
+export type HystereticQuantization = {
+  angle: number;
+  stepIndex: number;
+  changed: boolean;
+};
+
 export type MatrixPriceState = {
   value: number;
   referenceValue: number;
@@ -146,6 +171,7 @@ export type MetalResonanceCheck = {
 
 const METAL_DESTRUCTIVE_ATTRACTORS = ARCANA_ATTRACTORS.filter((arcana) => arcana.id === 13 || arcana.id === 16);
 const ANIMAL_SYNC_ATTRACTORS = ARCANA_ATTRACTORS.filter((arcana) => arcana.id === 10 || arcana.id === 21);
+const CRYPTO_RESONANCE_ATTRACTORS = ARCANA_ATTRACTORS.filter((arcana) => arcana.id === 1 || arcana.id === 18);
 
 export type FieldConfig = {
   kind: FieldKind;
@@ -198,6 +224,27 @@ export type AnimalKuramotoDiagnostics = {
   correlationMatrix: number[][];
 };
 
+export type CryptoPointCloudBounds = {
+  min: MatrixPoint;
+  max: MatrixPoint;
+};
+
+export type QuantumFluctuation = {
+  hurstExponent: number;
+  fractionalNoise: number;
+  highFrequency: number;
+  oscillatorDisplacement: number;
+  oscillatorVelocity: number;
+  amplitude: number;
+};
+
+export type CryptoResonance = {
+  active: boolean;
+  arcana: ArcanaAttractor;
+  distance: number;
+  strength: number;
+  point: MatrixPoint;
+};
 export const META_RELATIVE_ANALYSIS: RelativeAnalysisDesign = {
   baseIndex: 100,
   returnWindow: 1,
@@ -477,11 +524,123 @@ export function fractionalGaussianNoise(innovations: readonly number[], hurst = 
   });
 }
 
+export function calculateQuantumFluctuation(
+  innovations: readonly number[],
+  timeSeconds: number,
+  oscillatorDisplacement: number,
+  oscillatorVelocity: number,
+  hurstExponent = 0.35,
+): QuantumFluctuation {
+  if (!Number.isFinite(timeSeconds) || !Number.isFinite(oscillatorDisplacement)
+    || !Number.isFinite(oscillatorVelocity) || !Number.isFinite(hurstExponent)
+    || hurstExponent <= 0 || hurstExponent >= 0.5) {
+    throw new RangeError('Quantum fluctuation requires finite inputs and a Hurst exponent in (0, 0.5)');
+  }
+  const fractionalNoise = fractionalGaussianNoise(innovations, hurstExponent, 32).at(-1) ?? 0;
+  const highFrequency = Math.sin(timeSeconds * 2.17) + 0.65 * Math.cos(timeSeconds * 1.43);
+  const amplitude = Math.min(4, Math.hypot(
+    fractionalNoise,
+    highFrequency * 0.55,
+    oscillatorDisplacement * 0.35,
+    oscillatorVelocity * 0.08,
+  ));
+  return {
+    hurstExponent,
+    fractionalNoise,
+    highFrequency,
+    oscillatorDisplacement,
+    oscillatorVelocity,
+    amplitude: Number.isFinite(amplitude) ? amplitude : 0,
+  };
+}
+
+export function checkCryptoResonance(
+  amplitude: number,
+  highFrequency: number,
+  phase: number,
+  threshold = 1.15,
+): CryptoResonance {
+  if (![amplitude, highFrequency, phase, threshold].every(Number.isFinite) || amplitude < 0 || threshold <= 0) {
+    throw new RangeError('Crypto resonance inputs must be finite and the threshold must be positive');
+  }
+  const volatilityCoordinate: MatrixPoint = {
+    x: clamp(Math.tanh(highFrequency * 0.55), -1, 1),
+    y: clamp(Math.tanh(amplitude * 0.7 - 0.4), -1, 1),
+    z: clamp(Math.sin(phase) * 0.35, -0.35, 0.35),
+  };
+  let arcana = CRYPTO_RESONANCE_ATTRACTORS[0];
+  let distance = Number.POSITIVE_INFINITY;
+  for (const target of CRYPTO_RESONANCE_ATTRACTORS) {
+    const candidateDistance = Math.hypot(
+      volatilityCoordinate.x - target.x,
+      volatilityCoordinate.y - target.y,
+      (volatilityCoordinate.z ?? 0) - target.z,
+    );
+    if (candidateDistance < distance) {
+      arcana = target;
+      distance = candidateDistance;
+    }
+  }
+  const active = amplitude >= threshold;
+  const strength = active ? 0.25 + 0.75 * clamp((amplitude - threshold) / 0.9, 0, 1) : 0;
+  return {
+    active,
+    arcana,
+    distance,
+    strength,
+    point: volatilityCoordinate,
+  };
+}
+
+export function createCryptoPointCloudBounds(amplitude: number, resonanceStrength: number): CryptoPointCloudBounds {
+  if (![amplitude, resonanceStrength].every(Number.isFinite) || amplitude < 0) {
+    throw new RangeError('Point cloud bounds require finite non-negative amplitude and finite resonance');
+  }
+  const radius = clamp(0.62 + amplitude * 0.08 + resonanceStrength * 0.18, 0.62, 1.25);
+  return {
+    min: { x: -radius, y: -radius * 0.82, z: -radius },
+    max: { x: radius, y: radius * 0.82, z: radius },
+  };
+}
+
 export function quantizeAngleFloor(angle: number, step = Math.PI / 12): number {
   if (!Number.isFinite(angle) || !Number.isFinite(step) || step <= 0) {
     throw new RangeError('Angle and quantization step must be finite; step must be positive');
   }
   return Math.floor(angle / step) * step;
+}
+
+export function calculatePulsarMass(
+  filteredIndex: number,
+  referenceIndex: number,
+  relativeDispersion: number,
+  meanCorrelation: number,
+): number {
+  if (![filteredIndex, referenceIndex, relativeDispersion, meanCorrelation].every(Number.isFinite)
+    || filteredIndex <= 0 || referenceIndex <= 0 || relativeDispersion < 0) {
+    throw new RangeError('Pulsar mass requires positive index levels and finite, non-negative dispersion');
+  }
+  const indexStability = Math.exp(-Math.abs(Math.log(filteredIndex / referenceIndex)) * 3);
+  const coherence = clamp((meanCorrelation + 1) / 2, 0, 1);
+  const structuralWeight = clamp(relativeDispersion / 2, 0, 1);
+  return clamp(1.8 + indexStability * 0.72 + coherence * 0.34 + structuralWeight * 0.14, 0, 3);
+}
+
+export function quantizeAngleWithHysteresis(
+  angle: number,
+  previousStepIndex: number,
+  step = Math.PI / 12,
+  hysteresis = step / 12,
+): HystereticQuantization {
+  if (![angle, previousStepIndex, step, hysteresis].every(Number.isFinite)
+    || !Number.isInteger(previousStepIndex) || step <= 0 || hysteresis < 0 || hysteresis >= step / 2) {
+    throw new RangeError('Angle quantization requires finite inputs, an integer prior step, and valid hysteresis');
+  }
+  let stepIndex = previousStepIndex;
+  const desiredStep = Math.floor(angle / step);
+  if (stepIndex < desiredStep && angle >= (stepIndex + 1) * step + hysteresis) stepIndex += 1;
+  else if (stepIndex > desiredStep && angle < stepIndex * step - hysteresis) stepIndex -= 1;
+  return { angle: stepIndex * step, stepIndex, changed: stepIndex !== previousStepIndex };
 }
 
 export function calculateAnimalCorrelationMatrix(returns: readonly (readonly number[])[]): number[][] {
@@ -798,8 +957,6 @@ function cryptoSimulator(seed: number): FieldSimulator {
     const innovation = gauss(rand);
     innovations.push(innovation);
     if (innovations.length > 32) innovations.shift();
-    const fractionalNoise = fractionalGaussianNoise(innovations, 0.35, 32).at(-1) ?? innovation;
-    const highFrequency = Math.sin(frame * 2.17) + 0.65 * Math.cos(frame * 1.43);
     const anchorDrift = anchor && Number.isFinite(anchor) && anchor > 0
       ? clamp(Math.log(anchor / price) * 0.035, -0.002, 0.002)
       : 0;
@@ -813,11 +970,24 @@ function cryptoSimulator(seed: number): FieldSimulator {
       - naturalFrequency * naturalFrequency * oscillatorDisplacement;
     oscillatorVelocity = clamp(oscillatorVelocity + oscillatorAcceleration * dt, -5, 5);
     oscillatorDisplacement = clamp(oscillatorDisplacement + oscillatorVelocity * dt, -1.5, 1.5);
+    const quantum = calculateQuantumFluctuation(
+      innovations,
+      frame,
+      oscillatorDisplacement,
+      oscillatorVelocity,
+      0.35,
+    );
+    const resonance = checkCryptoResonance(
+      quantum.amplitude,
+      quantum.highFrequency,
+      Math.atan2(oscillatorVelocity, oscillatorDisplacement || 1e-9),
+    );
+    const pointCloudBounds = createCryptoPointCloudBounds(quantum.amplitude, resonance.strength);
 
     const logReturn = clamp(
       anchorDrift
-        + fractionalNoise * 0.00019 * Math.sqrt(dt / 0.12)
-        + highFrequency * 0.000035
+        + quantum.fractionalNoise * 0.00019 * Math.sqrt(dt / 0.12)
+        + quantum.highFrequency * 0.000035
         + oscillatorDisplacement * 0.000035,
       -0.015,
       0.015,
@@ -828,8 +998,8 @@ function cryptoSimulator(seed: number): FieldSimulator {
       ...makeTick(now, price, previous, 0.00075, false),
       angle: Math.atan2(logReturn * 750, 0.4 + Math.cos(frame * 1.43)),
       volatility: clamp(Math.abs(logReturn) * 450, 0, 1),
-      tension: clamp(0.18 + Math.abs(fractionalNoise) * 0.1 + Math.abs(highFrequency) * 0.16 + Math.abs(oscillatorDisplacement) * 0.2, 0, 1),
-      magicLength: clamp(0.2 + Math.abs(oscillatorVelocity) * 0.08 + Math.abs(fractionalNoise) * 0.2, 0.1, 3),
+      tension: clamp(0.18 + Math.abs(quantum.fractionalNoise) * 0.1 + Math.abs(quantum.highFrequency) * 0.16 + Math.abs(oscillatorDisplacement) * 0.2, 0, 1),
+      magicLength: clamp(0.2 + Math.abs(oscillatorVelocity) * 0.08 + Math.abs(quantum.fractionalNoise) * 0.2, 0.1, 3),
     };
 
     // Order creation and cancellation exchange dominance as the oscillator changes phase.
@@ -854,8 +1024,16 @@ function cryptoSimulator(seed: number): FieldSimulator {
       poissonJump: false,
       cryptoDampedDisplacement: oscillatorDisplacement,
       cryptoDampedVelocity: oscillatorVelocity,
-      cryptoFractionalNoise: fractionalNoise,
-      cryptoHighFrequency: highFrequency,
+      cryptoFractionalNoise: quantum.fractionalNoise,
+      cryptoHighFrequency: quantum.highFrequency,
+      cryptoHurstExponent: quantum.hurstExponent,
+      cryptoNoiseAmplitude: quantum.amplitude,
+      cryptoPairCreation: impulse !== 0,
+      cryptoResonanceArcanaId: resonance.active ? resonance.arcana.id : undefined,
+      cryptoResonanceDistance: resonance.distance,
+      cryptoResonanceStrength: resonance.strength,
+      cryptoResonancePoint: resonance.point,
+      cryptoPointCloudBounds: pointCloudBounds,
     };
     return {
       tick,
@@ -863,16 +1041,25 @@ function cryptoSimulator(seed: number): FieldSimulator {
       projection: buildProjection(net >= 0 ? 1 : -1, 0.58 + Math.min(0.38, Math.abs(net) * 0.04), 0.3 + Math.abs(oscillatorDisplacement) * 0.12, 0.09, oscillatorDisplacement > 0.35 ? 'figure_eight' : 'trefoil'),
       style: {
         strokeScale: 0.9,
-        vibration: 1.15 + Math.abs(oscillatorVelocity) * 0.1 + Math.abs(highFrequency) * 0.15,
+        vibration: 1.15 + Math.abs(oscillatorVelocity) * 0.1 + Math.abs(quantum.highFrequency) * 0.15,
         rigidity: 0,
         projectionStretch: 0.1,
         candyMass: 0.8 + clamp(0.8 + Math.abs(net) * 0.24, 0, 3) * 0.12,
         candyAngularVelocity: logReturn / dt,
-        candyVibrationFrequency: 1.2 + Math.abs(highFrequency) * 1.4 + Math.abs(oscillatorVelocity) * 0.1,
+        candyVibrationFrequency: 1.2 + Math.abs(quantum.highFrequency) * 1.4 + Math.abs(oscillatorVelocity) * 0.1,
         candyRadialScale: clamp(1 + oscillatorDisplacement * 0.035, 0.94, 1.06),
         candyPhaseOffset: Math.atan2(oscillatorVelocity, oscillatorDisplacement || 1e-9) * 0.04,
         candyHueShift: 0.76,
-        candyEmissive: 0.95 + Math.abs(highFrequency) * 0.35,
+        candyEmissive: 0.95 + Math.abs(quantum.highFrequency) * 0.35,
+        cryptoHurstExponent: quantum.hurstExponent,
+        cryptoNoiseAmplitude: quantum.amplitude,
+        cryptoHighFrequencyNoise: quantum.highFrequency,
+        cryptoOscillatorDisplacement: oscillatorDisplacement,
+        cryptoPairCreation: impulse,
+        cryptoPairEventTimestamp: impulse !== 0 ? now : 0,
+        cryptoResonanceStrength: resonance.active ? resonance.strength : 0,
+        cryptoResonanceArcanaId: resonance.active ? resonance.arcana.id : -1,
+        cryptoResonancePoint: resonance.point,
       },
       diagnostics,
     };
@@ -1067,10 +1254,13 @@ function animalSimulator(seed: number): FieldSimulator {
         candyPhaseOffset: phases.reduce((sum, value) => sum + Math.sin(value), 0) / count * 0.08,
         candyHueShift: sync.alert ? 0.12 : 0.25,
         candyEmissive: 0.55 + syncStrength * 0.7,
-        animalPulseStrength: animalAttractorStrength,
+        animalPulseStrength: syncStrength,
         animalPulsePhase: sync.meanPhase,
         animalBraidStrength: animalBraidTension,
         animalAttractorArcanaId: attractor.id,
+        animalPhaseSigma: Math.sqrt(Math.max(0, 1 - syncStrength * syncStrength)),
+        animalWormhole: syncStrength,
+        animalCorrelations: sync.correlationMatrix.flat(),
       },
       diagnostics,
     };
@@ -1087,7 +1277,12 @@ function metaSimulator(seed: number): FieldSimulator {
   let index = FIELD_CONFIGS.meta.basePrice;
   let previousFilteredIndex = index;
   let quantizedAngle = -Math.PI / 2;
+  let quantizedStepIndex = Math.floor(quantizedAngle / (Math.PI / 12));
+  let quantizedStepInitialized = false;
+  let syntheticXauUsd = 2650;
   let syntheticBtcPrice = 65000;
+  let metaCurrentArcanaId = 11;
+  let metaInterferenceLatched = false;
   filter.reset(index);
 
   return (now, btcAnchor) => {
@@ -1095,6 +1290,7 @@ function metaSimulator(seed: number): FieldSimulator {
     const commonUsd = gauss(rand) * 0.00024;
     const commonGlobal = gauss(rand) * 0.00017;
     const usdIndex = clamp(100 * Math.exp(commonUsd), 80, 120);
+    syntheticXauUsd *= Math.exp(commonGlobal * 0.12 - commonUsd * 0.35 + gauss(rand) * 0.00011);
     syntheticBtcPrice *= Math.exp(commonGlobal + gauss(rand) * 0.00045);
     if (btcAnchor && Number.isFinite(btcAnchor) && btcAnchor > 0) {
       syntheticBtcPrice += (btcAnchor - syntheticBtcPrice) * 0.2;
@@ -1160,9 +1356,58 @@ function metaSimulator(seed: number): FieldSimulator {
     const meanCorrelation = pairCorrelations.length ? pairCorrelations.reduce((sum, value) => sum + value, 0) / pairCorrelations.length : 0;
     const relativeDispersion = Math.sqrt(relativeAssets.reduce((sum, asset) => sum + asset.peerRelativePercent ** 2, 0) / count);
 
+    const pulsarMass = calculatePulsarMass(filteredIndex, FIELD_CONFIGS.meta.basePrice, relativeDispersion, meanCorrelation);
     const rawAngle = Math.atan2(filteredReturn * 1600, 0.35 + relativeDispersion * 0.08);
-    const floorAngle = quantizeAngleFloor(rawAngle);
-    if (floorAngle !== quantizedAngle) quantizedAngle = floorAngle;
+    const quantization = quantizedStepInitialized
+      ? quantizeAngleWithHysteresis(rawAngle, quantizedStepIndex)
+      : {
+        angle: Math.floor(rawAngle / (Math.PI / 12)) * (Math.PI / 12),
+        stepIndex: Math.floor(rawAngle / (Math.PI / 12)),
+        changed: false,
+      };
+    quantizedStepInitialized = true;
+    quantizedAngle = quantization.angle;
+    quantizedStepIndex = quantization.stepIndex;
+    const xauUsdAnalysis = analyzeMatrixPair(
+      'XAU',
+      {
+        value: syntheticXauUsd,
+        referenceValue: 2650,
+        volatility: clamp(Math.abs(commonGlobal - commonUsd * 0.35) * 800, 0, 1),
+        tension: 0.42 + clamp(relativeDispersion * 0.04, 0, 0.2),
+        mass: 1.15,
+      },
+      'USD',
+      { value: usdIndex, referenceValue: 100, volatility: Math.abs(commonUsd) * 400, tension: 0.36, mass: 2.5 },
+    );
+    const interferenceThreshold = 1.08;
+    const interferenceActive = xauUsdAnalysis.distance >= interferenceThreshold;
+    const interferenceStarted = interferenceActive && !metaInterferenceLatched;
+    const interferenceEnded = !interferenceActive && metaInterferenceLatched;
+    const previousArcanaId = metaCurrentArcanaId;
+    const defaultAnchorId = meanCorrelation > 0.35 ? 4 : 11;
+    if (interferenceStarted) {
+      const midpoint = xauUsdAnalysis.midpoint;
+      const nextAttractor = ARCANA_ATTRACTORS
+        .filter((arcana) => arcana.id !== metaCurrentArcanaId)
+        .sort((left, right) => (
+          Math.hypot(left.x - midpoint.x, left.y - midpoint.y, left.z - (midpoint.z ?? 0))
+          - Math.hypot(right.x - midpoint.x, right.y - midpoint.y, right.z - (midpoint.z ?? 0))
+        ))[0];
+      if (nextAttractor) metaCurrentArcanaId = nextAttractor.id;
+    } else if (interferenceEnded) {
+      metaCurrentArcanaId = defaultAnchorId;
+    } else if (!interferenceActive) {
+      metaCurrentArcanaId = defaultAnchorId;
+    }
+    metaInterferenceLatched = interferenceActive;
+    const phaseShift = interferenceStarted;
+    const crackIntensity = interferenceActive
+      ? clamp((xauUsdAnalysis.distance - interferenceThreshold) / 0.75, 0, 1)
+      : 0;
+    const microTremor = interferenceActive
+      ? Math.sin(now / 1000 * 17 + metaCurrentArcanaId) * (0.012 + crackIntensity * 0.065)
+      : 0;
     const matrixAnalysis = analyzeMatrixPair(
       'BTC',
       { value: syntheticBtcPrice, referenceValue: 65000, volatility: clamp(Math.abs(commonGlobal) * 500, 0, 1), tension: 0.28 + relativeDispersion * 0.04, mass: 0.95 },
@@ -1171,13 +1416,18 @@ function metaSimulator(seed: number): FieldSimulator {
     );
     const invasion = applyMatrixInvasionToGeometry(
       'meta',
-      { tension: 0.28 + relativeDispersion * 0.04, rigidity: 0.95, angle: quantizedAngle },
-      matrixAnalysis,
+      { tension: 0.28 + relativeDispersion * 0.04, rigidity: 0.97, angle: quantizedAngle },
+      xauUsdAnalysis,
       now / 1000,
     );
+    const metaArcana = ARCANA_ATTRACTORS.find((arcana) => arcana.id === metaCurrentArcanaId) ?? ARCANA_ATTRACTORS[11];
+    const rippleStrength = quantization.changed ? clamp(0.5 + pulsarMass * 0.16, 0, 1) : 0;
+    const projectedAngle = phaseShift
+      ? Math.atan2(metaArcana.y, metaArcana.x)
+      : quantizedAngle + microTremor;
     const tick: KnotTick = {
       ...makeTick(now, filteredIndex, rawPrevious, 0.0015, false),
-      angle: invasion.angle,
+      angle: projectedAngle,
       magicLength: clamp(0.3 + relativeDispersion * 0.16, 0.3, 1.2),
       tension: clamp(Math.abs(filteredReturn) * 180 + relativeDispersion * 0.08 + invasion.invasionStrength * 0.12, 0.04, 0.7),
       volatility: clamp(Math.abs(filteredReturn) * 120, 0, 0.45),
@@ -1190,7 +1440,7 @@ function metaSimulator(seed: number): FieldSimulator {
       tension: tick.tension,
       angularVelocity: filteredReturn / (FIELD_CONFIGS.meta.intervalMs / 1000),
       mass: clamp(2.5 + relativeDispersion * 0.25 + invasion.invasionStrength * 0.15, 0, 3),
-      phase: invasion.angle,
+      phase: projectedAngle,
       dailyStep: 0,
       poissonJump: false,
       basketReturn,
@@ -1201,8 +1451,22 @@ function metaSimulator(seed: number): FieldSimulator {
       resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
       resonanceStrength: matrixAnalysis.resonance.normalizedStrength,
       matrixTension: invasion.tension,
-      metaMicroTremor: invasion.microTremor,
+      metaMicroTremor: microTremor,
+      metaPulsarMass: pulsarMass,
+      metaQuantizedAngle: projectedAngle,
+      metaQuantizedStep: quantization.changed,
+      metaQuantizedStepIndex: quantization.stepIndex,
+      metaPhaseShift: phaseShift,
+      metaXauUsdDistance: xauUsdAnalysis.distance,
+      metaCrackIntensity: crackIntensity,
+      metaRippleStrength: rippleStrength,
+      metaRippleTimestamp: quantization.changed ? now : 0,
+      metaPreviousArcanaId: phaseShift ? previousArcanaId : metaArcana.id,
+      metaTargetArcanaId: metaArcana.id,
       usdIndex,
+      xauUsdPrice: syntheticXauUsd,
+      xauVolatility: clamp(Math.abs(commonGlobal - commonUsd * 0.35) * 800, 0, 1),
+      xauTension: 0.42 + clamp(relativeDispersion * 0.04, 0, 0.2),
       btcProxyPrice: syntheticBtcPrice,
       btcVolatility: clamp(Math.abs(commonGlobal) * 500, 0, 1),
       btcTension: 0.28 + relativeDispersion * 0.04,
@@ -1215,20 +1479,31 @@ function metaSimulator(seed: number): FieldSimulator {
       projection: buildProjection(Math.sign(filteredReturn) || 1, 0.32 + tick.tension * 0.3, 0.42, 0.05, 'spiral'),
       style: {
         strokeScale: 1.5,
-        vibration: Math.abs(invasion.microTremor) * 18,
-        rigidity: invasion.rigidity,
+        vibration: Math.abs(microTremor) * 18,
+        rigidity: interferenceActive ? clamp(invasion.rigidity, 0.88, 1) : 0.97,
         projectionStretch: 0,
-        invasionStrength: invasion.invasionStrength,
-        candySpinModifier: 1 + invasion.invasionStrength * 0.15,
-        matrixDistance: matrixAnalysis.distance,
-        resonanceArcanaId: matrixAnalysis.resonance.arcana.id,
-        candyMass: 1.35 + relativeDispersion * 0.25,
+        invasionStrength: interferenceActive ? clamp(invasion.invasionStrength + crackIntensity * 0.2, 0, 1) : 0,
+        candySpinModifier: 1 + (quantization.changed ? 0.08 : 0) + crackIntensity * 0.05,
+        matrixDistance: xauUsdAnalysis.distance,
+        resonanceArcanaId: metaArcana.id,
+        candyMass: clamp(pulsarMass, 0.6, 3),
         candyAngularVelocity: filteredReturn / (FIELD_CONFIGS.meta.intervalMs / 1000),
         candyVibrationFrequency: 0.45,
-        candyRadialScale: clamp(0.98 + invasion.rigidity * 0.025 + Math.abs(invasion.microTremor) * 0.05, 0.98, 1.06),
-        candyPhaseOffset: invasion.angle * 0.025,
+        candyRadialScale: clamp(0.98 + invasion.rigidity * 0.025 + Math.abs(microTremor) * 0.05, 0.98, 1.06),
+        candyPhaseOffset: projectedAngle * 0.025,
         candyHueShift: 0.58,
-        candyEmissive: 0.38 + invasion.invasionStrength * 0.3,
+        candyEmissive: 0.38 + crackIntensity * 0.42,
+        metaPulsarMass: pulsarMass,
+        metaQuantizedAngle: quantizedAngle,
+        metaQuantizedStep: quantization.changed,
+        metaQuantizedStepIndex: quantization.stepIndex,
+        metaPhaseShift: phaseShift,
+        metaXauUsdDistance: xauUsdAnalysis.distance,
+        metaCrackIntensity: crackIntensity,
+        metaRippleStrength: rippleStrength,
+        metaRippleTimestamp: quantization.changed ? now : 0,
+        metaPreviousArcanaId: phaseShift ? previousArcanaId : metaArcana.id,
+        metaTargetArcanaId: metaArcana.id,
       },
       diagnostics,
     };
@@ -1242,4 +1517,70 @@ export function createFieldSimulator(kind: FieldKind, seed = 20261020): FieldSim
     case 'animal': return animalSimulator(seed);
     case 'meta': return metaSimulator(seed);
   }
+}
+
+export type BollingerHalfVariance = {
+  mean: number;
+  sigmaUp: number;
+  sigmaDown: number;
+  upper: number;
+  lower: number;
+  percentB: number;
+  bandwidth: number;
+  samples: number;
+};
+
+export type BollingerOptions = {
+  window?: number;
+  k?: number;
+  /** Metal: lambda * E[J^2] is added to the upper half-variance only. */
+  jumpIntensity?: number;
+  jumpSize?: number;
+  /** Animal: replaces price deviation with the Kuramoto phase variance 1 - r^2. */
+  phaseVariance?: number;
+};
+
+/**
+ * Bollinger band built from two half-variances split at the moving average.
+ * sigma+ uses deviations above the mean, sigma- those below it.
+ */
+export function calculateBollingerHalfVariance(
+  prices: readonly number[],
+  { window = 20, k = 2, jumpIntensity = 0, jumpSize = 0, phaseVariance }: BollingerOptions = {},
+): BollingerHalfVariance | undefined {
+  const sample = prices.slice(-Math.max(3, window)).filter(Number.isFinite);
+  if (sample.length < 3) return undefined;
+  const mean = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+  if (!(Math.abs(mean) > 1e-12)) return undefined;
+  let upSquares = 0;
+  let downSquares = 0;
+  for (const value of sample) {
+    const deviation = value - mean;
+    if (deviation >= 0) upSquares += deviation * deviation;
+    else downSquares += deviation * deviation;
+  }
+  let sigmaUp: number;
+  let sigmaDown: number;
+  if (phaseVariance !== undefined) {
+    const phaseSigma = Math.abs(mean) * 0.02 * Math.sqrt(clamp(phaseVariance, 0, 1));
+    sigmaUp = phaseSigma;
+    sigmaDown = phaseSigma;
+  } else {
+    sigmaUp = Math.sqrt(upSquares / sample.length * 2 + Math.max(0, jumpIntensity) * jumpSize * jumpSize);
+    sigmaDown = Math.sqrt(downSquares / sample.length * 2);
+  }
+  const upper = mean + k * sigmaUp;
+  const lower = mean - k * sigmaDown;
+  const width = Math.max(upper - lower, Math.abs(mean) * 1e-9);
+  const price = sample[sample.length - 1];
+  return {
+    mean,
+    sigmaUp,
+    sigmaDown,
+    upper,
+    lower,
+    percentB: clamp((price - lower) / width, -0.5, 1.5),
+    bandwidth: width / Math.abs(mean),
+    samples: sample.length,
+  };
 }

@@ -12,8 +12,8 @@ import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
-import { useKnotSelection, type AnimalSyncTrace } from '@/hooks/useKnotSelection';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, calculateBollingerHalfVariance, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
 const MAX_TICKS = 256;
@@ -167,7 +167,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     SYMBOL,
   );
   const { ticker, isConnected: isExchangeConnected } = useBtcUsdTicker();
-  const metalFeed = useMetalFeed(field?.kind === 'metal');
+  const metalFeed = useMetalFeed(field?.kind === 'metal' || field?.kind === 'meta');
   const liveData = field ? undefined : marketDataMap[SYMBOL];
   const [fieldStep, setFieldStep] = useState<FieldStep | undefined>(undefined);
   const [metalPhaseHistory, setMetalPhaseHistory] = useState<MetalPhaseSample[]>([]);
@@ -183,7 +183,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const metalFractureCount = useKnotSelection((state) => state.metalFractures.length);
   const animalSyncEventCount = useKnotSelection((state) => state.animalSyncEvents.length);
   const animalSyncEvents = useKnotSelection((state) => state.animalSyncEvents);
+  const cryptoQuantumEvents = useKnotSelection((state) => state.cryptoQuantumEvents);
+  const metaPhaseShifts = useKnotSelection((state) => state.metaPhaseShifts);
   const [animalReplayEvent, setAnimalReplayEvent] = useState<AnimalSyncTrace | undefined>(undefined);
+  const [cryptoReplayEvent, setCryptoReplayEvent] = useState<CryptoQuantumTrace | undefined>(undefined);
   const [metalFeedJumpEvent, setMetalFeedJumpEvent] = useState(false);
   const [selectionLocked, setSelectionLocked] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(0);
@@ -198,6 +201,9 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const lastMetalQuoteTimestamp = useRef<number | undefined>(undefined);
   const metalJumpResetTimer = useRef<number | undefined>(undefined);
   const animalResonanceRecorded = useRef(false);
+  const [metalCleaveCross, setMetalCleaveCross] = useState<{ cell: number; line: number; timestamp: number } | undefined>(undefined);
+  const cryptoExtremeRecorded = useRef(false);
+  const metaInterferenceRecorded = useRef(false);
 
   useEffect(() => {
     tickerRef.current = ticker?.price;
@@ -256,6 +262,48 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     if (field?.kind !== 'metal' || !diagnostics || timestamp === undefined || timestamp === lastPhaseTimestamp.current) return;
     lastPhaseTimestamp.current = timestamp;
     setMetalPhaseHistory((current) => [...current.slice(-119), { ...diagnostics, timestamp }]);
+  }, [field?.kind, fieldStep]);
+
+  useEffect(() => {
+    if (field?.kind !== 'crypto') {
+      cryptoExtremeRecorded.current = false;
+      return;
+    }
+    const diagnostics = fieldStep?.diagnostics;
+    const resonanceId = diagnostics?.cryptoResonanceArcanaId;
+    const bounds = diagnostics?.cryptoPointCloudBounds;
+    const point = diagnostics?.cryptoResonancePoint;
+    const amplitude = diagnostics?.cryptoNoiseAmplitude ?? 0;
+    if (amplitude < 0.8) cryptoExtremeRecorded.current = false;
+    if (!diagnostics || resonanceId === undefined || !bounds || !point || amplitude < 1.15
+      || cryptoExtremeRecorded.current) return;
+    const arcana = ARCANA_ATTRACTORS.find((item) => item.id === resonanceId);
+    if (!arcana || (arcana.id !== 1 && arcana.id !== 18)) return;
+    useKnotSelection.getState().recordCryptoQuantumEvent({
+      timestamp: fieldStep.tick.timestamp ?? Date.now(),
+      price: fieldStep.tick.price,
+      hurstExponent: diagnostics.cryptoHurstExponent ?? 0.35,
+      maxNoiseAmplitude: amplitude,
+      highFrequencyNoise: diagnostics.cryptoHighFrequency ?? 0,
+      oscillatorDisplacement: diagnostics.cryptoDampedDisplacement ?? 0,
+      oscillatorVelocity: diagnostics.cryptoDampedVelocity ?? 0,
+      resonanceArcanaId: arcana.id,
+      resonanceArcanaName: arcana.name,
+      resonanceArcanaPosition: { x: arcana.x, y: arcana.y, z: arcana.z },
+      resonancePoint: { x: point.x, y: point.y, z: point.z ?? 0 },
+      pointCloudBounds: {
+        min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z ?? 0 },
+        max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z ?? 0 },
+      },
+    });
+    cryptoExtremeRecorded.current = true;
+    console.info('[crypto-quantum-resonance]', {
+      timestamp: fieldStep.tick.timestamp,
+      hurstExponent: diagnostics.cryptoHurstExponent,
+      maxNoiseAmplitude: amplitude,
+      arcana: arcana.roman,
+      pointCloudBounds: bounds,
+    });
   }, [field?.kind, fieldStep]);
 
   useEffect(() => {
@@ -369,8 +417,46 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   );
   const metalJumpActive = field?.kind === 'metal'
     && (Boolean(fieldStep?.diagnostics?.poissonJump) || metalFeedJumpEvent);
+  const metaXauUsdAnalysis = useMemo(() => {
+    if (field?.kind !== 'meta') return undefined;
+    const diagnostics = fieldStep?.diagnostics;
+    const xauPrice = metalFeed.quote?.price ?? diagnostics?.xauUsdPrice ?? 2650;
+    const xauVolatility = metalFeed.quote?.source === 'LIVE'
+      ? metalFeed.volatility
+      : diagnostics?.xauVolatility ?? 0.12;
+    const usdIndex = diagnostics?.usdIndex ?? 100;
+    return analyzeMatrixPair(
+      'XAU',
+      { value: xauPrice, referenceValue: 2650, volatility: xauVolatility, tension: diagnostics?.xauTension ?? 0.42, mass: 1.15 },
+      'USD',
+      { value: usdIndex, referenceValue: 100, volatility: diagnostics?.usdVolatility ?? 0.18, tension: 0.36, mass: 2.5 },
+    );
+  }, [field?.kind, fieldStep, metalFeed]);
+  const metaInterferenceActive = field?.kind === 'meta' && (metaXauUsdAnalysis?.distance ?? 0) >= 1.08;
   const fieldStyle: KnotFieldStyle | undefined = useMemo(() => {
     if (!field || !fieldStep) return undefined;
+    if (field.kind === 'meta') {
+      const distance = metaXauUsdAnalysis?.distance ?? fieldStep.diagnostics?.metaXauUsdDistance ?? 0;
+      const crackIntensity = distance >= 1.08 ? Math.max(0, Math.min(1, (distance - 1.08) / 0.75)) : 0;
+      const analysisArcana = metaXauUsdAnalysis?.resonance.arcana.id;
+      const targetArcana = ARCANA_ATTRACTORS.find((arcana) => arcana.id === analysisArcana);
+      return {
+        ...fieldStep.style,
+        metaXauUsdDistance: distance,
+        metaCrackIntensity: crackIntensity,
+        metaPhaseShift: metaInterferenceActive || fieldStep.style.metaPhaseShift,
+        metaTargetArcanaId: metaInterferenceActive && targetArcana
+          ? targetArcana.id
+          : fieldStep.style.metaTargetArcanaId,
+        metaQuantizedAngle: metaInterferenceActive && targetArcana
+          ? Math.atan2(targetArcana.y, targetArcana.x)
+          : fieldStep.style.metaQuantizedAngle,
+        candyPhaseOffset: metaInterferenceActive && targetArcana
+          ? Math.atan2(targetArcana.y, targetArcana.x) * 0.025
+          : fieldStep.style.candyPhaseOffset,
+        metaPulsarMass: fieldStep.diagnostics?.metaPulsarMass ?? fieldStep.style.metaPulsarMass,
+      };
+    }
     if (field.kind !== 'metal') return fieldStep.style;
     const diagnostics = fieldStep.diagnostics;
     const invasion = applyMatrixInvasionToGeometry(
@@ -388,22 +474,119 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       matrixDistance: matrixAnalysis.analysis.distance,
       resonanceArcanaId: matrixAnalysis.analysis.resonance.arcana.id,
       metalJump: metalJumpActive,
+      metalFieldActive: true,
+      metalFractureCell: Math.abs(
+        Math.floor(matrixAnalysis.analysis.distance * 1000)
+        + matrixAnalysis.analysis.resonance.arcana.id * 7,
+      ) % 48,
+      metalFractureLine: matrixAnalysis.analysis.resonance.arcana.id % 6,
+      metalLightningIntensity: metalJumpActive
+        ? Math.min(1, 0.55 + metalJumpIntensity * 0.25 + invasion.invasionStrength * 0.2)
+        : 0,
+      metalLightningTimestamp: metalJumpActive
+        ? latestTick?.timestamp ?? fieldStep.tick.timestamp ?? Date.now()
+        : 0,
       metalLayerGrowth: diagnostics?.dailyStep ?? 0,
       metalMicroTremor: metalFeed.quote?.source === 'LIVE'
         ? Math.min(1, Math.abs(metalFeed.angularVelocity) * 4)
         : 0,
     };
-  }, [field, fieldStep, latestTick, matrixAnalysis, metalFeed, metalJumpActive]);
-  const visualFieldStyle = useMemo(() => {
-    if (field?.kind !== 'animal' || !animalReplayEvent || !fieldStyle) return fieldStyle;
+  }, [field, fieldStep, latestTick, matrixAnalysis, metaInterferenceActive, metaXauUsdAnalysis, metalFeed, metalJumpActive]);
+  useEffect(() => {
+    if (field?.kind !== 'meta') {
+      metaInterferenceRecorded.current = false;
+      return;
+    }
+    const diagnostics = fieldStep?.diagnostics;
+    const distance = metaXauUsdAnalysis?.distance ?? diagnostics?.metaXauUsdDistance ?? 0;
+    if (distance < 0.96) metaInterferenceRecorded.current = false;
+    const triggered = Boolean(diagnostics?.metaPhaseShift)
+      || (metaInterferenceActive && !metaInterferenceRecorded.current);
+    if (!triggered || !diagnostics || !fieldStep) return;
+    const previousId = diagnostics.metaPreviousArcanaId ?? 11;
+    let targetId = metaInterferenceActive
+      ? metaXauUsdAnalysis?.resonance.arcana.id ?? diagnostics.metaTargetArcanaId ?? 11
+      : diagnostics.metaTargetArcanaId ?? 11;
+    if (targetId === previousId) targetId = previousId === 4 ? 11 : 4;
+    const previousArcana = ARCANA_ATTRACTORS.find((arcana) => arcana.id === previousId);
+    const targetArcana = ARCANA_ATTRACTORS.find((arcana) => arcana.id === targetId);
+    if (!previousArcana || !targetArcana) return;
+    useKnotSelection.getState().recordMetaPhaseShift({
+      timestamp: fieldStep.tick.timestamp ?? Date.now(),
+      indexPrice: fieldStep.tick.price,
+      pulsarMass: diagnostics.metaPulsarMass ?? diagnostics.mass,
+      quantizedAngle: diagnostics.metaQuantizedAngle ?? fieldStep.tick.angle,
+      quantizedStepIndex: diagnostics.metaQuantizedStepIndex ?? Math.floor(fieldStep.tick.angle / (Math.PI / 12)),
+      previousArcanaId: previousId,
+      previousArcanaPosition: { x: previousArcana.x, y: previousArcana.y, z: previousArcana.z },
+      targetArcanaId: targetId,
+      targetArcanaPosition: { x: targetArcana.x, y: targetArcana.y, z: targetArcana.z },
+      xauUsdDistance: distance,
+      crackIntensity: Math.max(0, Math.min(1, (distance - 1.08) / 0.75)),
+    });
+    metaInterferenceRecorded.current = true;
+    console.warn('[meta-spacetime-phase-shift]', {
+      timestamp: fieldStep.tick.timestamp,
+      pulsarMass: diagnostics.metaPulsarMass,
+      quantizedAngle: diagnostics.metaQuantizedAngle,
+      xauUsdDistance: distance,
+      from: previousArcana.roman,
+      to: targetArcana.roman,
+      source: metalFeed.quote?.source ?? 'SYNTHETIC',
+    });
+  }, [field?.kind, fieldStep, metaInterferenceActive, metaXauUsdAnalysis, metalFeed.quote?.source]);
+  const bollinger = useMemo(() => {
+    if (field?.kind !== 'metal' && field?.kind !== 'animal') return undefined;
+    const prices = history.map((tick) => tick.price);
+    if (field.kind === 'metal') {
+      const jump = fieldStep?.diagnostics?.jumpIntensity ?? 0;
+      const reference = prices.at(-1) ?? 0;
+      return calculateBollingerHalfVariance(prices, { jumpIntensity: jump, jumpSize: Math.abs(reference) * 0.0015 });
+    }
+    const order = fieldStep?.diagnostics?.kuramotoOrder ?? 0;
+    return calculateBollingerHalfVariance(prices, { phaseVariance: 1 - order * order });
+  }, [field?.kind, fieldStep, history]);
+  const bollingerStyle = useMemo(() => {
+    if (!fieldStyle || !bollinger) return fieldStyle;
     return {
       ...fieldStyle,
-      animalPulseStrength: animalReplayEvent.orderParameter,
-      animalPulsePhase: animalReplayEvent.meanPhase,
-      animalBraidStrength: animalReplayEvent.braidTension,
-      animalAttractorArcanaId: animalReplayEvent.arcanaId,
+      bollingerPercentB: bollinger.percentB,
+      bollingerBandwidth: bollinger.bandwidth,
+      bollingerSigmaUp: bollinger.sigmaUp,
+      bollingerSigmaDown: bollinger.sigmaDown,
+      ...(field?.kind === 'metal' && metalCleaveCross ? {
+        metalCleaveCrossCell: metalCleaveCross.cell,
+        metalCleaveCrossLine: metalCleaveCross.line,
+        metalCleaveCrossTimestamp: metalCleaveCross.timestamp,
+      } : {}),
     };
-  }, [animalReplayEvent, field?.kind, fieldStyle]);
+  }, [bollinger, field?.kind, fieldStyle, metalCleaveCross]);
+  const visualFieldStyle = useMemo(() => {
+    if (!bollingerStyle) return bollingerStyle;
+    const fieldStyle = bollingerStyle;
+    if (field?.kind === 'animal' && animalReplayEvent) {
+      return {
+        ...fieldStyle,
+        animalPulseStrength: animalReplayEvent.orderParameter,
+        animalPulsePhase: animalReplayEvent.meanPhase,
+        animalBraidStrength: animalReplayEvent.braidTension,
+        animalAttractorArcanaId: animalReplayEvent.arcanaId,
+      };
+    }
+    if (field?.kind === 'crypto' && cryptoReplayEvent) {
+      return {
+        ...fieldStyle,
+        cryptoHurstExponent: cryptoReplayEvent.hurstExponent,
+        cryptoNoiseAmplitude: cryptoReplayEvent.maxNoiseAmplitude,
+        cryptoHighFrequencyNoise: cryptoReplayEvent.highFrequencyNoise,
+        cryptoOscillatorDisplacement: cryptoReplayEvent.oscillatorDisplacement,
+        cryptoResonanceStrength: 1,
+        cryptoResonanceArcanaId: cryptoReplayEvent.resonanceArcanaId,
+        cryptoResonancePoint: cryptoReplayEvent.resonancePoint,
+      };
+    }
+    return fieldStyle;
+  }, [animalReplayEvent, bollingerStyle, cryptoReplayEvent, field?.kind]);
   useEffect(() => {
     const quote = metalFeed.quote;
     const resonance = metalResonance;
@@ -566,6 +749,9 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               animalCentroid={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalCentroid : undefined}
               animalAttractorArcanaId={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalAttractorArcanaId : undefined}
               animalAttractorStrength={field?.kind === 'animal' ? fieldStep?.diagnostics?.animalAttractorStrength : undefined}
+              cryptoResonancePoint={field?.kind === 'crypto' ? cryptoReplayEvent?.resonancePoint ?? fieldStep?.diagnostics?.cryptoResonancePoint : undefined}
+              cryptoResonanceArcanaId={field?.kind === 'crypto' ? cryptoReplayEvent?.resonanceArcanaId ?? fieldStep?.diagnostics?.cryptoResonanceArcanaId : undefined}
+              cryptoResonanceStrength={field?.kind === 'crypto' ? (cryptoReplayEvent ? 1 : fieldStep?.diagnostics?.cryptoResonanceStrength) : undefined}
             />
             {field?.kind === 'metal' && (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-amber-200/15 bg-amber-100/[0.025] px-3 py-2 font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">
@@ -713,7 +899,48 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <span>HF sin/cos / {fieldStep?.diagnostics?.cryptoHighFrequency?.toFixed(2) ?? '--'}</span>
                   <span>book x / {fieldStep?.diagnostics?.cryptoDampedDisplacement?.toFixed(2) ?? '--'}</span>
                   <span>book v / {fieldStep?.diagnostics?.cryptoDampedVelocity?.toFixed(2) ?? '--'}</span>
+                  <span>resonance / {fieldStep?.diagnostics?.cryptoResonanceArcanaId === 1 ? 'I MAGICIAN' : fieldStep?.diagnostics?.cryptoResonanceArcanaId === 18 ? 'XVIII MOON' : '—'}</span>
+                  <span>cloud bounds / {fieldStep?.diagnostics?.cryptoPointCloudBounds ? 'captured' : '—'}</span>
                 </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-stone-500">quantum inventory / {cryptoQuantumEvents.length}</span>
+                  <button
+                    type="button"
+                    disabled={cryptoQuantumEvents.length === 0}
+                    onClick={() => setCryptoReplayEvent((current) => current ? undefined : cryptoQuantumEvents.at(-1))}
+                    className="border border-violet-200/25 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-violet-100 enabled:hover:bg-violet-300/10 disabled:opacity-40"
+                  >
+                    {cryptoReplayEvent ? 'Stop state replay' : 'Replay latest state'}
+                  </button>
+                </div>
+                {cryptoReplayEvent && (
+                  <div className="mt-2 border border-violet-200/20 bg-violet-200/[0.035] p-2 font-mono text-[8px] text-violet-50/70" aria-live="polite">
+                    <p>
+                      REPLAY / {new Date(cryptoReplayEvent.timestamp).toLocaleString()} / H {cryptoReplayEvent.hurstExponent.toFixed(3)}
+                      {' '} / εmax {cryptoReplayEvent.maxNoiseAmplitude.toFixed(3)} / ARCANA {cryptoReplayEvent.resonanceArcanaId === 1 ? 'I MAGICIAN' : cryptoReplayEvent.resonanceArcanaId === 18 ? 'XVIII MOON' : 'NONE'}
+                      {cryptoReplayEvent.candyId && ` / ${cryptoReplayEvent.candyId}`}
+                      {cryptoReplayEvent.candySync !== undefined && ` / ${cryptoReplayEvent.candySync ? 'SYNC' : 'PHASED'}`}
+                    </p>
+                    <p className="mt-1 text-stone-500">
+                      Bounds X [{cryptoReplayEvent.pointCloudBounds.min.x.toFixed(2)}, {cryptoReplayEvent.pointCloudBounds.max.x.toFixed(2)}]
+                      {' '} Y [{cryptoReplayEvent.pointCloudBounds.min.y.toFixed(2)}, {cryptoReplayEvent.pointCloudBounds.max.y.toFixed(2)}]
+                      {' '} Z [{cryptoReplayEvent.pointCloudBounds.min.z.toFixed(2)}, {cryptoReplayEvent.pointCloudBounds.max.z.toFixed(2)}]
+                    </p>
+                    <svg viewBox="0 0 220 76" className="mt-1 h-14 w-full" role="img" aria-label="Replayed quantum point-cloud bounding box">
+                      <rect x="12" y="8" width="196" height="58" fill="none" stroke="rgba(196,181,253,0.35)" />
+                      {Array.from({ length: 42 }, (_, index) => {
+                        const seed = ((index + 1) * 16807) % 2147483647 / 2147483647;
+                        const ratioX = cryptoReplayEvent.pointCloudBounds.min.x === cryptoReplayEvent.pointCloudBounds.max.x
+                          ? 0.5
+                          : seed;
+                        const ratioY = cryptoReplayEvent.pointCloudBounds.min.y === cryptoReplayEvent.pointCloudBounds.max.y
+                          ? 0.5
+                          : ((seed * 3.71) % 1);
+                        return <circle key={index} cx={14 + ratioX * 192} cy={10 + ratioY * 54} r={index % 7 === 0 ? 1.8 : 1} fill={index % 2 ? '#a78bfa' : '#67e8f9'} fillOpacity="0.72" />;
+                      })}
+                    </svg>
+                  </div>
+                )}
               </section>
             )}
             {field?.kind === 'meta' && (
@@ -724,7 +951,29 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                     BTC/USD D {fieldStep?.diagnostics?.matrixDistance?.toFixed(2) ?? '--'} / Δθ {((fieldStep?.diagnostics?.metaMicroTremor ?? 0) * 180 / Math.PI).toFixed(2)}° / corr {fieldStep?.diagnostics?.metaMeanCorrelation?.toFixed(2) ?? '--'}
                   </p>
                 </div>
-                <p className="mt-1 font-mono text-[8px] text-stone-600">Relative dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'} / 15° floor quantization with distance-gated micro-tremor</p>
+                <div className="mt-1 grid grid-cols-2 gap-1.5 font-mono text-[8px] text-stone-500 sm:grid-cols-4">
+                  <span>Pulsar mass / {fieldStep?.diagnostics?.metaPulsarMass?.toFixed(3) ?? '--'}</span>
+                  <span>Filtered index / {latestTick?.price.toFixed(2) ?? '--'} · 2nd-order Butterworth</span>
+                  <span>Rigid angle / {((fieldStep?.diagnostics?.metaQuantizedAngle ?? 0) * 180 / Math.PI).toFixed(1)}° / 15° + hysteresis</span>
+                  <span>XAU/USD D / {metaXauUsdAnalysis?.distance.toFixed(3) ?? '--'} / {metalFeed.quote?.source === 'LIVE' ? 'LIVE' : 'SYNTHETIC'}</span>
+                  <span className={metaInterferenceActive ? 'text-orange-300' : ''}>
+                    Horizon / {metaInterferenceActive ? `CRACK ${((fieldStyle?.metaCrackIntensity ?? 0) * 100).toFixed(0)}%` : 'stable'}
+                    {' '}· {ARCANA_ATTRACTORS.find((arcana) => arcana.id === fieldStyle?.metaTargetArcanaId)?.roman ?? '--'}
+                    {' '} {ARCANA_ATTRACTORS.find((arcana) => arcana.id === fieldStyle?.metaTargetArcanaId)?.name ?? ''}
+                  </span>
+                  <span>Gravity ripple / {fieldStep?.diagnostics?.metaQuantizedStep ? 'PULSE' : 'quiet'} · phase shifts {metaPhaseShifts.length}</span>
+                </div>
+                {metaPhaseShifts.at(-1) && (
+                  <p className="mt-1 font-mono text-[8px] text-orange-200/80">
+                    LAST PHASE SHIFT / {ARCANA_ATTRACTORS.find((arcana) => arcana.id === metaPhaseShifts.at(-1)?.previousArcanaId)?.roman ?? '--'}
+                    {' '}→ {ARCANA_ATTRACTORS.find((arcana) => arcana.id === metaPhaseShifts.at(-1)?.targetArcanaId)?.roman ?? '--'}
+                    {' '}· M {metaPhaseShifts.at(-1)?.pulsarMass.toFixed(3)}
+                    {' '}· D {metaPhaseShifts.at(-1)?.xauUsdDistance.toFixed(3)}
+                  </p>
+                )}
+                <p className="mt-1 font-mono text-[8px] text-stone-600">
+                  Relative dispersion {fieldStep?.diagnostics?.metaRelativeDispersion?.toFixed(3) ?? '--'} / filtered index + floor quantizer with boundary hysteresis / XAU-USD rupture threshold 1.08
+                </p>
                 {fieldStep?.diagnostics?.dataContract && (
                   <p className="mt-1 font-mono text-[8px] text-stone-500">
                     {fieldStep.diagnostics.dataContract.symbol} / {fieldStep.diagnostics.dataContract.source.provider}
@@ -793,7 +1042,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               <div className="space-y-4">
                 <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
                   <div className="relative h-[560px] min-h-[480px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
-                    <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
+                    <KnotChart onMetalCleaveCross={setMetalCleaveCross} tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                     <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
@@ -801,12 +1050,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
                 </div>
                 <div className="mt-4">
-                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={visualFieldStyle} />
+                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} />
                 </div>
               </div>
             ) : viewMode === '3d' ? (
               <div className="space-y-4">
-                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={visualFieldStyle} />
+                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} />
               </div>
             ) : (
               <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">

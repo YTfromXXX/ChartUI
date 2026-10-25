@@ -20,6 +20,7 @@ type CandyXRPhysicsProps = {
   candies: CandyPoint[];
   onGrabChange?: (grabbed: boolean) => void;
   onImpact?: (targetId: string) => void;
+  onHoverCandy?: (candy: CandyPoint | null, index?: number, particleSample?: number) => void;
 };
 
 type TargetDefinition = {
@@ -195,7 +196,7 @@ function TargetBox({
   );
 }
 
-function InteractiveCandyBodies({ candies, onGrabChange, onImpact }: CandyXRPhysicsProps) {
+function InteractiveCandyBodies({ candies, onGrabChange, onImpact, onHoverCandy }: CandyXRPhysicsProps) {
   const bodiesRef = useRef<(RapierRigidBody | null)[]>([]);
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const handleToIndex = useRef(new Map<number, number>());
@@ -325,6 +326,8 @@ function InteractiveCandyBodies({ candies, onGrabChange, onImpact }: CandyXRPhys
   }, [candies.length, onGrabChange]);
 
   const handlePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
+    const hoverIndex = event.instanceId;
+    if (hoverIndex !== undefined && hoverIndex < candies.length) onHoverCandy?.(candies[hoverIndex], hoverIndex);
     const active = grabbed.current;
     if (!active || active.pointerId !== event.pointerId) return;
     const body = bodiesRef.current[active.index];
@@ -337,7 +340,7 @@ function InteractiveCandyBodies({ candies, onGrabChange, onImpact }: CandyXRPhys
     active.previous.copy(destination);
     active.timestamp = now;
     body.setNextKinematicTranslation({ x: destination.x, y: destination.y, z: destination.z });
-  }, []);
+  }, [candies, onHoverCandy]);
 
   const instances = useMemo(() => candies.map((candy, index) => {
     const pose = candyPose(candy, index, 0);
@@ -382,6 +385,7 @@ function InteractiveCandyBodies({ candies, onGrabChange, onImpact }: CandyXRPhys
           onPointerMove={handlePointerMove}
           onPointerUp={releaseGrab}
           onPointerCancel={releaseGrab}
+          onPointerOut={() => onHoverCandy?.(null)}
         >
           <meshPhysicalMaterial
             roughness={0.08}
@@ -403,10 +407,10 @@ function InteractiveCandyBodies({ candies, onGrabChange, onImpact }: CandyXRPhys
   );
 }
 
-export default function CandyXRPhysics({ candies, onGrabChange, onImpact }: CandyXRPhysicsProps) {
+export default function CandyXRPhysics({ candies, onGrabChange, onImpact, onHoverCandy }: CandyXRPhysicsProps) {
   return (
     <Physics gravity={[0, -1.2, 0]} timeStep="vary" colliders={false}>
-      <InteractiveCandyBodies candies={candies} onGrabChange={onGrabChange} onImpact={onImpact} />
+      <InteractiveCandyBodies candies={candies} onGrabChange={onGrabChange} onImpact={onImpact} onHoverCandy={onHoverCandy} />
     </Physics>
   );
 }
