@@ -106,3 +106,12 @@ Approximation: ATR uses the absolute close-to-close change instead of true range
 ## Observer access to the probability cloud (Crypto)
 
 Pick a recorded quantum singularity from KNOT INVENTORY, then overlay a manual price, size and direction (`observeQuantumCloud`). The panel shows in-cloud probability (Gaussian), direction-aware offset/displacement in cloud widths, edge risk (adverse side) and a wave-collapse flag at the cloud edge. The orbit shell radius follows size and its inclination follows direction/offset. This is a **simulated position**, not an order or realised P&L; the cloud width is derived from the recorded noise amplitude and bounds.
+
+## Crypto position detector and electron-orbital stamp
+
+| Part | Behaviour |
+|---|---|
+| `CryptoPositionState` | Glyph (clicked in the Knot palette; recalls the latest trace price as entry) overlaid with manual direction, size, entry, target and liquidation price. Source = `glyph`, `manual` or `hybrid`. Simulated: no orders, no realised P&L. |
+| 2D particle detector | The 48 hex cells become detectors. The entry→current-price segment (entry at 25% of the plot width) lights only the crossed edges (LR, B, LL, UL, T, UR). The last crossed cell's 6-bit edge code is printed as the digital reading. |
+| 3D orbital shell | Tilt = direction (±36°), radius = size (1.1–3.0), blink rate = |P&L| (0.6–6.6 Hz, gold profit / red loss). |
+| Annihilation precursor | Liquidation proximity above 60% scatters the shell particles with chaotic noise and collapses them toward the core near 100%. If no liquidation price is entered, ±10% from entry (≈10x) is assumed and labelled "auto". |

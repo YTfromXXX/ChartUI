@@ -18,6 +18,7 @@ import {
 } from '@/lib/candyPoints';
 import AnimalIndicators from './AnimalIndicators';
 import { AnimalVoxelBackdrop, GravityWellShader, KumoBand, MetalHoneycombBackdrop } from './FieldBackdrop';
+import { CryptoOrbitalShell } from './CryptoOrbital';
 import CandyXRPhysics from './CandyXRPhysics';
 import { CandyInstancedMesh, CryptoPointCloud, CyberpunkPriceSphere } from './CandySpiralMesh';
 
@@ -30,6 +31,7 @@ type CandySpiralSceneProps = {
   fieldName?: string;
   fieldStyle?: KnotFieldStyle;
   fieldDiagnostics?: FieldDiagnostics;
+  cryptoOrbital?: { tilt: number; radius: number; blinkHz: number; pnlRatio: number; annihilation: number };
 };
 
 function SpiralEyeCamera({ enabled }: { enabled: boolean }) {
@@ -256,6 +258,7 @@ export default function CandySpiralScene({
   fieldName,
   fieldStyle,
   fieldDiagnostics,
+  cryptoOrbital: orbital,
 }: CandySpiralSceneProps) {
   const [candies, setCandies] = useState<CandyPoint[]>(() => generateLocalCandyPoints(currentPrice, 2.0, 3.0));
   const [hoveredCandy, setHoveredCandy] = useState<CandyPoint | null>(null);
@@ -498,7 +501,10 @@ export default function CandySpiralScene({
               onHoverCandy={hoverCandy}
             />
           ) : fieldName === 'crypto' ? (
-            <CryptoPointCloud candies={candies} radius={2.0} fieldStyle={fieldStyle} onHoverCandy={hoverCandy} />
+            <>
+              <CryptoPointCloud candies={candies} radius={2.0} fieldStyle={fieldStyle} onHoverCandy={hoverCandy} />
+              {orbital && <CryptoOrbitalShell {...orbital} />}
+            </>
           ) : (
             <CandyInstancedMesh
               candies={candies}

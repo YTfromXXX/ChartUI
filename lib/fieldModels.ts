@@ -2070,3 +2070,60 @@ export function observeQuantumCloud(
     collapsed: edgeRisk >= 1,
   };
 }
+
+export type CryptoPositionSource = 'glyph' | 'manual' | 'hybrid';
+
+/** Simulated Crypto position: a recalled glyph/singularity overlaid with manual direction, size and prices. */
+export interface CryptoPositionState {
+  source: CryptoPositionSource;
+  glyphId: number | null;
+  glyphLabel: string;
+  direction: ObserverDirection;
+  size: number;
+  entryPrice: number;
+  targetPrice: number | null;
+  liquidationPrice: number | null;
+}
+
+export type CryptoPositionMetrics = {
+  valid: boolean;
+  sign: 1 | -1;
+  pnlRatio: number;
+  tilt: number;
+  radius: number;
+  blinkHz: number;
+  liquidationPrice: number;
+  liquidationProximity: number;
+  annihilation: number;
+};
+
+/** Default liquidation assumes roughly 10x leverage when none is entered. */
+export function defaultLiquidationPrice(entry: number, direction: ObserverDirection) {
+  return direction === 'long' ? entry * 0.9 : entry * 1.1;
+}
+
+export function calculateCryptoPositionMetrics(position: CryptoPositionState, currentPrice: number): CryptoPositionMetrics {
+  const sign: 1 | -1 = position.direction === 'long' ? 1 : -1;
+  const valid = [position.entryPrice, position.size, currentPrice].every((value) => Number.isFinite(value) && value > 0);
+  if (!valid) return { valid: false, sign, pnlRatio: 0, tilt: 0, radius: 0, blinkHz: 0, liquidationPrice: 0, liquidationProximity: 0, annihilation: 0 };
+  const liquidation = position.liquidationPrice !== null && Number.isFinite(position.liquidationPrice) && position.liquidationPrice > 0
+    && (sign === 1 ? position.liquidationPrice < position.entryPrice : position.liquidationPrice > position.entryPrice)
+    ? position.liquidationPrice
+    : defaultLiquidationPrice(position.entryPrice, position.direction);
+  const pnlRatio = sign * (currentPrice - position.entryPrice) / position.entryPrice;
+  const loss = -sign * (currentPrice - position.entryPrice);
+  const liquidationProximity = Math.max(0, Math.min(1, loss / Math.abs(position.entryPrice - liquidation)));
+  return {
+    valid,
+    sign,
+    pnlRatio,
+    tilt: sign * Math.PI / 5,
+    radius: 1.1 + 1.9 * (1 - Math.exp(-position.size / 2)),
+    blinkHz: 0.6 + 6 * Math.min(1, Math.abs(pnlRatio) / 0.05),
+    liquidationPrice: liquidation,
+    liquidationProximity,
+    annihilation: Math.max(0, Math.min(1, (liquidationProximity - 0.6) / 0.4)),
+  };
+}
+
+export const DETECTOR_EDGE_NAMES = ['LR', 'B', 'LL', 'UL', 'T', 'UR'] as const;

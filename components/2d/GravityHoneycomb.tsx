@@ -535,3 +535,116 @@ export function drawLissajousInset(
   ctx.fillText(`T-ω ${state.chaos ? 'CHAOS' : state.field === 'metal' ? 'STABLE' : 'CYCLE'} ${(state.stability * 100).toFixed(0)}%`, box.x + 4, box.y + box.size - 4);
   ctx.restore();
 }
+
+export type DetectorHit = { cell: number; mask: number; centerX: number; centerY: number };
+type Point2 = { x: number; y: number };
+
+function segmentsIntersect(a: Point2, b: Point2, c: Point2, d: Point2) {
+  const orient = (p: Point2, q: Point2, r: Point2) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const o1 = orient(a, b, c);
+  const o2 = orient(a, b, d);
+  const o3 = orient(c, d, a);
+  const o4 = orient(c, d, b);
+  return o1 * o2 < 0 && o3 * o4 < 0;
+}
+
+/** Returns, per 48-cell hex detector, the bitmask of the 6 edges (0 LR, 1 B, 2 LL, 3 UL, 4 T, 5 UR) crossed by the segment. */
+export function detectorCrossings(width: number, height: number, from: Point2, to: Point2): DetectorHit[] {
+  const layout = metalLayout(width, height);
+  const hits: DetectorHit[] = [];
+  const minX = Math.min(from.x, to.x) - layout.radius;
+  const maxX = Math.max(from.x, to.x) + layout.radius;
+  const minY = Math.min(from.y, to.y) - layout.radius;
+  const maxY = Math.max(from.y, to.y) + layout.radius;
+  for (let column = 0; column < layout.columns; column += 1) {
+    for (let row = 0; row < layout.rows; row += 1) {
+      const cx = layout.originX + column * layout.horizontalStep;
+      const cy = layout.originY + row * layout.verticalStep + (column % 2) * layout.verticalStep / 2;
+      if (cx < minX || cx > maxX || cy < minY || cy > maxY) continue;
+      let mask = 0;
+      for (let edge = 0; edge < 6; edge += 1) {
+        const a0 = edge * Math.PI / 3;
+        const a1 = (edge + 1) * Math.PI / 3;
+        const p = { x: cx + Math.cos(a0) * layout.radius, y: cy + Math.sin(a0) * layout.radius };
+        const q = { x: cx + Math.cos(a1) * layout.radius, y: cy + Math.sin(a1) * layout.radius };
+        if (segmentsIntersect(from, to, p, q)) mask |= 1 << edge;
+      }
+      if (mask) hits.push({ cell: column * layout.rows + row, mask, centerX: cx, centerY: cy });
+    }
+  }
+  hits.sort((left, right) => Math.hypot(left.centerX - from.x, left.centerY - from.y) - Math.hypot(right.centerX - from.x, right.centerY - from.y));
+  return hits;
+}
+
+export type CryptoDetectorInput = {
+  entry: Point2;
+  tip: Point2;
+  sign: 1 | -1;
+  annihilation: number;
+  blinkHz: number;
+  time: number;
+};
+
+const EDGE_LABELS = ['LR', 'B', 'LL', 'UL', 'T', 'UR'];
+
+export function describeDetectorMask(mask: number) {
+  const lit = EDGE_LABELS.filter((_, edge) => mask & (1 << edge));
+  const bits = Array.from({ length: 6 }, (_, edge) => (mask & (1 << edge) ? '1' : '0')).join('');
+  return { bits, label: lit.join('+') || '—' };
+}
+
+/** Draws the 48 cells as particle detectors: only hex edges crossed by the entry→price track glow. */
+export function drawCryptoDetectorHoneycomb(ctx: CanvasRenderingContext2D, width: number, height: number, input: CryptoDetectorInput) {
+  const layout = metalLayout(width, height);
+  const hits = detectorCrossings(width, height, input.entry, input.tip);
+  const masks = new Map(hits.map((hit) => [hit.cell, hit.mask]));
+  const flicker = 0.75 + 0.25 * Math.sin(input.time * 0.001 * input.blinkHz * TAU);
+  const noise = input.annihilation;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let column = 0; column < layout.columns; column += 1) {
+    for (let row = 0; row < layout.rows; row += 1) {
+      const cell = column * layout.rows + row;
+      const cx = layout.originX + column * layout.horizontalStep;
+      const cy = layout.originY + row * layout.verticalStep + (column % 2) * layout.verticalStep / 2;
+      const mask = masks.get(cell) ?? 0;
+      for (let edge = 0; edge < 6; edge += 1) {
+        const a0 = edge * Math.PI / 3;
+        const a1 = (edge + 1) * Math.PI / 3;
+        const jitter = noise > 0 ? (Math.sin(input.time * 0.04 + cell * 7.1 + edge * 3.3) * noise * 2.2) : 0;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a0) * layout.radius + jitter, cy + Math.sin(a0) * layout.radius - jitter);
+        ctx.lineTo(cx + Math.cos(a1) * layout.radius - jitter, cy + Math.sin(a1) * layout.radius + jitter);
+        if (mask & (1 << edge)) {
+          ctx.strokeStyle = noise > 0.5 ? '#fb7185' : input.sign > 0 ? '#fde68a' : '#c4b5fd';
+          ctx.globalAlpha = Math.min(1, flicker);
+          ctx.lineWidth = 2.6;
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.strokeStyle = '#67e8f9';
+          ctx.globalAlpha = 0.1;
+          ctx.lineWidth = 0.6;
+          ctx.shadowBlur = 0;
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(253,230,138,0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(input.entry.x, input.entry.y);
+  ctx.lineTo(input.tip.x, input.tip.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const last = hits.at(-1);
+  const reading = describeDetectorMask(last?.mask ?? 0);
+  ctx.fillStyle = '#fde68a';
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.fillText(`DETECTOR ${last ? `c${last.cell}` : 'idle'} · ${reading.label} · ${reading.bits} · hits ${hits.length}`, 24, height - 34);
+  ctx.restore();
+}

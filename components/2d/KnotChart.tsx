@@ -3,7 +3,7 @@
 import { debugMetrics } from '@/lib/debugMetrics';
 import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
-import { drawAnimalVoxelHoneycomb, drawGravityHoneycomb, drawGravityWells, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
+import { drawAnimalVoxelHoneycomb, drawCryptoDetectorHoneycomb, drawGravityHoneycomb, drawGravityWells, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
 export type KnotTick = {
   timestamp?: number;
@@ -83,6 +83,11 @@ export type KnotFieldStyle = {
   lissajousPoints?: readonly { x: number; y: number }[];
   hackAlignment?: number;
   hackLocked?: number;
+  cryptoPositionActive?: number;
+  cryptoPositionEntry?: number;
+  cryptoPositionSign?: number;
+  cryptoPositionAnnihilation?: number;
+  cryptoPositionBlinkHz?: number;
   hackPrice?: number;
   macdDistortionHeight?: number;
   macdAcceleration?: number;
@@ -178,6 +183,11 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   lissajousPoints: [],
   hackAlignment: 0,
   hackLocked: 0,
+  cryptoPositionActive: 0,
+  cryptoPositionEntry: 0,
+  cryptoPositionSign: 1,
+  cryptoPositionAnnihilation: 0,
+  cryptoPositionBlinkHz: 1,
   hackPrice: 0,
   macdDistortionHeight: 0,
   macdAcceleration: 0,
@@ -1045,6 +1055,16 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
         activeCleaveHandler?.({ cell: crossing.cell, line: crossing.line, timestamp: lastCleaveCrossAt });
       }
     }
+  } else if (activeStyle.cryptoPositionActive > 0 && activeStyle.cryptoPositionEntry > 0) {
+    const entryY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.cryptoPositionEntry - minPrice) * yScale));
+    drawCryptoDetectorHoneycomb(ctx, width, height, {
+      entry: { x: plotLeft + (plotRight - plotLeft) * 0.25, y: entryY },
+      tip: { x: targetX, y: targetY },
+      sign: activeStyle.cryptoPositionSign >= 0 ? 1 : -1,
+      annihilation: activeStyle.cryptoPositionAnnihilation,
+      blinkHz: activeStyle.cryptoPositionBlinkHz,
+      time: frame * 16.67,
+    });
   } else if (activeStyle.animalPhaseSigma > 0 || activeStyle.animalPulseStrength > 0) {
     drawAnimalVoxelHoneycomb(ctx, width, height, {
       order: activeStyle.animalPulseStrength,

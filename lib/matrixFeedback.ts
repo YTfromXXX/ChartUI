@@ -24,6 +24,7 @@ export const CRYPTO_META_EXTENSION_TABLE: readonly ExtensionRow[] = [
   { indicator: 'fBm / damped oscillator', crypto: 'Cloud-chamber noise, pair creation / annihilation', meta: '-', status: 'live' },
   { indicator: 'Butterworth + 15° quantizer', crypto: '-', meta: 'Pulsar mass, rigid leap, ripple', status: 'live' },
   { indicator: 'Arcana resonance', crypto: 'I Magician / XVIII Moon lensing', meta: 'IV Emperor / VIII Justice anchor, leap', status: 'live' },
+  { indicator: 'Position detector / orbital stamp', crypto: 'Entry→price track lights hex edges; orbit tilt/radius/blink from direction/size/P&L', meta: '-', status: 'live' },
   { indicator: 'Matrix distance (XAU-USD)', crypto: 'BTC-USD resonance point', meta: 'Micro-tremor / crack threshold', status: 'live' },
   { indicator: 'Bollinger half-variance', crypto: 'Hurst-scaled band: noise amplitude as sigma', meta: 'Band on low-pass mass; leap on band break', status: 'planned' },
   { indicator: 'MACD double pendulum', crypto: 'Oscillator phase difference drives pair-creation rate', meta: 'Fast/slow mass gap drives quantized step rate', status: 'planned' },

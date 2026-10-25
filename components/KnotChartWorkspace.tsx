@@ -13,8 +13,8 @@ import MatrixLiveFeedback from '@/components/MatrixLiveFeedback';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, observeQuantumCloud, type ObserverDirection, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
-import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, observeQuantumCloud, calculateCryptoPositionMetrics, type CryptoPositionState, type ObserverDirection, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { MAJOR_ARCANA_KNOTS, useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
 const MAX_TICKS = 256;
@@ -188,6 +188,13 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const metaPhaseShifts = useKnotSelection((state) => state.metaPhaseShifts);
   const [animalReplayEvent, setAnimalReplayEvent] = useState<AnimalSyncTrace | undefined>(undefined);
   const [observerIndex, setObserverIndex] = useState(-1);
+  const [positionGlyph, setPositionGlyph] = useState<number | null>(null);
+  const [positionEdited, setPositionEdited] = useState(false);
+  const [positionDirection, setPositionDirection] = useState<ObserverDirection>('long');
+  const [positionSize, setPositionSize] = useState('1');
+  const [positionEntry, setPositionEntry] = useState('');
+  const [positionTarget, setPositionTarget] = useState('');
+  const [positionLiquidation, setPositionLiquidation] = useState('');
   const [observerPrice, setObserverPrice] = useState('');
   const [observerSize, setObserverSize] = useState('1');
   const [observerDirection, setObserverDirection] = useState<ObserverDirection>('long');
@@ -604,6 +611,34 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     () => calculateVortexSearch(indicatorPrices.at(-1) ?? 0, rsiState, atrState, indicatorVelocity),
     [atrState, indicatorPrices, indicatorVelocity, rsiState],
   );
+  const livePrice = indicatorPrices.at(-1) ?? 0;
+  const cryptoPosition = useMemo<CryptoPositionState | null>(() => {
+    const entryPrice = Number(positionEntry);
+    if (field?.kind !== 'crypto' || !(entryPrice > 0)) return null;
+    const optional = (text: string) => (Number(text) > 0 ? Number(text) : null);
+    return {
+      source: positionGlyph === null ? 'manual' : positionEdited ? 'hybrid' : 'glyph',
+      glyphId: positionGlyph,
+      glyphLabel: positionGlyph === null ? 'manual' : MAJOR_ARCANA_KNOTS[positionGlyph] ?? `knot ${positionGlyph}`,
+      direction: positionDirection,
+      size: Number(positionSize),
+      entryPrice,
+      targetPrice: optional(positionTarget),
+      liquidationPrice: optional(positionLiquidation),
+    };
+  }, [field?.kind, positionDirection, positionEdited, positionEntry, positionGlyph, positionLiquidation, positionSize, positionTarget]);
+  const positionMetrics = useMemo(
+    () => (cryptoPosition && livePrice > 0 ? calculateCryptoPositionMetrics(cryptoPosition, livePrice) : undefined),
+    [cryptoPosition, livePrice],
+  );
+  const cryptoOrbital = positionMetrics?.valid
+    ? { tilt: positionMetrics.tilt, radius: positionMetrics.radius, blinkHz: positionMetrics.blinkHz, pnlRatio: positionMetrics.pnlRatio, annihilation: positionMetrics.annihilation }
+    : undefined;
+  function recallGlyph(glyphId: number, price: number) {
+    setPositionGlyph(glyphId);
+    setPositionEdited(false);
+    setPositionEntry(price > 0 ? price.toFixed(2) : '');
+  }
   const observedTrace = observerIndex >= 0 ? cryptoQuantumEvents[observerIndex] : undefined;
   const cloudObservation = useMemo(() => {
     if (!observedTrace) return undefined;
@@ -671,6 +706,13 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       hackAlignment: hack?.alignment ?? 0,
       hackLocked: hack?.locked ? 1 : 0,
       hackPrice: hack?.locked ? hack.singularityPrice : 0,
+      ...(positionMetrics?.valid && cryptoPosition ? {
+        cryptoPositionActive: 1,
+        cryptoPositionEntry: cryptoPosition.entryPrice,
+        cryptoPositionSign: positionMetrics.sign,
+        cryptoPositionAnnihilation: positionMetrics.annihilation,
+        cryptoPositionBlinkHz: positionMetrics.blinkHz,
+      } : {}),
       indicatorVelocity: indicatorVelocity.indicator_velocity,
       targetPriceProjection: indicatorVelocity.target_price_projection,
       animalOrderRise: animalOrderMacd?.macd?.riseStrength ?? 0,
@@ -681,7 +723,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
         metalCleaveCrossTimestamp: metalCleaveCross.timestamp,
       } : {}),
     };
-  }, [animalOrderMacd, atrState, bollinger, field?.kind, fieldStep, fieldStyle, hack, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, lissajous, macdState, metalCleaveCross, rsiState, volumeState, vortex]);
+  }, [cryptoPosition, positionMetrics, animalOrderMacd, atrState, bollinger, field?.kind, fieldStep, fieldStyle, hack, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, lissajous, macdState, metalCleaveCross, rsiState, volumeState, vortex]);
   const visualFieldStyle = useMemo(() => {
     if (!bollingerStyle) return bollingerStyle;
     const fieldStyle = bollingerStyle;
@@ -805,6 +847,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   function toggleKnot(id: number) {
     if (selectionLocked) return;
     const isSelected = selectedKnotIds.includes(id);
+    if (!isSelected && field?.kind === 'crypto') {
+      const recalled = useKnotSelection.getState().tracesByKnot[id]?.at(-1)?.price ?? 0;
+      recallGlyph(id, recalled > 0 ? recalled : livePrice);
+    }
     if (!isSelected && latestTick) {
       const arcana = matrixAnalysis.analysis.resonance.arcana;
       useKnotSelection.getState().recordKnotTrace(id, {
@@ -1068,6 +1114,22 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   )}
                   {cloudObservation && !cloudObservation.valid && <p className="mt-1 text-rose-300">Enter a positive price and size.</p>}
                 </div>
+                <div className="mt-2 border border-cyan-200/20 bg-cyan-100/[0.03] p-2 font-mono text-[8px] text-stone-400" aria-label="Hybrid position input">
+                  <p className="uppercase tracking-[0.14em] text-cyan-100/80">Position / glyph recall + manual overlay (simulated, no orders)</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="border border-white/10 px-1.5 py-0.5">glyph: {positionGlyph === null ? 'none — click the Knot palette' : `${positionGlyph} ${MAJOR_ARCANA_KNOTS[positionGlyph] ?? ''}`}</span>
+                    {positionGlyph !== null && <button type="button" onClick={() => { setPositionGlyph(null); setPositionEdited(true); }} className="border border-white/10 px-1.5 py-0.5 uppercase hover:text-cyan-100">clear glyph</button>}
+                    {(['long', 'short'] as const).map((direction) => (
+                      <button key={direction} type="button" onClick={() => { setPositionDirection(direction); setPositionEdited(true); }} aria-pressed={positionDirection === direction} className={`border px-1.5 py-0.5 uppercase ${positionDirection === direction ? 'border-cyan-300/60 text-cyan-100' : 'border-white/10'}`}>{direction}</button>
+                    ))}
+                    {([['size', positionSize, setPositionSize, 'w-12'], ['entry', positionEntry, setPositionEntry, 'w-20'], ['target', positionTarget, setPositionTarget, 'w-20'], ['liq', positionLiquidation, setPositionLiquidation, 'w-20']] as const).map(([label, value, setter, width]) => (
+                      <label key={label} className="flex items-center gap-1 uppercase">{label}<input value={value} onChange={(event) => { setter(event.target.value); setPositionEdited(true); }} inputMode="decimal" aria-label={`Position ${label}`} placeholder={label === 'liq' ? 'auto' : ''} className={`${width} border border-white/10 bg-black/40 px-1 py-0.5`} /></label>
+                    ))}
+                  </div>
+                  {cryptoPosition && positionMetrics?.valid ? (
+                    <p className="mt-1">source {cryptoPosition.source} · P&L {(positionMetrics.pnlRatio * 100).toFixed(2)}% · orbit r {positionMetrics.radius.toFixed(2)} · blink {positionMetrics.blinkHz.toFixed(1)}Hz · liq {positionMetrics.liquidationPrice.toFixed(2)}{cryptoPosition.liquidationPrice ? '' : ' (auto ±10%)'} · proximity {(positionMetrics.liquidationProximity * 100).toFixed(0)}%{positionMetrics.annihilation > 0 ? ' · ANNIHILATION PRECURSOR' : ''}</p>
+                  ) : <p className="mt-1 text-stone-500">Enter an entry price or click a glyph to arm the detector and orbital shell.</p>}
+                </div>
                 {cryptoReplayEvent && (
                   <div className="mt-2 border border-violet-200/20 bg-violet-200/[0.035] p-2 font-mono text-[8px] text-violet-50/70" aria-live="polite">
                     <p>
@@ -1217,12 +1279,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
                 </div>
                 <div className="mt-4">
-                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} />
+                  <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={560} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} cryptoOrbital={cryptoOrbital} />
                 </div>
               </div>
             ) : viewMode === '3d' ? (
               <div className="space-y-4">
-                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} />
+                <CandySpiralScene currentPrice={latestTick?.price ?? 65000} symbol={SYMBOL} height={620} fieldName={field?.kind} fieldStyle={visualFieldStyle} fieldDiagnostics={fieldStep?.diagnostics} cryptoOrbital={cryptoOrbital} />
               </div>
             ) : (
               <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
