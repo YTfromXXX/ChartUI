@@ -2,28 +2,42 @@
 
 import { useEffect, useRef } from 'react';
 import { MAJOR_ARCANA_KNOTS } from '@/hooks/useKnotSelection';
+import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
+import type { MatrixPairAnalysis } from '@/lib/fieldModels';
+import { MARKET_CANDIDATE_CATALOG, MATRIX_ROLES, type MarketAssetClass } from '@/lib/marketCatalog';
 
-type ExplorerCategory = 'Grain' | 'Metal' | 'Stock' | 'Currency' | 'Crypto' | 'Index';
+type ExplorerCategory = 'Grain' | 'Energy' | 'Metal' | 'Stock' | 'Currency' | 'Crypto' | 'Index' | 'Macro';
 
 const CATEGORY_COLORS: Record<ExplorerCategory, string> = {
   Grain: '#facc15',
+  Energy: '#fb923c',
   Metal: '#e2e8f0',
   Stock: '#4ade80',
   Currency: '#38bdf8',
   Crypto: '#fb7185',
   Index: '#a78bfa',
+  Macro: '#c084fc',
 };
 
-export const EXPLORER_SYMBOLS: Array<{ symbol: string; category: ExplorerCategory }> = [
-  { symbol: 'WHEATUSD', category: 'Grain' }, { symbol: 'CORNUSD', category: 'Grain' }, { symbol: 'SOYBUSD', category: 'Grain' }, { symbol: 'OATSUSD', category: 'Grain' },
-  { symbol: 'XAUUSD', category: 'Metal' }, { symbol: 'XAGUSD', category: 'Metal' }, { symbol: 'XPTUSD', category: 'Metal' }, { symbol: 'COPPERUSD', category: 'Metal' },
-  { symbol: 'AAPL', category: 'Stock' }, { symbol: 'TSLA', category: 'Stock' }, { symbol: 'NVDA', category: 'Stock' }, { symbol: 'MSFT', category: 'Stock' }, { symbol: 'AMZN', category: 'Stock' },
-  { symbol: 'EURUSD', category: 'Currency' }, { symbol: 'GBPUSD', category: 'Currency' }, { symbol: 'USDJPY', category: 'Currency' }, { symbol: 'AUDUSD', category: 'Currency' }, { symbol: 'USDCHF', category: 'Currency' }, { symbol: 'NZDUSD', category: 'Currency' },
-  { symbol: 'BTCUSD', category: 'Crypto' }, { symbol: 'ETHUSD', category: 'Crypto' }, { symbol: 'SOLUSD', category: 'Crypto' }, { symbol: 'ADAUSD', category: 'Crypto' }, { symbol: 'XRPUSD', category: 'Crypto' }, { symbol: 'DOGEUSD', category: 'Crypto' }, { symbol: 'LTCUSD', category: 'Crypto' },
-  { symbol: 'US500', category: 'Index' }, { symbol: 'US30', category: 'Index' }, { symbol: 'NAS100', category: 'Index' }, { symbol: 'DAX40', category: 'Index' }, { symbol: 'GER40', category: 'Index' }, { symbol: 'UK100', category: 'Index' }, { symbol: 'JPN225', category: 'Index' },
-];
+const EXPLORER_CATEGORY: Record<MarketAssetClass, ExplorerCategory> = {
+  agriculture: 'Grain',
+  energy: 'Energy',
+  metal: 'Metal',
+  equity: 'Stock',
+  currency: 'Currency',
+  crypto: 'Crypto',
+  index: 'Index',
+  rates: 'Macro',
+  economic: 'Macro',
+};
 
-type StardustSymbol = { symbol: string; category: ExplorerCategory; nx: number; ny: number; jitter: number; arcanaId: number };
+export const EXPLORER_SYMBOLS = MARKET_CANDIDATE_CATALOG.map((asset) => ({
+  symbol: asset.symbol,
+  category: EXPLORER_CATEGORY[asset.assetClass],
+  roleIds: asset.roleIds,
+}));
+
+type StardustSymbol = { symbol: string; category: ExplorerCategory; nx: number; ny: number; jitter: number; arcanaId: number; roleIds: readonly number[] };
 
 function hashString(value: string): number {
   let hash = 0;
@@ -43,7 +57,8 @@ function buildStardust(): StardustSymbol[] {
       nx: (column + 0.5) / columns,
       ny: (row + 0.5) / rows,
       jitter: hash % 1000,
-      arcanaId: hash % 22,
+      arcanaId: entry.roleIds[0] ?? hash % 22,
+      roleIds: entry.roleIds,
     };
   });
 }
@@ -89,7 +104,139 @@ function drawKnotGlyph(context: CanvasRenderingContext2D, x: number, y: number, 
   context.restore();
 }
 
-export default function MatrixGridExplorer({ height = 360 }: { height?: number }) {
+function MatrixDistanceOverlay({ analysis, label, source, animalCentroid, animalAttractorArcanaId, animalAttractorStrength, cryptoResonancePoint, cryptoResonanceArcanaId, cryptoResonanceStrength }: {
+  analysis: MatrixPairAnalysis;
+  label: string;
+  source: string;
+  animalCentroid?: { x: number; y: number; z?: number };
+  animalAttractorArcanaId?: number;
+  animalAttractorStrength?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  cryptoResonanceArcanaId?: number;
+  cryptoResonanceStrength?: number;
+}) {
+  const toX = (value: number) => 12 + ((value + 1) / 2) * 356;
+  const toY = (value: number) => 10 + ((value + 1) / 2) * 104;
+  const attractor = analysis.resonance.arcana;
+  return (
+    <div className="absolute inset-x-2 bottom-2 z-10 border border-violet-200/25 bg-[#020611]/90 p-2 backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.1em]">
+        <span className="text-violet-100">{label} / {source}</span>
+        <span className="text-stone-400">D {analysis.distance.toFixed(3)} / {attractor.roman} {attractor.name}</span>
+      </div>
+      <svg viewBox="0 0 380 124" className="mt-1 h-20 w-full" role="img" aria-label={`${analysis.asset} to ${analysis.counterAsset} matrix distance ${analysis.distance.toFixed(3)}, resonance ${attractor.name}`}>
+        <defs>
+          <pattern id="arcana-matrix-grid" width="23" height="13" patternUnits="userSpaceOnUse">
+            <path d="M23 0H0V13" fill="none" stroke="rgba(148,163,184,0.13)" strokeWidth="0.55" />
+          </pattern>
+        </defs>
+        <rect x="12" y="10" width="356" height="104" fill="url(#arcana-matrix-grid)" />
+        {ARCANA_ATTRACTORS.map((node) => {
+          const x = toX(node.x);
+          const y = toY(node.y);
+          const active = node.id === attractor.id;
+          return (
+            <g key={node.id}>
+              {active && <circle cx={x} cy={y} r="7" fill="rgba(196,181,253,0.16)" stroke="#c4b5fd" strokeOpacity="0.7" />}
+              <circle cx={x} cy={y} r={active ? 2.8 : 1.6} fill={active ? (node.destructiveAffinity >= 0.7 ? '#fb7185' : '#c4b5fd') : '#64748b'} />
+              {(active || [0, 4, 13, 16].includes(node.id)) && <text x={x + 4} y={y - 3} fill={active ? '#f8fafc' : '#64748b'} fontSize="5">{node.roman}</text>}
+            </g>
+          );
+        })}
+        <line
+          x1={toX(analysis.assetPosition.x)}
+          y1={toY(analysis.assetPosition.y)}
+          x2={toX(analysis.counterPosition.x)}
+          y2={toY(analysis.counterPosition.y)}
+          stroke={attractor.destructiveAffinity >= 0.7 ? '#fb7185' : '#22d3ee'}
+          strokeWidth="1.2"
+          strokeDasharray="3 3"
+        />
+        <circle cx={toX(analysis.assetPosition.x)} cy={toY(analysis.assetPosition.y)} r="3.3" fill="#22d3ee" />
+        <circle cx={toX(analysis.counterPosition.x)} cy={toY(analysis.counterPosition.y)} r="3.3" fill="#fbbf24" />
+        <circle cx={toX(analysis.midpoint.x)} cy={toY(analysis.midpoint.y)} r="2.2" fill="#fff" />
+        {animalCentroid && animalAttractorArcanaId !== undefined && (() => {
+          const target = ARCANA_ATTRACTORS.find((node) => node.id === animalAttractorArcanaId);
+          if (!target) return null;
+          return (
+            <g>
+              <line
+                x1={toX(animalCentroid.x)}
+                y1={toY(animalCentroid.y)}
+                x2={toX(target.x)}
+                y2={toY(target.y)}
+                stroke="#4ade80"
+                strokeWidth={0.8 + (animalAttractorStrength ?? 0) * 1.2}
+                strokeOpacity={0.35 + (animalAttractorStrength ?? 0) * 0.6}
+              />
+              <circle cx={toX(animalCentroid.x)} cy={toY(animalCentroid.y)} r="4" fill="none" stroke="#4ade80" strokeWidth="1.2" />
+              <text x={toX(animalCentroid.x) + 5} y={toY(animalCentroid.y) - 5} fill="#86efac" fontSize="6">ANIMAL</text>
+            </g>
+          );
+        })()}
+        {cryptoResonancePoint && cryptoResonanceArcanaId !== undefined && cryptoResonanceArcanaId >= 0 && (() => {
+          const target = ARCANA_ATTRACTORS.find((node) => node.id === cryptoResonanceArcanaId);
+          if (!target) return null;
+          const lensX = toX(cryptoResonancePoint.x);
+          const lensY = toY(cryptoResonancePoint.y);
+          const intensity = Math.max(0, Math.min(1, cryptoResonanceStrength ?? 0));
+          return (
+            <g>
+              {[8, 15, 23, 32].map((baseRadius, ringIndex) => (
+                <circle
+                  key={baseRadius}
+                  cx={lensX}
+                  cy={lensY}
+                  r={baseRadius * (1 + intensity * 0.65)}
+                  fill="none"
+                  stroke={target.id === 1 ? '#38bdf8' : '#c084fc'}
+                  strokeWidth={0.5 + intensity * 0.45}
+                  strokeOpacity={(0.28 - ringIndex * 0.045) * intensity}
+                />
+              ))}
+              {Array.from({ length: 8 }, (_, spoke) => {
+                const angle = (spoke / 8) * Math.PI * 2;
+                const inner = 6;
+                const outer = 27 * (1 + intensity * 0.65);
+                return (
+                  <line
+                    key={spoke}
+                    x1={lensX + Math.cos(angle) * inner}
+                    y1={lensY + Math.sin(angle) * inner}
+                    x2={lensX + Math.cos(angle) * outer}
+                    y2={lensY + Math.sin(angle) * outer}
+                    stroke={target.id === 1 ? '#38bdf8' : '#c084fc'}
+                    strokeOpacity={intensity * 0.3}
+                    strokeWidth="0.6"
+                  />
+                );
+              })}
+              <circle cx={lensX} cy={lensY} r={4 + intensity * 3} fill={target.id === 1 ? '#38bdf8' : '#c084fc'} fillOpacity={0.25 + intensity * 0.35} />
+              <text x={lensX + 7} y={lensY - 6} fill={target.id === 1 ? '#7dd3fc' : '#d8b4fe'} fontSize="6">
+                {target.roman} / {target.name.toUpperCase()}
+              </text>
+            </g>
+          );
+        })()}
+        <text x={toX(analysis.assetPosition.x) + 5} y={toY(analysis.assetPosition.y) + 8} fill="#a5f3fc" fontSize="6">{analysis.asset}</text>
+        <text x={toX(analysis.counterPosition.x) + 5} y={toY(analysis.counterPosition.y) + 8} fill="#fde68a" fontSize="6">{analysis.counterAsset}</text>
+      </svg>
+    </div>
+  );
+}
+
+export default function MatrixGridExplorer({ height = 360, analysis, label = 'Matrix resonance', source = 'Synthetic', animalCentroid, animalAttractorArcanaId, animalAttractorStrength, cryptoResonancePoint, cryptoResonanceArcanaId, cryptoResonanceStrength }: {
+  height?: number;
+  analysis?: MatrixPairAnalysis;
+  label?: string;
+  source?: string;
+  animalCentroid?: { x: number; y: number; z?: number };
+  animalAttractorArcanaId?: number;
+  animalAttractorStrength?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  cryptoResonanceArcanaId?: number;
+  cryptoResonanceStrength?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailRef = useRef<TrailPoint[]>([]);
   const materializedRef = useRef<Map<string, MaterializedEntry>>(new Map());
@@ -158,7 +305,8 @@ export default function MatrixGridExplorer({ height = 360 }: { height?: number }
       if (lastMaterialized) {
         const star = stardustRef.current.find((entry) => entry.symbol === lastMaterialized[0]);
         if (star) {
-          const age = time - lastMaterialized[1].activatedAt;
+            const role = MATRIX_ROLES[star.arcanaId];
+            const age = time - lastMaterialized[1].activatedAt;
           const alpha = Math.min(0.16, age / 4000);
           const auraX = width * 0.5;
           const auraY = renderHeight * 0.46;
@@ -176,7 +324,7 @@ export default function MatrixGridExplorer({ height = 360 }: { height?: number }
           context.fillText(String(star.arcanaId).padStart(2, '0'), auraX, auraY);
           context.font = '10px ui-monospace, monospace';
           context.globalAlpha = alpha * 5;
-          context.fillText(MAJOR_ARCANA_KNOTS[star.arcanaId], auraX, auraY + Math.min(width, renderHeight) * 0.2);
+          context.fillText(role?.function ?? MAJOR_ARCANA_KNOTS[star.arcanaId], auraX, auraY + Math.min(width, renderHeight) * 0.2);
           context.restore();
         }
       }
@@ -252,7 +400,22 @@ export default function MatrixGridExplorer({ height = 360 }: { height?: number }
   return (
     <div className="relative overflow-hidden border border-violet-200/15 bg-[#04030a]" style={{ height }}>
       <canvas ref={canvasRef} className="h-full w-full touch-none" aria-label="Matrix grid explorer / symbol sensor field" />
-      <p className="pointer-events-none absolute left-3 top-2 font-mono text-[8px] uppercase tracking-[0.24em] text-violet-200/45">Explorer / sensor sweep to materialize knots</p>
+      <p className="pointer-events-none absolute left-3 top-2 font-mono text-[8px] uppercase tracking-[0.24em] text-violet-200/45">
+        Explorer / {EXPLORER_SYMBOLS.length} candidates · {MATRIX_ROLES.length} arcana roles · sensor sweep to materialize
+      </p>
+      {analysis && (
+        <MatrixDistanceOverlay
+          analysis={analysis}
+          label={label}
+          source={source}
+          animalCentroid={animalCentroid}
+          animalAttractorArcanaId={animalAttractorArcanaId}
+          animalAttractorStrength={animalAttractorStrength}
+          cryptoResonancePoint={cryptoResonancePoint}
+          cryptoResonanceArcanaId={cryptoResonanceArcanaId}
+          cryptoResonanceStrength={cryptoResonanceStrength}
+        />
+      )}
     </div>
   );
 }

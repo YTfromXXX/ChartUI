@@ -1,7 +1,9 @@
 'use client';
 
+import { debugMetrics } from '@/lib/debugMetrics';
+import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
-import { drawGravityHoneycomb, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
+import { drawAnimalVoxelHoneycomb, drawCryptoDetectorHoneycomb, drawGravityHoneycomb, drawGravityWells, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
 export type KnotTick = {
   timestamp?: number;
@@ -32,6 +34,219 @@ export type KnotTimelineLayer = {
 };
 
 export type GuidePointer = { x: number; y: number };
+
+/** Per-market physics of the knot: stroke thickness, high-frequency vibration,
+ * angular rigidity (0 = fluid, 1 = rigid polyhedron) and directional box stretch. */
+export type KnotFieldStyle = {
+  strokeScale?: number;
+  vibration?: number;
+  rigidity?: number;
+  projectionStretch?: number;
+  syncAlert?: boolean;
+  syncStrength?: number;
+  invasionStrength?: number;
+  candySpinModifier?: number;
+  matrixDistance?: number;
+  resonanceArcanaId?: number;
+  metalJump?: boolean;
+  metalLayerGrowth?: number;
+  metalMicroTremor?: number;
+  metalFieldActive?: boolean;
+  metalFractureCell?: number;
+  metalFractureLine?: number;
+  metalLightningIntensity?: number;
+  metalLightningTimestamp?: number;
+  bollingerPercentB?: number;
+  bollingerBandwidth?: number;
+  bollingerSigmaUp?: number;
+  bollingerSigmaDown?: number;
+  metalCleaveCrossCell?: number;
+  metalCleaveCrossLine?: number;
+  metalCleaveCrossTimestamp?: number;
+  animalPhaseSigma?: number;
+  rsiValue?: number;
+  rsiOmega?: number;
+  rsiOverheat?: number;
+  atrPulse?: number;
+  atrFaultDepth?: number;
+  animalRsiSpread?: number;
+  vortexSpeed?: number;
+  vortexSingularity?: number;
+  vortexAcceleration?: number;
+  vortexHighlight?: number;
+  volumeWells?: readonly { price: number; depth: number }[];
+  wellDepth?: number;
+  wellOffset?: number;
+  lissajousStability?: number;
+  lissajousChaos?: number;
+  lissajousLimitCycle?: number;
+  lissajousPoints?: readonly { x: number; y: number }[];
+  hackAlignment?: number;
+  hackLocked?: number;
+  cryptoPositionActive?: number;
+  cryptoPositionEntry?: number;
+  cryptoPositionSign?: number;
+  cryptoPositionAnnihilation?: number;
+  cryptoPositionBlinkHz?: number;
+  hackPrice?: number;
+  macdDistortionHeight?: number;
+  macdAcceleration?: number;
+  macdPhaseDifference?: number;
+  ichimokuCrossTimestamp?: number;
+  ichimokuCrossDirection?: number;
+  kumoBreakTimestamp?: number;
+  kumoBreakDirection?: number;
+  kumoCenter?: number;
+  kumoThickness?: number;
+  indicatorVelocity?: number;
+  targetPriceProjection?: number;
+  animalOrderRise?: number;
+  animalCollapseTimestamp?: number;
+  animalWormhole?: number;
+  animalCorrelations?: readonly number[];
+  candyMass?: number;
+  candyAngularVelocity?: number;
+  candyVibrationFrequency?: number;
+  candyRadialScale?: number;
+  candyPhaseOffset?: number;
+  candyHueShift?: number;
+  candyEmissive?: number;
+  animalPulseStrength?: number;
+  animalPulsePhase?: number;
+  animalBraidStrength?: number;
+  animalAttractorArcanaId?: number;
+  cryptoHurstExponent?: number;
+  cryptoNoiseAmplitude?: number;
+  cryptoHighFrequencyNoise?: number;
+  cryptoOscillatorDisplacement?: number;
+  cryptoPairCreation?: number;
+  cryptoPairEventTimestamp?: number;
+  cryptoResonanceStrength?: number;
+  cryptoResonanceArcanaId?: number;
+  cryptoResonancePoint?: { x: number; y: number; z?: number };
+  metaPulsarMass?: number;
+  metaQuantizedAngle?: number;
+  metaQuantizedStep?: boolean;
+  metaQuantizedStepIndex?: number;
+  metaPhaseShift?: boolean;
+  metaXauUsdDistance?: number;
+  metaCrackIntensity?: number;
+  metaRippleStrength?: number;
+  metaRippleTimestamp?: number;
+  metaPreviousArcanaId?: number;
+  metaTargetArcanaId?: number;
+};
+
+const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
+  strokeScale: 1,
+  vibration: 0,
+  rigidity: 0,
+  projectionStretch: 0,
+  syncAlert: false,
+  syncStrength: 0,
+  invasionStrength: 0,
+  candySpinModifier: 1,
+  matrixDistance: 0,
+  resonanceArcanaId: -1,
+  metalJump: false,
+  metalLayerGrowth: 0,
+  metalMicroTremor: 0,
+  metalFieldActive: false,
+  metalFractureCell: 0,
+  metalFractureLine: 0,
+  metalLightningIntensity: 0,
+  metalLightningTimestamp: 0,
+  bollingerPercentB: 0.5,
+  bollingerBandwidth: 0,
+  bollingerSigmaUp: 0,
+  bollingerSigmaDown: 0,
+  metalCleaveCrossCell: 0,
+  metalCleaveCrossLine: 0,
+  metalCleaveCrossTimestamp: 0,
+  animalPhaseSigma: 0,
+  rsiValue: 0,
+  rsiOmega: 0,
+  rsiOverheat: 0,
+  atrPulse: 0,
+  atrFaultDepth: 1,
+  animalRsiSpread: 0,
+  vortexSpeed: 0,
+  vortexSingularity: 0,
+  vortexAcceleration: 0,
+  vortexHighlight: 0,
+  volumeWells: [],
+  wellDepth: 0,
+  wellOffset: 0,
+  lissajousStability: 1,
+  lissajousChaos: 0,
+  lissajousLimitCycle: 1,
+  lissajousPoints: [],
+  hackAlignment: 0,
+  hackLocked: 0,
+  cryptoPositionActive: 0,
+  cryptoPositionEntry: 0,
+  cryptoPositionSign: 1,
+  cryptoPositionAnnihilation: 0,
+  cryptoPositionBlinkHz: 1,
+  hackPrice: 0,
+  macdDistortionHeight: 0,
+  macdAcceleration: 0,
+  macdPhaseDifference: 0,
+  ichimokuCrossTimestamp: 0,
+  ichimokuCrossDirection: 0,
+  kumoBreakTimestamp: 0,
+  kumoBreakDirection: 0,
+  kumoCenter: 0,
+  kumoThickness: 0,
+  indicatorVelocity: 0,
+  targetPriceProjection: 0,
+  animalOrderRise: 0,
+  animalCollapseTimestamp: 0,
+  animalWormhole: 0,
+  animalCorrelations: [],
+  candyMass: 1,
+  candyAngularVelocity: 0,
+  candyVibrationFrequency: 1,
+  candyRadialScale: 1,
+  candyPhaseOffset: 0,
+  candyHueShift: 0,
+  candyEmissive: 0.8,
+  animalPulseStrength: 0,
+  animalPulsePhase: 0,
+  animalBraidStrength: 0,
+  animalAttractorArcanaId: -1,
+  cryptoHurstExponent: 0.35,
+  cryptoNoiseAmplitude: 0,
+  cryptoHighFrequencyNoise: 0,
+  cryptoOscillatorDisplacement: 0,
+  cryptoPairCreation: 0,
+  cryptoPairEventTimestamp: 0,
+  cryptoResonanceStrength: 0,
+  cryptoResonanceArcanaId: -1,
+  cryptoResonancePoint: { x: 0, y: 0, z: 0 },
+  metaPulsarMass: 1,
+  metaQuantizedAngle: 0,
+  metaQuantizedStep: false,
+  metaQuantizedStepIndex: 0,
+  metaPhaseShift: false,
+  metaXauUsdDistance: 0,
+  metaCrackIntensity: 0,
+  metaRippleStrength: 0,
+  metaRippleTimestamp: 0,
+  metaPreviousArcanaId: -1,
+  metaTargetArcanaId: -1,
+};
+let activeStyle: Required<KnotFieldStyle> = NEUTRAL_STYLE;
+export type CleaveCrossEvent = { cell: number; line: number; timestamp: number };
+let activeCleaveHandler: ((event: CleaveCrossEvent) => void) | undefined;
+let previousMetalTip: { x: number; y: number } | undefined;
+let lastCleaveCrossAt = 0;
+
+function rigidAngle(angle: number, rigidity: number) {
+  if (rigidity <= 0) return angle;
+  const step = Math.PI / 12;
+  return angle + (Math.round(angle / step) * step - angle) * rigidity;
+}
 export type ProjectionGesture =
   | { type: 'toggle-selection-lock' }
   | { type: 'time-scale'; delta: number }
@@ -65,6 +280,8 @@ export type KnotChartProps = {
   intrusionRotation?: number;
   patternOffset?: number;
   onGesture?: (gesture: ProjectionGesture) => void;
+  onMetalCleaveCross?: (event: CleaveCrossEvent) => void;
+  fieldStyle?: KnotFieldStyle;
 };
 
 type CanvasSize = { width: number; height: number; dpr: number };
@@ -689,18 +906,21 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   const vertical = Math.max(0, Math.min(1, projection.vertical_pressure));
   const horizontal = Math.max(0, Math.min(1, projection.horizontal_pressure));
   const futureWidth = Math.min(width * 0.3, 154);
-  const pulse = 1 + Math.sin(frame * 0.06) * 0.045;
+  const pulse = 1 + Math.sin(frame * 0.06) * 0.045 * (1 - activeStyle.rigidity);
+  const stretch = 1 + activeStyle.projectionStretch;
   const scaleX = (0.92 + horizontal * 0.5 - vertical * 0.16) * pulse;
-  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse;
+  const scaleY = (0.88 + vertical * 0.72 - horizontal * 0.12) * pulse * stretch;
   const undistortedAnchorX = targetX + futureWidth * 0.56;
-  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22;
+  const undistortedAnchorY = targetY + ((projection.coordinates.at(-1)?.y ?? 0.5) - 0.5) * height * 0.22 * (1 + activeStyle.projectionStretch);
   const anchor = gravityDrift(undistortedAnchorX, undistortedAnchorY, width, height, gravityTensor);
   const topology = projection.topology.toLowerCase();
-  const color = topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
+  const color = activeStyle.syncAlert
+    ? '#fbbf24'
+    : topology.includes('figure') ? '#fda4af' : topology.includes('trefoil') ? '#a7f3d0' : '#c4b5fd';
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.18 + activeStyle.syncStrength * 0.16;
   ctx.lineWidth = 1;
   ctx.setLineDash([2, 5]);
   ctx.beginPath();
@@ -708,7 +928,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   projection.coordinates.forEach((point, index) => {
     const pathPoint = gravityDrift(
       targetX + futureWidth * ((index + 1) / Math.max(1, projection.coordinates.length)) * (0.65 + point.x * 0.35),
-      targetY + (point.y - 0.5) * height * 0.32,
+      targetY + (point.y - 0.5) * height * 0.32 * stretch,
       width,
       height,
       gravityTensor,
@@ -725,7 +945,7 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   ctx.translate(anchor.x, anchor.y);
   ctx.scale(scaleX, scaleY);
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3;
+  ctx.globalAlpha = 0.18 + Math.max(vertical, horizontal) * 0.3 + activeStyle.syncStrength * 0.2;
   ctx.shadowColor = color;
   ctx.shadowBlur = 12;
   ctx.lineWidth = 1.2;
@@ -755,7 +975,27 @@ function drawFutureKnot(ctx: CanvasRenderingContext2D, targetX: number, targetY:
   }
   ctx.stroke();
   ctx.restore();
+
+  if (activeStyle.syncAlert) {
+    ctx.save();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.fillStyle = '#fef3c7';
+    ctx.globalAlpha = 0.58 + Math.sin(frame * 0.12) * 0.18;
+    ctx.lineWidth = 1 + activeStyle.syncStrength;
+    ctx.setLineDash([3, 4]);
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 8 + activeStyle.syncStrength * 10;
+    ctx.beginPath();
+    ctx.arc(targetX, targetY, 8 + activeStyle.syncStrength * 12, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '8px monospace';
+    ctx.fillText('HERD SYNC', targetX + 12, targetY - 11);
+    ctx.restore();
+  }
 }
+
+const crossingStore = createCrossingStore();
 
 function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: KnotBuffer, timeline: KnotChartProps['timeline'], futureProjection: KnotFutureProjection | undefined, gravityTensor: TrueGravityTensor | undefined, guidePointer: GuidePointer | undefined, selectedKnotIds: readonly number[], gridTimeScale: number, shellScale: number, intrusionRotation: number, patternOffset: number, frame: number) {
   const { width, height } = size;
@@ -773,7 +1013,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const currentIndex = readIndex(buffer, buffer.count - 1);
   const currentPrice = buffer.prices[currentIndex];
   const currentVolatility = buffer.volatilities[currentIndex];
-  const currentAngle = buffer.angles[currentIndex];
+  const currentAngle = rigidAngle(buffer.angles[currentIndex], activeStyle.rigidity);
   const currentMagicLength = buffer.lengths[currentIndex];
   const currentTension = buffer.tensions[currentIndex];
   const plotLeft = 20;
@@ -789,7 +1029,163 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const targetY = Math.max(height * 0.18, Math.min(height * 0.82, rawTargetY));
   const gravityTarget = gravityDrift(targetX, targetY, width, height, gravityTensor);
 
-  drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
+  if (activeStyle.metalFieldActive) {
+    drawMetalCrystalHoneycomb(ctx, width, height, {
+      fractureCell: activeStyle.metalFractureCell,
+      fractureLine: activeStyle.metalFractureLine,
+      flashIntensity: activeStyle.metalLightningIntensity,
+      layerGrowth: activeStyle.metalLayerGrowth,
+      eventTimestamp: activeStyle.metalLightningTimestamp,
+      percentB: activeStyle.bollingerPercentB,
+      crossCell: activeStyle.metalCleaveCrossCell,
+      crossLine: activeStyle.metalCleaveCrossLine,
+      crossTimestamp: activeStyle.metalCleaveCrossTimestamp,
+      sparkBoost: activeStyle.macdAcceleration,
+      distortionHeight: activeStyle.macdDistortionHeight,
+      faultDepth: activeStyle.atrFaultDepth,
+      overheat: activeStyle.rsiOverheat,
+    });
+    const tip = { x: targetX, y: targetY };
+    const previousTip = previousMetalTip;
+    previousMetalTip = tip;
+    if (previousTip && activeStyle.bollingerPercentB > 0.5) {
+      const crossing = findCleavageCrossing(width, height, previousTip, tip);
+      if (crossing && Date.now() - lastCleaveCrossAt > 400) {
+        lastCleaveCrossAt = Date.now();
+        activeCleaveHandler?.({ cell: crossing.cell, line: crossing.line, timestamp: lastCleaveCrossAt });
+      }
+    }
+  } else if (activeStyle.cryptoPositionActive > 0 && activeStyle.cryptoPositionEntry > 0) {
+    const entryY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.cryptoPositionEntry - minPrice) * yScale));
+    drawCryptoDetectorHoneycomb(ctx, width, height, {
+      entry: { x: plotLeft + (plotRight - plotLeft) * 0.25, y: entryY },
+      tip: { x: targetX, y: targetY },
+      sign: activeStyle.cryptoPositionSign >= 0 ? 1 : -1,
+      annihilation: activeStyle.cryptoPositionAnnihilation,
+      blinkHz: activeStyle.cryptoPositionBlinkHz,
+      time: frame * 16.67,
+    });
+  } else if (activeStyle.animalPhaseSigma > 0 || activeStyle.animalPulseStrength > 0) {
+    drawAnimalVoxelHoneycomb(ctx, width, height, {
+      order: activeStyle.animalPulseStrength,
+      phaseSigma: activeStyle.animalPhaseSigma,
+      pulsePhase: activeStyle.animalPulsePhase,
+      alert: activeStyle.animalPulseStrength > 0.85,
+      riseStrength: activeStyle.animalOrderRise,
+      collapseTimestamp: activeStyle.animalCollapseTimestamp,
+      vortexSpeed: activeStyle.vortexSpeed,
+      vortexHighlight: activeStyle.vortexHighlight,
+      vortexAcceleration: activeStyle.vortexAcceleration,
+      atrPulse: activeStyle.atrPulse,
+      rsiSpread: activeStyle.animalRsiSpread,
+      hackLocked: activeStyle.hackLocked,
+    });
+  } else {
+    drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
+  }
+  if (activeStyle.kumoThickness > 0) {
+    const toY = (price: number) => Math.max(plotTop, Math.min(plotBottom, plotBottom - (price - minPrice) * yScale));
+    const cloudMid = currentPrice * (1 + activeStyle.kumoCenter);
+    const half = currentPrice * activeStyle.kumoThickness / 2;
+    const top = toY(cloudMid + half);
+    const bottom = toY(cloudMid - half);
+    const breakAge = activeStyle.kumoBreakTimestamp > 0 ? Date.now() - activeStyle.kumoBreakTimestamp : Number.POSITIVE_INFINITY;
+    const fault = Math.exp(-breakAge / 900);
+    ctx.save();
+    ctx.globalAlpha = 0.12 + fault * 0.25;
+    ctx.fillStyle = activeStyle.metalFieldActive ? '#d4a94a' : '#34d399';
+    ctx.fillRect(plotLeft, top, plotRight - plotLeft, Math.max(2, bottom - top));
+    if (fault > 0.03) {
+      ctx.globalAlpha = fault;
+      ctx.strokeStyle = activeStyle.metalFieldActive ? '#fff1b8' : '#fb7185';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(targetX - 40, top);
+      for (let step = 1; step <= 6; step += 1) {
+        ctx.lineTo(targetX - 40 + step * 14 + Math.sin(step * 5.1) * 6, top + (bottom - top) * step / 6);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (activeStyle.ichimokuCrossTimestamp > 0) {
+    const crossAge = Date.now() - activeStyle.ichimokuCrossTimestamp;
+    const node = Math.exp(-crossAge / 2500);
+    if (node > 0.03) {
+      ctx.save();
+      ctx.globalAlpha = node;
+      ctx.strokeStyle = activeStyle.ichimokuCrossDirection >= 0 ? '#fbbf24' : '#67e8f9';
+      ctx.lineWidth = 1.2;
+      const radius = 6 + (1 - node) * 18;
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, radius, 0, TAU);
+      ctx.moveTo(targetX - radius * 1.4, targetY - radius * 1.4);
+      ctx.lineTo(targetX + radius * 1.4, targetY + radius * 1.4);
+      ctx.moveTo(targetX - radius * 1.4, targetY + radius * 1.4);
+      ctx.lineTo(targetX + radius * 1.4, targetY - radius * 1.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  const wellField = activeStyle.metalFieldActive ? 'metal' : activeStyle.animalPhaseSigma > 0 || activeStyle.animalPulseStrength > 0 ? 'animal' : undefined;
+  if (wellField && activeStyle.volumeWells.length > 0) {
+    drawGravityWells(ctx, {
+      wells: activeStyle.volumeWells,
+      yOf: (price) => plotBottom - (price - minPrice) * yScale,
+      left: plotLeft,
+      right: plotRight,
+      top: plotTop,
+      bottom: plotBottom,
+      field: wellField,
+      chaos: activeStyle.lissajousChaos > 0,
+      limitCycle: activeStyle.lissajousLimitCycle,
+      locked: activeStyle.hackLocked > 0,
+      time: Date.now(),
+    });
+  }
+  if (wellField && activeStyle.lissajousPoints.length > 2) {
+    drawLissajousInset(ctx, activeStyle.lissajousPoints, { x: plotRight - 92, y: plotTop + 8, size: 84 }, {
+      chaos: activeStyle.lissajousChaos > 0,
+      stability: activeStyle.lissajousStability,
+      field: wellField,
+    });
+  }
+  const singularityPrice = activeStyle.hackLocked > 0 ? activeStyle.hackPrice : activeStyle.vortexSingularity;
+  if (singularityPrice > 0) {
+    const singularityY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (singularityPrice - minPrice) * yScale));
+    ctx.save();
+    if (activeStyle.hackLocked > 0) {
+      const glow = ctx.createRadialGradient(plotRight - 12, singularityY, 1, plotRight - 12, singularityY, 36);
+      glow.addColorStop(0, 'rgba(255,215,64,0.9)');
+      glow.addColorStop(1, 'rgba(255,215,64,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(plotRight - 48, singularityY - 36, 72, 72);
+    }
+    ctx.globalAlpha = activeStyle.hackLocked > 0 ? 1 : activeStyle.vortexAcceleration > 0 ? 0.9 : 0.45;
+    ctx.strokeStyle = activeStyle.hackLocked > 0 ? '#ffd740' : activeStyle.vortexAcceleration > 0 ? '#fde047' : '#f9a8d4';
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    ctx.moveTo(plotLeft, singularityY);
+    ctx.lineTo(plotRight, singularityY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(plotRight - 12, singularityY, 4 + (activeStyle.vortexAcceleration > 0 ? 3 : 0), 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (activeStyle.targetPriceProjection > 0 && activeStyle.indicatorVelocity !== 0) {
+    const projectedY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.targetPriceProjection - minPrice) * yScale));
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = activeStyle.indicatorVelocity > 0 ? '#86efac' : '#fda4af';
+    ctx.beginPath();
+    ctx.moveTo(targetX, targetY);
+    ctx.lineTo(plotRight - 6, projectedY);
+    ctx.stroke();
+    ctx.restore();
+  }
   const pricePhase = ((currentPrice - minPrice) / priceRange) * TAU + currentAngle;
   drawComplexPlaneGuides(ctx, width, height, gravityTarget.x, gravityTarget.y, currentTension, pricePhase, frame, guidePointer, selectedKnotIds, gridTimeScale, shellScale, intrusionRotation, patternOffset);
   if (timeline?.t40m) drawTimelinePath(ctx, width, height, currentTension, timeline.t40m, gravityTarget.x, gravityTarget.y, 0);
@@ -800,7 +1196,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
 
   ctx.save();
   ctx.strokeStyle = '#dbeafe';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = activeStyle.strokeScale;
   ctx.globalAlpha = 0.3;
   ctx.beginPath();
   for (let ordinal = 0; ordinal < buffer.count; ordinal += 1) {
@@ -823,7 +1219,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
     const jump = buffer.jumps[index] === 1 || Math.abs(buffer.prices[nextIndex] - buffer.prices[index]) > priceRange * 0.28;
     ctx.save();
     ctx.strokeStyle = jump ? '#fb7185' : '#67e8f9';
-    ctx.lineWidth = jump ? 1.8 : 1.2;
+    ctx.lineWidth = (jump ? 1.8 : 1.2) * activeStyle.strokeScale;
     if (jump) {
       const gap = Math.max(2, 12 / Math.max(0.2, buffer.tensions[index] + 0.2));
       ctx.setLineDash([gap, gap * 1.35]);
@@ -841,7 +1237,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.save();
   ctx.strokeStyle = '#f8d66d';
   ctx.fillStyle = 'rgba(248, 214, 109, 0.12)';
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.4 * activeStyle.strokeScale;
   ctx.beginPath();
   ctx.arc(gravityTarget.x, gravityTarget.y, currentRadius, -Math.PI * 0.8, Math.PI * 0.6);
   ctx.stroke();
@@ -849,7 +1245,20 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   const vectorLength = Math.max(10, currentMagicLength * 18 + currentTension * 22);
   const endX = gravityTarget.x + Math.cos(currentAngle) * vectorLength;
   const endY = gravityTarget.y + Math.sin(currentAngle) * vectorLength;
-  drawSplitLine(ctx, gravityTarget.x - Math.cos(currentAngle) * vectorLength, gravityTarget.y - Math.sin(currentAngle) * vectorLength, endX, endY, gravityTarget.x, gravityTarget.y, currentVolatility * 5 + 2);
+  const ca = Math.cos(currentAngle);
+  const sa = Math.sin(currentAngle);
+  const gx = gravityTarget.x;
+  const gy = gravityTarget.y;
+  const shift = vectorLength * 0.35;
+  const reach = vectorLength * 0.85;
+  const vib = activeStyle.vibration;
+  const jitter = (phase: number) => (vib > 0 ? Math.sin(frame * 1.7 + phase) * vib * 2.2 + Math.sin(frame * 3.1 + phase * 2.3) * vib : 0);
+  setSegment(crossingStore, 0, gx - ca * vectorLength + jitter(0), gy - sa * vectorLength + jitter(1), endX + jitter(2), endY + jitter(3));
+  setSegment(crossingStore, 1, gx + ca * shift + sa * reach + jitter(4), gy + sa * shift - ca * reach + jitter(5), gx + ca * shift - sa * reach + jitter(6), gy + sa * shift + ca * reach + jitter(7));
+  setSegment(crossingStore, 2, gx - reach + jitter(8), gy - vectorLength * 0.2 + jitter(9), gx + reach + jitter(10), gy - vectorLength * 0.2 + jitter(11));
+  setSegment(crossingStore, 3, gx + vectorLength * 0.2 + jitter(12), gy - reach + jitter(13), gx + vectorLength * 0.2 + jitter(14), gy + reach + jitter(15));
+  debugMetrics.chartCrossings = findCrossings(crossingStore);
+  drawSegmentsWithGaps(ctx, crossingStore, currentVolatility * 3 + 2, width, height);
   ctx.restore();
 
   for (let distance = 1; distance <= Math.min(buffer.count - 1, 8); distance += 1) {
@@ -877,7 +1286,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
   ctx.restore();
 }
 
-export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture }: KnotChartProps) {
+export default function KnotChart({ tick, timeline, history, className = 'h-[360px] w-full', height = 360, maxTicks = 256, futureProjection, gravityTensor, guideTracking = false, guidePointer, onGuideTrackingChange, onGuidePointerChange, selectedKnotIds = [], gridTimeScale = 1, shellScale = 1, intrusionRotation = 0, patternOffset = 0, onGesture, onMetalCleaveCross, fieldStyle }: KnotChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latestTickData = useRef<KnotTick | undefined>(tick);
   const timelineRef = useRef(timeline);
@@ -890,6 +1299,10 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
   const historyRef = useRef<readonly KnotTick[] | undefined>(undefined);
   const bufferRef = useRef<KnotBuffer>(createBuffer(Math.max(16, maxTicks)));
   const sizeRef = useRef<CanvasSize>({ width: 640, height, dpr: 1 });
+  const fieldStyleRef = useRef<Required<KnotFieldStyle>>(NEUTRAL_STYLE);
+  const cleaveHandlerRef = useRef(onMetalCleaveCross);
+  cleaveHandlerRef.current = onMetalCleaveCross;
+  fieldStyleRef.current = fieldStyle ? { ...NEUTRAL_STYLE, ...fieldStyle } : NEUTRAL_STYLE;
 
   useEffect(() => {
     const buffer = bufferRef.current;
@@ -906,6 +1319,7 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     timelineRef.current = timeline;
     futureProjectionRef.current = futureProjection;
     gravityTensorRef.current = gravityTensor;
+    debugMetrics.gravityMax = gravityTensor ? Math.max(Math.abs(gravityTensor.magnitude) || 0, Math.hypot(gravityTensor.gradient.x, gravityTensor.gradient.y) || 0, ...gravityTensor.centers.map((c) => Math.abs(c.strength) || 0)) : 0;
     guideTrackingRef.current = guideTracking;
     selectedKnotIdsRef.current = selectedKnotIds;
     if (tick) writeTick(bufferRef.current, tick);
@@ -943,6 +1357,8 @@ export default function KnotChart({ tick, timeline, history, className = 'h-[360
     resize();
     const draw = () => {
       if (!running) return;
+      activeStyle = fieldStyleRef.current;
+      activeCleaveHandler = cleaveHandlerRef.current;
       renderFrame(context, sizeRef.current, bufferRef.current, timelineRef.current, futureProjectionRef.current, gravityTensorRef.current, guideTrackingRef.current ? guidePointerRef.current : undefined, selectedKnotIdsRef.current, gridTimeScale, shellScale, intrusionRotation, patternOffset, frame);
       frame += 1;
       animationFrame = window.requestAnimationFrame(draw);

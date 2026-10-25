@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test:backend": "python -m pytest",
+    "test": "npm run typecheck && npm run test:backend"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.2",
