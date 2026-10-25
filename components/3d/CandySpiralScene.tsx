@@ -17,7 +17,7 @@ import {
   type CandyPointsResponse,
 } from '@/lib/candyPoints';
 import AnimalIndicators from './AnimalIndicators';
-import { AnimalVoxelBackdrop, KumoBand, MetalHoneycombBackdrop } from './FieldBackdrop';
+import { AnimalVoxelBackdrop, GravityWellShader, KumoBand, MetalHoneycombBackdrop } from './FieldBackdrop';
 import CandyXRPhysics from './CandyXRPhysics';
 import { CandyInstancedMesh, CryptoPointCloud, CyberpunkPriceSphere } from './CandySpiralMesh';
 
@@ -448,6 +448,8 @@ export default function CandySpiralScene({
           {fieldName === 'metal' && (
             <MetalHoneycombBackdrop
               distortionHeight={fieldStyle?.macdDistortionHeight ?? 0}
+              wellDepth={fieldStyle?.wellDepth ?? 0}
+              wellOffset={fieldStyle?.wellOffset ?? 0}
               fractureCell={fieldStyle?.metalFractureCell ?? 0}
               crossCell={fieldStyle?.metalCleaveCrossCell ?? 0}
               crossTimestamp={fieldStyle?.metalCleaveCrossTimestamp ?? 0}
@@ -459,6 +461,18 @@ export default function CandySpiralScene({
               order={fieldStyle?.animalPulseStrength ?? 0}
               phaseSigma={fieldStyle?.animalPhaseSigma ?? 0}
               phase={fieldStyle?.animalPulsePhase ?? 0}
+              wellDepth={fieldStyle?.wellDepth ?? 0}
+              wellOffset={fieldStyle?.wellOffset ?? 0}
+            />
+          )}
+          {(fieldName === 'metal' || fieldName === 'animal') && (
+            <GravityWellShader
+              field={fieldName}
+              depth={fieldStyle?.wellDepth ?? 0}
+              offset={fieldStyle?.wellOffset ?? 0}
+              chaos={fieldStyle?.lissajousChaos ?? 0}
+              smooth={fieldStyle?.lissajousLimitCycle ?? 1}
+              locked={(fieldStyle?.hackLocked ?? 0) > 0}
             />
           )}
           {fieldName === 'animal' && (
@@ -469,6 +483,8 @@ export default function CandySpiralScene({
               vortexSpeed={fieldStyle?.vortexSpeed ?? 0}
               vortexHighlight={fieldStyle?.vortexHighlight ?? 0}
               vortexAcceleration={(fieldStyle?.vortexAcceleration ?? 0) > 0}
+              hackLocked={(fieldStyle?.hackLocked ?? 0) > 0}
+              limitCycle={fieldStyle?.lissajousLimitCycle ?? 1}
               atrPulse={fieldStyle?.atrPulse ?? 0}
               correlations={fieldStyle?.animalCorrelations ?? fieldDiagnostics?.animalCorrelationMatrix?.flat() ?? []}
             />

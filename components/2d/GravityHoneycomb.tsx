@@ -275,6 +275,7 @@ export function drawMetalCrystalHoneycomb(
 
 export type AnimalVoxelStyle = {
   vortexSpeed?: number;
+  hackLocked?: number;
   vortexHighlight?: number;
   vortexAcceleration?: number;
   atrPulse?: number;
@@ -402,9 +403,9 @@ export function drawAnimalVoxelHoneycomb(
   for (let index = 0; index < total; index += 1) {
     const phaseGlow = Math.max(0, Math.sin(now * 2 + (index / ANIMAL_POINTS_PER_CELL) * GOLDEN_ANGLE)) * order;
     const marked = highlight >= 0 && index % ANIMAL_POINTS_PER_CELL === highlight;
-    const size = 1.6 + phaseGlow * 1.8 + (marked ? 2.2 + (style.vortexAcceleration ? 1.5 : 0) : 0);
+    const size = 1.6 + phaseGlow * 1.8 + (marked ? 2.2 + (style.vortexAcceleration ? 1.5 : 0) + (style.hackLocked ? 2.5 : 0) : 0);
     ctx.globalAlpha = 0.28 + phaseGlow * 0.6;
-    ctx.fillStyle = marked ? (style.vortexAcceleration ? '#fef08a' : '#f9a8d4') : hue;
+    ctx.fillStyle = marked ? (style.hackLocked ? '#ffd740' : style.vortexAcceleration ? '#fef08a' : '#f9a8d4') : hue;
     ctx.fillRect(mapped[index].x - size / 2, mapped[index].y - size / 2, size, size);
   }
   ctx.restore();
@@ -418,4 +419,119 @@ export function gravityDrift(
   tensor: TrueGravityTensor | undefined,
 ) {
   return tensor ? deflect(x, y, width, height, tensor, 0) : { x, y };
+}
+
+export type GravityWellDrawOptions = {
+  wells: readonly { price: number; depth: number }[];
+  yOf: (price: number) => number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  field: 'metal' | 'animal';
+  chaos: boolean;
+  limitCycle: number;
+  locked: boolean;
+  time: number;
+};
+
+/** Volume wells: hexagonal rings shrink and sink into the grid; Metal chaos triggers falling fault cascades, Animal smoothness follows the limit cycle. */
+export function drawGravityWells(ctx: CanvasRenderingContext2D, options: GravityWellDrawOptions) {
+  const { wells, yOf, left, right, top, bottom, field, chaos, limitCycle, locked, time } = options;
+  const width = right - left;
+  const tint = field === 'metal' ? '216,189,118' : '110,231,183';
+  const seconds = time / 1000;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left, top, width, bottom - top);
+  ctx.clip();
+  wells.forEach((well, wellIndex) => {
+    const y = yOf(well.price);
+    if (!Number.isFinite(y) || y < top - 40 || y > bottom + 40) return;
+    const band = 14 + well.depth * 34;
+    const gradient = ctx.createLinearGradient(0, y - band, 0, y + band);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(0.5, `rgba(0,0,0,${0.18 + well.depth * 0.42})`);
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(left, y - band, width, band * 2);
+    const cx = left + width * (0.5 + 0.18 * Math.sin(wellIndex * 2.3));
+    const rings = 7;
+    const rough = field === 'animal' ? (1 - limitCycle) * 0.25 : 0;
+    for (let k = 0; k < rings; k += 1) {
+      const t = k / rings;
+      const radius = (width * 0.16 + band * 1.2) * (1 - t * 0.85) * (0.5 + well.depth * 0.5);
+      const cy = y + t * band * 0.9;
+      ctx.beginPath();
+      for (let v = 0; v <= 6; v += 1) {
+        const angle = (v / 6) * Math.PI * 2 + Math.PI / 6;
+        const wobble = 1 + rough * Math.sin(seconds * 3 + v * 2.1 + k);
+        const px = cx + Math.cos(angle) * radius * wobble;
+        const py = cy + Math.sin(angle) * radius * 0.34 * wobble;
+        if (v === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = `rgba(${tint},${0.08 + t * 0.35 * well.depth})`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    if (field === 'metal' && chaos) {
+      for (let i = 0; i < 9; i += 1) {
+        const progress = (((seconds * 0.9 - i * 0.11) % 1) + 1) % 1;
+        const x0 = left + width * ((i + 0.5) / 9);
+        const startY = top;
+        const endY = startY + (y - startY) * progress * progress;
+        ctx.beginPath();
+        ctx.moveTo(x0, startY);
+        const segments = 6;
+        for (let s = 1; s <= segments; s += 1) {
+          ctx.lineTo(x0 + (cx - x0) * (s / segments) * progress + Math.sin(i * 9 + s * 3.7) * 6, startY + (endY - startY) * (s / segments));
+        }
+        ctx.strokeStyle = `rgba(255,236,170,${0.55 * (1 - progress * 0.5)})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
+    if (locked && wellIndex === 0) {
+      const glow = ctx.createRadialGradient(cx, y, 2, cx, y, 46);
+      glow.addColorStop(0, 'rgba(255,215,64,0.55)');
+      glow.addColorStop(1, 'rgba(255,215,64,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - 46, y - 46, 92, 92);
+    }
+  });
+  ctx.restore();
+}
+
+/** Tension–ω phase-plane inset (Lissajous trajectory). */
+export function drawLissajousInset(
+  ctx: CanvasRenderingContext2D,
+  points: readonly { x: number; y: number }[],
+  box: { x: number; y: number; size: number },
+  state: { chaos: boolean; stability: number; field: 'metal' | 'animal' },
+) {
+  if (points.length < 3) return;
+  const scale = box.size / 6;
+  const cx = box.x + box.size / 2;
+  const cy = box.y + box.size / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(box.x, box.y, box.size, box.size);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeRect(box.x, box.y, box.size, box.size);
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = cx + Math.max(-3, Math.min(3, p.x)) * scale;
+    const y = cy + Math.max(-3, Math.min(3, p.y)) * scale;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = state.chaos ? '#fb7185' : state.field === 'metal' ? '#fde68a' : '#6ee7b7';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '8px monospace';
+  ctx.fillText(`T-ω ${state.chaos ? 'CHAOS' : state.field === 'metal' ? 'STABLE' : 'CYCLE'} ${(state.stability * 100).toFixed(0)}%`, box.x + 4, box.y + box.size - 4);
+  ctx.restore();
 }

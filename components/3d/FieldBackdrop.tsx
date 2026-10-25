@@ -30,6 +30,8 @@ function hexReach(angle: number) {
 }
 
 type MetalBackdropProps = {
+  wellDepth?: number;
+  wellOffset?: number;
   distortionHeight?: number;
   fractureCell: number;
   crossCell: number;
@@ -38,7 +40,7 @@ type MetalBackdropProps = {
 };
 
 /** Metal: the 2D 48-cell crystal honeycomb with 4 cleavage lines, rendered as a backdrop plane. */
-export function MetalHoneycombBackdrop({ distortionHeight = 0, fractureCell, crossCell, crossTimestamp, percentB }: MetalBackdropProps) {
+export function MetalHoneycombBackdrop({ distortionHeight = 0, wellDepth = 0, wellOffset = 0, fractureCell, crossCell, crossTimestamp, percentB }: MetalBackdropProps) {
   const { hexLines, cleaveLines } = useMemo(() => {
     const hex: number[] = [];
     const cleave: number[] = [];
@@ -76,7 +78,8 @@ export function MetalHoneycombBackdrop({ distortionHeight = 0, fractureCell, cro
     for (let index = 0; index < attr.count; index += 1) {
       const x = hexBase[index * 3];
       const y = hexBase[index * 3 + 1];
-      attr.setZ(index, lift * Math.sin(x * 0.8 + y * 0.6 + t * 0.9) * Math.exp(-(x * x + y * y) / 30));
+      const sink = wellDepth * 1.6 * Math.exp(-((y - wellOffset * 2.4) ** 2) / 0.9) * Math.exp(-(x * x) / 14);
+      attr.setZ(index, lift * Math.sin(x * 0.8 + y * 0.6 + t * 0.9) * Math.exp(-(x * x + y * y) / 30) - sink);
     }
     attr.needsUpdate = true;
     const mesh = flashRef.current;
@@ -101,10 +104,10 @@ export function MetalHoneycombBackdrop({ distortionHeight = 0, fractureCell, cro
   );
 }
 
-type AnimalBackdropProps = { order: number; phaseSigma: number; phase: number };
+type AnimalBackdropProps = { order: number; phaseSigma: number; phase: number; wellDepth?: number; wellOffset?: number };
 
 /** Animal: the 2D voxel-chained point cloud per cell, squeezed like a wormhole as r rises. */
-export function AnimalVoxelBackdrop({ order, phaseSigma, phase }: AnimalBackdropProps) {
+export function AnimalVoxelBackdrop({ order, phaseSigma, phase, wellDepth = 0, wellOffset = 0 }: AnimalBackdropProps) {
   const total = COLUMNS * ROWS * POINTS_PER_CELL;
   const base = useMemo(() => {
     const values = new Float32Array(total * 2);
@@ -157,11 +160,12 @@ export function AnimalVoxelBackdrop({ order, phaseSigma, phase }: AnimalBackdrop
       const radial = Math.min(1, Math.hypot(bx, by) / 3.2);
       const warp = squeeze + (1 - squeeze) * 0.35 * radial;
       const wobble = Math.sin(t * 1.4 + index * 0.37) * wobbleAmp;
-      pointAttr.setXYZ(index, bx * warp + wobble, by * warp + wobble * 0.6, 0);
+      const sink = wellDepth * 1.6 * Math.exp(-((by - wellOffset * 2.4) ** 2) / 0.9) * Math.exp(-(bx * bx) / 14);
+      pointAttr.setXYZ(index, bx * warp + wobble, by * warp + wobble * 0.6, -sink);
     }
     segmentPairs.forEach(([a, b], index) => {
-      lineAttr.setXYZ(index * 2, pointAttr.getX(a), pointAttr.getY(a), 0);
-      lineAttr.setXYZ(index * 2 + 1, pointAttr.getX(b), pointAttr.getY(b), 0);
+      lineAttr.setXYZ(index * 2, pointAttr.getX(a), pointAttr.getY(a), pointAttr.getZ(a));
+      lineAttr.setXYZ(index * 2 + 1, pointAttr.getX(b), pointAttr.getY(b), pointAttr.getZ(b));
     });
     pointAttr.needsUpdate = true;
     lineAttr.needsUpdate = true;
@@ -241,5 +245,82 @@ export function KumoBand({ field, center, thickness, breakTimestamp, collapseTim
       </mesh>
       <lineSegments ref={crackRef} geometry={crackGeometry} material={crackMaterial} visible={false} />
     </group>
+  );
+}
+
+type WellShaderProps = {
+  field: 'metal' | 'animal';
+  depth: number;
+  offset: number;
+  chaos: number;
+  smooth: number;
+  locked: boolean;
+};
+
+const WELL_VERTEX = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const WELL_FRAGMENT = `
+precision highp float;
+varying vec2 vUv;
+uniform float uTime;
+uniform float uDepth;
+uniform float uChaos;
+uniform float uSmooth;
+uniform float uField;
+uniform float uLocked;
+void main() {
+  vec2 p = (vUv - 0.5) * vec2(2.0, 2.0);
+  float r = length(vec2(p.x * 0.55, p.y));
+  float hole = smoothstep(0.55, 0.0, r) * uDepth;
+  // Metal: hard hex rings, chaos drops fault streaks (falling G). Animal: smooth tunnel wall that roughens as the limit cycle breaks.
+  float hex = abs(sin(r * 26.0 - uTime * 0.6 * (1.0 + uField)));
+  float rough = (1.0 - uSmooth) * 0.35 * sin(atan(p.y, p.x) * 7.0 + uTime * 3.0);
+  float ring = smoothstep(0.92, 1.0, hex + rough * uField) * hole;
+  float streak = step(0.93, fract(sin(floor(vUv.x * 40.0) * 91.7) * 4375.5));
+  float fall = streak * smoothstep(0.0, 1.0, fract(vUv.y * 2.0 + uTime * 1.4 + floor(vUv.x * 40.0) * 0.13)) * uChaos * (1.0 - uField);
+  vec3 tint = mix(vec3(0.85, 0.72, 0.38), vec3(0.42, 0.9, 0.7), uField);
+  vec3 col = tint * ring * 1.4 + vec3(1.0, 0.93, 0.7) * fall * hole;
+  col = mix(col, vec3(1.0, 0.84, 0.25) * hole * 1.8, uLocked * smoothstep(0.25, 0.0, r));
+  float alpha = clamp(hole * 0.55 + ring * 0.8 + fall * hole + uLocked * hole, 0.0, 0.95);
+  gl_FragColor = vec4(col, alpha);
+}`;
+
+/** Volume gravity well shader: a hole in the honeycomb backdrop at the deepest volume price band. */
+export function GravityWellShader({ field, depth, offset, chaos, smooth, locked }: WellShaderProps) {
+  const material = useMemo(() => new THREE.ShaderMaterial({
+    vertexShader: WELL_VERTEX,
+    fragmentShader: WELL_FRAGMENT,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uDepth: { value: 0 },
+      uChaos: { value: 0 },
+      uSmooth: { value: 1 },
+      uField: { value: field === 'animal' ? 1 : 0 },
+      uLocked: { value: 0 },
+    },
+  }), [field]);
+  const meshRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    material.uniforms.uTime.value = clock.getElapsedTime();
+    material.uniforms.uDepth.value = THREE.MathUtils.lerp(material.uniforms.uDepth.value, depth, 0.1);
+    material.uniforms.uChaos.value = THREE.MathUtils.lerp(material.uniforms.uChaos.value, chaos, 0.1);
+    material.uniforms.uSmooth.value = THREE.MathUtils.lerp(material.uniforms.uSmooth.value, smooth, 0.1);
+    material.uniforms.uLocked.value = THREE.MathUtils.lerp(material.uniforms.uLocked.value, locked ? 1 : 0, 0.15);
+    if (meshRef.current) meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, offset * 2.4 * 1.9, 0.1);
+  });
+  if (depth <= 0.01) return null;
+  return (
+    <mesh ref={meshRef} position={[0, 0, BACKDROP_Z + 0.05]} material={material}>
+      <planeGeometry args={[14, 7]} />
+    </mesh>
   );
 }

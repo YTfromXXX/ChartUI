@@ -3,7 +3,7 @@
 import { debugMetrics } from '@/lib/debugMetrics';
 import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
-import { drawAnimalVoxelHoneycomb, drawGravityHoneycomb, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
+import { drawAnimalVoxelHoneycomb, drawGravityHoneycomb, drawGravityWells, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
 export type KnotTick = {
   timestamp?: number;
@@ -74,6 +74,16 @@ export type KnotFieldStyle = {
   vortexSingularity?: number;
   vortexAcceleration?: number;
   vortexHighlight?: number;
+  volumeWells?: readonly { price: number; depth: number }[];
+  wellDepth?: number;
+  wellOffset?: number;
+  lissajousStability?: number;
+  lissajousChaos?: number;
+  lissajousLimitCycle?: number;
+  lissajousPoints?: readonly { x: number; y: number }[];
+  hackAlignment?: number;
+  hackLocked?: number;
+  hackPrice?: number;
   macdDistortionHeight?: number;
   macdAcceleration?: number;
   macdPhaseDifference?: number;
@@ -159,6 +169,16 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   vortexSingularity: 0,
   vortexAcceleration: 0,
   vortexHighlight: 0,
+  volumeWells: [],
+  wellDepth: 0,
+  wellOffset: 0,
+  lissajousStability: 1,
+  lissajousChaos: 0,
+  lissajousLimitCycle: 1,
+  lissajousPoints: [],
+  hackAlignment: 0,
+  hackLocked: 0,
+  hackPrice: 0,
   macdDistortionHeight: 0,
   macdAcceleration: 0,
   macdPhaseDifference: 0,
@@ -1038,6 +1058,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       vortexAcceleration: activeStyle.vortexAcceleration,
       atrPulse: activeStyle.atrPulse,
       rsiSpread: activeStyle.animalRsiSpread,
+      hackLocked: activeStyle.hackLocked,
     });
   } else {
     drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
@@ -1086,11 +1107,42 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       ctx.restore();
     }
   }
-  if (activeStyle.vortexSingularity > 0) {
-    const singularityY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.vortexSingularity - minPrice) * yScale));
+  const wellField = activeStyle.metalFieldActive ? 'metal' : activeStyle.animalPhaseSigma > 0 || activeStyle.animalPulseStrength > 0 ? 'animal' : undefined;
+  if (wellField && activeStyle.volumeWells.length > 0) {
+    drawGravityWells(ctx, {
+      wells: activeStyle.volumeWells,
+      yOf: (price) => plotBottom - (price - minPrice) * yScale,
+      left: plotLeft,
+      right: plotRight,
+      top: plotTop,
+      bottom: plotBottom,
+      field: wellField,
+      chaos: activeStyle.lissajousChaos > 0,
+      limitCycle: activeStyle.lissajousLimitCycle,
+      locked: activeStyle.hackLocked > 0,
+      time: Date.now(),
+    });
+  }
+  if (wellField && activeStyle.lissajousPoints.length > 2) {
+    drawLissajousInset(ctx, activeStyle.lissajousPoints, { x: plotRight - 92, y: plotTop + 8, size: 84 }, {
+      chaos: activeStyle.lissajousChaos > 0,
+      stability: activeStyle.lissajousStability,
+      field: wellField,
+    });
+  }
+  const singularityPrice = activeStyle.hackLocked > 0 ? activeStyle.hackPrice : activeStyle.vortexSingularity;
+  if (singularityPrice > 0) {
+    const singularityY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (singularityPrice - minPrice) * yScale));
     ctx.save();
-    ctx.globalAlpha = activeStyle.vortexAcceleration > 0 ? 0.9 : 0.45;
-    ctx.strokeStyle = activeStyle.vortexAcceleration > 0 ? '#fde047' : '#f9a8d4';
+    if (activeStyle.hackLocked > 0) {
+      const glow = ctx.createRadialGradient(plotRight - 12, singularityY, 1, plotRight - 12, singularityY, 36);
+      glow.addColorStop(0, 'rgba(255,215,64,0.9)');
+      glow.addColorStop(1, 'rgba(255,215,64,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(plotRight - 48, singularityY - 36, 72, 72);
+    }
+    ctx.globalAlpha = activeStyle.hackLocked > 0 ? 1 : activeStyle.vortexAcceleration > 0 ? 0.9 : 0.45;
+    ctx.strokeStyle = activeStyle.hackLocked > 0 ? '#ffd740' : activeStyle.vortexAcceleration > 0 ? '#fde047' : '#f9a8d4';
     ctx.setLineDash([2, 5]);
     ctx.beginPath();
     ctx.moveTo(plotLeft, singularityY);

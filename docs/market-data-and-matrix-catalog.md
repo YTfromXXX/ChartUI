@@ -94,3 +94,11 @@ Pure helpers in `lib/fieldModels.ts`: `calculateMacdPendulum`, `accelerateJumpIn
 | Vortex search | – | The 7-point cloud spins into a vortex driven by RSI ω, ATR pulse and the manual up/neutral/down velocity. Highlights the singularity price and acceleration zone (2D and 3D). |
 
 Approximation: ATR uses the absolute close-to-close change instead of true range.
+
+## Volume wells, Tension–ω phase plane and hacking UX (Metal & Animal)
+
+| Part | Metal | Animal |
+|---|---|---|
+| Volume / order book → gravity well | Mass per price band (real volume if supplied, order-book centers from the gravity tensor, otherwise a **dwell-time proxy** – labelled in the HUD). Deep bands sink the honeycomb along Z (2D hex rings, 3D backdrop + `GravityWellShader`). | Same wells; the voxel point cloud sinks into the hole. |
+| Tension–ω Lissajous | Point-reflection symmetry + limit-cycle steadiness → stability. Below 0.55 = chaos: faults cascade toward the well (falling G in 2D and 3D). | Treated as a synchronisation limit cycle. Stable → smooth wormhole wall; unstable → rough wall. |
+| Hacking | `evaluateHackingSingularity`: the manual velocity must match well direction, MACD height sign, vortex acceleration zone and phase-plane stability (alignment ≥ 0.75, each ≥ 0.55). Then the true singularity glows gold (2D line, 3D node, HUD). | Same; the highlighted point of the 7-point cloud turns gold. |

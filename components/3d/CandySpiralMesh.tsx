@@ -446,6 +446,10 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
     const atrBreath = 1 + atrPulse * 0.05 * Math.sin(elapsed * (1.6 + atrPulse * 2.4));
     const vortexSpeed = THREE.MathUtils.clamp(fieldStyle?.vortexSpeed ?? 0, -4, 4);
     crystalUniforms.uRsiOverheat.value = fieldStyle?.metalFieldActive ? rsiOverheat : 0;
+    const wellDepth = THREE.MathUtils.clamp(fieldStyle?.wellDepth ?? 0, 0, 1);
+    const wellOffset = THREE.MathUtils.clamp(fieldStyle?.wellOffset ?? 0, -1, 1);
+    const lissajousChaos = fieldStyle?.metalFieldActive ? fieldStyle?.lissajousChaos ?? 0 : 0;
+    const wallRoughness = fieldStyle?.animalPhaseSigma ? 1 - THREE.MathUtils.clamp(fieldStyle?.lissajousLimitCycle ?? 1, 0, 1) : 0;
     const macdHeight = THREE.MathUtils.clamp(fieldStyle?.macdDistortionHeight ?? 0, -1, 1);
     const cleaveTimestamp = fieldStyle?.metalCleaveCrossTimestamp ?? 0;
     if (cleaveTimestamp > 0 && cleaveTimestamp !== lastCleaveTimestamp.current) {
@@ -548,6 +552,11 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
         tempPosition.y += Math.cos(seed * 1.3 + elapsed * 2.7) * chaos * radius * 0.1;
         tempPosition.z += Math.sin(seed * 0.7 + elapsed * 3.7) * chaos * radius * 0.12;
       }
+      if (wellDepth > 0 && fieldStyle?.metalFieldActive) {
+        const pull = Math.exp(-((tempPosition.y / (radius || 1) - wellOffset) ** 2) / 0.5);
+        tempPosition.y -= wellDepth * pull * radius * 0.06;
+        if (lissajousChaos > 0) tempPosition.y -= lissajousChaos * pull * radius * 0.12 * (((elapsed * 1.4 + candy.cell_index * 0.07) % 1));
+      }
       if (macdHeight !== 0) tempPosition.y += macdHeight * radius * 0.09 * Math.sin(candy.cell_index * 0.9 + elapsed * 0.8);
       if (rigidStep !== 0) {
         const layerStep = Math.floor(candy.t * 6) / 6;
@@ -559,7 +568,7 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
       }
       if (wormhole > 0) {
         const throat = 1 - wormhole * wormhole * 0.5 * (1 - ny * ny);
-        const peristalsis = 1 + (0.05 + atrPulse * 0.1) * wormhole * Math.sin(ny * 9 - elapsed * (3 + atrPulse * 4));
+        const peristalsis = 1 + (0.05 + atrPulse * 0.1) * wormhole * Math.sin(ny * 9 - elapsed * (3 + atrPulse * 4)) + wallRoughness * 0.05 * wormhole * Math.sin(ny * 37 + elapsed * 11);
         const taper = throat * peristalsis;
         const swirl = wormhole * ny * 0.9 + vortexSpeed * 0.12 * (1 - ny * ny) * Math.sin(elapsed * 0.5);
         const wx = tempPosition.x * taper;

@@ -1874,3 +1874,145 @@ export function calculateVortexSearch(
   const highlightIndex = ((Math.round((velocity.target_price_projection - price) / Math.max(reach, 1e-9)) % 7) + 7) % 7;
   return { rotationSpeed, pulse: atr?.pulse ?? 0, singularityPrice, accelerationZone, highlightIndex };
 }
+
+export type VolumeWell = { price: number; depth: number };
+export type VolumeWellState = {
+  wells: VolumeWell[];
+  maxDepth: number;
+  deepest?: VolumeWell;
+  source: 'volume' | 'orderbook' | 'dwell-proxy';
+};
+
+/**
+ * Mass tensor along price: real volume / order-book strength when supplied,
+ * otherwise a dwell-time proxy (time spent at a price, weighted by activity).
+ */
+export function calculateVolumeWells(
+  prices: readonly number[],
+  options: { volumes?: readonly number[]; bookCenters?: readonly { price: number; strength: number }[]; bins?: number } = {},
+): VolumeWellState {
+  const clean = prices.filter(Number.isFinite);
+  if (clean.length < 4) return { wells: [], maxDepth: 0, source: 'dwell-proxy' };
+  const bins = Math.max(6, options.bins ?? 16);
+  const lo = Math.min(...clean);
+  const hi = Math.max(...clean);
+  const span = Math.max(hi - lo, Math.abs(hi) * 1e-6, 1e-9);
+  const mass = new Array<number>(bins).fill(0);
+  const hasVolume = Boolean(options.volumes && options.volumes.length === prices.length && options.volumes.some((v) => v > 0));
+  prices.forEach((price, index) => {
+    if (!Number.isFinite(price)) return;
+    const bin = Math.min(bins - 1, Math.floor(((price - lo) / span) * bins));
+    const activity = index > 0 && Number.isFinite(prices[index - 1]) ? 1 + Math.abs(price - prices[index - 1]) / span * bins : 1;
+    mass[bin] += hasVolume ? Math.max(0, options.volumes![index]) : activity;
+  });
+  let source: VolumeWellState['source'] = hasVolume ? 'volume' : 'dwell-proxy';
+  for (const center of options.bookCenters ?? []) {
+    if (!Number.isFinite(center.price) || !Number.isFinite(center.strength)) continue;
+    const bin = Math.min(bins - 1, Math.max(0, Math.floor(((center.price - lo) / span) * bins)));
+    mass[bin] += Math.max(0, center.strength) * (Math.max(...mass) || 1) * 0.5;
+    source = hasVolume ? source : 'orderbook';
+  }
+  const peak = Math.max(...mass, 1e-9);
+  const wells = mass
+    .map((value, bin) => ({ price: lo + ((bin + 0.5) / bins) * span, depth: value / peak }))
+    .filter((well) => well.depth >= 0.35)
+    .sort((a, b) => b.depth - a.depth)
+    .slice(0, 4);
+  return { wells, maxDepth: wells[0]?.depth ?? 0, deepest: wells[0], source };
+}
+
+export type TensionOmegaState = {
+  ready: boolean;
+  points: { x: number; y: number }[];
+  symmetry: number;
+  limitCycle: number;
+  stability: number;
+  chaos: boolean;
+};
+
+/** Phase-plane (T, ω) trajectory: point-reflection symmetry plus limit-cycle steadiness. */
+export function calculateTensionOmegaLissajous(tensions: readonly number[], angles: readonly number[], window = 48): TensionOmegaState {
+  const n = Math.min(tensions.length, angles.length, window + 1);
+  const empty: TensionOmegaState = { ready: false, points: [], symmetry: 1, limitCycle: 1, stability: 1, chaos: false };
+  if (n < 14) return empty;
+  const t = tensions.slice(-n);
+  const a = angles.slice(-n);
+  const omega: number[] = [];
+  for (let i = 1; i < n; i += 1) {
+    let d = a[i] - a[i - 1];
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    omega.push(d);
+  }
+  const tt = t.slice(1);
+  const norm = (values: number[]) => {
+    const mean = values.reduce((s, v) => s + v, 0) / values.length;
+    const sd = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length) || 1;
+    return values.map((v) => (v - mean) / sd);
+  };
+  const xs = norm(tt);
+  const ys = norm(omega);
+  const points = xs.map((x, i) => ({ x, y: ys[i] }));
+  const radii = points.map((p) => Math.hypot(p.x, p.y));
+  const meanR = radii.reduce((s, v) => s + v, 0) / radii.length || 1;
+  const cv = Math.sqrt(radii.reduce((s, v) => s + (v - meanR) ** 2, 0) / radii.length) / meanR;
+  const steps: number[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const d = Math.atan2(points[i].y, points[i].x) - Math.atan2(points[i - 1].y, points[i - 1].x);
+    steps.push(Math.atan2(Math.sin(d), Math.cos(d)));
+  }
+  const meanStep = steps.reduce((s, v) => s + v, 0) / steps.length;
+  const sdStep = Math.sqrt(steps.reduce((s, v) => s + (v - meanStep) ** 2, 0) / steps.length);
+  const steadiness = clamp(1 - sdStep / (Math.abs(meanStep) + 0.35), 0, 1);
+  let mirrored = 0;
+  for (const p of points) {
+    let best = Infinity;
+    for (const q of points) best = Math.min(best, Math.hypot(-p.x - q.x, -p.y - q.y));
+    mirrored += best;
+  }
+  const symmetry = 1 / (1 + (3 * mirrored) / points.length / meanR);
+  const limitCycle = clamp(0.5 / (1 + cv * 2) + 0.5 * steadiness, 0, 1);
+  const stability = clamp(0.55 * symmetry + 0.45 * limitCycle, 0, 1);
+  return { ready: true, points, symmetry, limitCycle, stability, chaos: stability < 0.55 };
+}
+
+export type HackingState = {
+  alignment: number;
+  components: { well: number; macd: number; vortex: number; stability: number };
+  locked: boolean;
+  singularityPrice: number;
+  highlightIndex: number;
+};
+
+/** The manual velocity must match wells, MACD height, vortex and phase-plane stability to reveal the true singularity. */
+export function evaluateHackingSingularity(input: {
+  price: number;
+  velocity: IndicatorVelocity;
+  vortex: VortexState;
+  wells: VolumeWellState;
+  macdHeight: number;
+  lissajous: TensionOmegaState;
+  field: 'metal' | 'animal';
+}): HackingState {
+  const v = input.velocity.indicator_velocity;
+  const direction = Math.sign(v);
+  const strong = Math.abs(v) > 0.3;
+  const ahead = input.wells.wells
+    .filter((well) => direction !== 0 && Math.sign(well.price - input.price) === direction)
+    .sort((a, b) => Math.abs(a.price - input.price) - Math.abs(b.price - input.price))[0];
+  const well = strong && ahead ? clamp(ahead.depth / 0.7, 0, 1) : 0;
+  const macd = strong && Math.sign(input.macdHeight) === direction ? clamp(0.6 + Math.abs(input.macdHeight) * 2, 0, 1) : 0;
+  const vortex = input.vortex.accelerationZone ? 1 : strong ? 0.35 : 0;
+  const stability = input.field === 'metal'
+    ? (input.lissajous.chaos ? 0 : input.lissajous.stability)
+    : input.lissajous.limitCycle;
+  const components = { well, macd, vortex, stability };
+  const alignment = (well + macd + vortex + stability) / 4;
+  const locked = strong && Object.values(components).every((value) => value >= 0.55) && alignment >= 0.75;
+  return {
+    alignment,
+    components,
+    locked,
+    singularityPrice: ahead?.price ?? input.vortex.singularityPrice,
+    highlightIndex: input.vortex.highlightIndex,
+  };
+}

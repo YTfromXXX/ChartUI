@@ -12,7 +12,7 @@ import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -599,6 +599,28 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     () => calculateVortexSearch(indicatorPrices.at(-1) ?? 0, rsiState, atrState, indicatorVelocity),
     [atrState, indicatorPrices, indicatorVelocity, rsiState],
   );
+  const volumeState = useMemo(
+    () => calculateVolumeWells(indicatorPrices, {
+      bookCenters: gravityTensor?.centers.map((center) => ({ price: center.price, strength: center.strength })),
+    }),
+    [gravityTensor, indicatorPrices],
+  );
+  const lissajous = useMemo(
+    () => calculateTensionOmegaLissajous(history.map((tick) => tick.tension), history.map((tick) => tick.angle)),
+    [history],
+  );
+  const hack = useMemo(() => {
+    if (field?.kind !== 'metal' && field?.kind !== 'animal') return undefined;
+    return evaluateHackingSingularity({
+      price: indicatorPrices.at(-1) ?? 0,
+      velocity: indicatorVelocity,
+      vortex,
+      wells: volumeState,
+      macdHeight: macdState?.distortionHeight ?? 0,
+      lissajous,
+      field: field.kind,
+    });
+  }, [field?.kind, indicatorPrices, indicatorVelocity, lissajous, macdState, volumeState, vortex]);
   const bollingerStyle = useMemo(() => {
     if (!fieldStyle || !bollinger) return fieldStyle;
     return {
@@ -626,6 +648,18 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       vortexSingularity: vortex.singularityPrice,
       vortexAcceleration: vortex.accelerationZone ? 1 : 0,
       vortexHighlight: vortex.highlightIndex,
+      volumeWells: volumeState.wells,
+      wellDepth: volumeState.maxDepth,
+      wellOffset: volumeState.deepest && indicatorPrices.length > 1
+        ? Math.max(-1, Math.min(1, (volumeState.deepest.price - indicatorPrices[indicatorPrices.length - 1]) / Math.max(Math.max(...indicatorPrices) - Math.min(...indicatorPrices), 1e-9)))
+        : 0,
+      lissajousStability: lissajous.stability,
+      lissajousChaos: lissajous.chaos ? 1 : 0,
+      lissajousLimitCycle: lissajous.limitCycle,
+      lissajousPoints: lissajous.points,
+      hackAlignment: hack?.alignment ?? 0,
+      hackLocked: hack?.locked ? 1 : 0,
+      hackPrice: hack?.locked ? hack.singularityPrice : 0,
       indicatorVelocity: indicatorVelocity.indicator_velocity,
       targetPriceProjection: indicatorVelocity.target_price_projection,
       animalOrderRise: animalOrderMacd?.macd?.riseStrength ?? 0,
@@ -636,7 +670,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
         metalCleaveCrossTimestamp: metalCleaveCross.timestamp,
       } : {}),
     };
-  }, [animalOrderMacd, atrState, bollinger, field?.kind, fieldStep, fieldStyle, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, macdState, metalCleaveCross, rsiState, vortex]);
+  }, [animalOrderMacd, atrState, bollinger, field?.kind, fieldStep, fieldStyle, hack, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, lissajous, macdState, metalCleaveCross, rsiState, volumeState, vortex]);
   const visualFieldStyle = useMemo(() => {
     if (!bollingerStyle) return bollingerStyle;
     const fieldStyle = bollingerStyle;
@@ -1122,10 +1156,16 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                     {(field?.kind === 'metal' || field?.kind === 'animal') && (
+                  <>
                   <label className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/40 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-stone-300">
                     velocity {indicatorVelocity.indicator_velocity.toFixed(2)} → {indicatorVelocity.target_price_projection.toFixed(2)}
                     <input type="range" min={-1} max={1} step={0.05} value={indicatorInput} onChange={(event) => setIndicatorInput(Number(event.target.value))} aria-label="Indicator velocity input" />
                   </label>
+                  <div className={`absolute bottom-12 left-4 bg-black/40 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] ${hack?.locked ? 'text-amber-300' : 'text-stone-400'}`}>
+                    hack sync {Math.round((hack?.alignment ?? 0) * 100)}% · wells {volumeState.wells.length} ({volumeState.source}) · T-ω {lissajous.ready ? (lissajous.chaos ? 'chaos' : 'stable') : 'warming'}
+                    {hack?.locked ? ` · TRUE SINGULARITY ${hack.singularityPrice.toFixed(2)}` : ''}
+                  </div>
+                  </>
                 )}
                 <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
                   </div>
