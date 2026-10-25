@@ -9,6 +9,7 @@ import KnotGlyphPalette from '@/components/KnotGlyphPalette';
 import CandySpiralScene from '@/components/3d/CandySpiralScene';
 import MatrixGridExplorer from '@/components/MatrixGridExplorer';
 import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
+import MatrixLiveFeedback from '@/components/MatrixLiveFeedback';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
@@ -846,7 +847,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-100/[0.06] text-amber-200"><Activity className="h-5 w-5" /></div>
             <div><p className="font-mono text-[9px] uppercase tracking-[0.38em] text-cyan-200/60">Native projection workspace</p><h1 className="mt-1 text-xl tracking-[0.14em] text-cyan-50 sm:text-2xl">{field?.title ?? 'BTCUSD / KNOT PROJECTION'}</h1></div>
           </div>
-          <div className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500"><Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link><span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning && (field?.kind !== 'metal' || metalFeed.quote?.source === 'LIVE') ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : field?.kind === 'metal' && isRunning ? 'bg-amber-300' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `${field?.kind === 'metal' && metalFeed.quote?.source !== 'LIVE' ? 'fallback' : 'live'} / ${streamLabel}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span></div>
+          <div className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500"><Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link>{(field?.kind === 'crypto' || field?.kind === 'meta') && <MatrixLiveFeedback kind={field.kind} diagnostics={fieldStep?.diagnostics} inventoryCount={field.kind === 'crypto' ? cryptoQuantumEvents.length : metaPhaseShifts.length} />}<span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning && (field?.kind !== 'metal' || metalFeed.quote?.source === 'LIVE') ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : field?.kind === 'metal' && isRunning ? 'bg-amber-300' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `${field?.kind === 'metal' && metalFeed.quote?.source !== 'LIVE' ? 'fallback' : 'live'} / ${streamLabel}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span></div>
         </header>
 
         <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_280px]">
