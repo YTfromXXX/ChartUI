@@ -16,6 +16,10 @@ type AnimalIndicatorsProps = {
   alert?: boolean;
   phase?: number;
   correlations?: readonly number[];
+  vortexSpeed?: number;
+  vortexHighlight?: number;
+  vortexAcceleration?: boolean;
+  atrPulse?: number;
 };
 
 /** Central Kuramoto ring: radius follows r, turns gold above r = 0.85. */
@@ -153,10 +157,46 @@ function LogarithmicExpansionVector({ active }: { active: boolean }) {
   );
 }
 
-export default function AnimalIndicators({ order = 0, alert = false, phase = 0, correlations = [] }: AnimalIndicatorsProps) {
+/** Seven-point hole cloud spun into a vortex by RSI omega, ATR pulse and the manual velocity. */
+function VortexSeven({ speed, highlight, acceleration, pulse }: { speed: number; highlight: number; acceleration: boolean; pulse: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const nodeRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const angle = useRef(0);
+  useFrame(({ clock }, delta) => {
+    angle.current += Math.min(delta, 0.05) * speed;
+    const t = clock.getElapsedTime();
+    const breathe = 1 + pulse * 0.25 * Math.sin(t * (2 + pulse * 3));
+    nodeRefs.current.forEach((mesh, index) => {
+      if (!mesh) return;
+      const arm = index / 7;
+      const theta = angle.current + index * GOLDEN_ANGLE;
+      const radius = (0.25 + arm * 0.8) * breathe;
+      mesh.position.set(Math.cos(theta) * radius, Math.sin(arm * 6 + t) * 0.03, Math.sin(theta) * radius);
+      const marked = index === Math.floor(highlight);
+      mesh.scale.setScalar(marked ? (acceleration ? 2.4 : 1.7) : 1);
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.color.set(marked ? (acceleration ? '#fef08a' : '#f9a8d4') : '#6ee7b7');
+      material.emissive.set(marked ? (acceleration ? '#facc15' : '#ec4899') : '#34d399');
+    });
+    if (groupRef.current) groupRef.current.rotation.y = -angle.current * 0.15;
+  });
+  return (
+    <group ref={groupRef} position={[0, 0.0, 0]}>
+      {Array.from({ length: 7 }, (_, index) => (
+        <mesh key={index} ref={(mesh) => { nodeRefs.current[index] = mesh; }}>
+          <sphereGeometry args={[0.045, 10, 10]} />
+          <meshStandardMaterial color="#6ee7b7" emissive="#34d399" emissiveIntensity={1.8} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+export default function AnimalIndicators({ order = 0, alert = false, phase = 0, correlations = [], vortexSpeed = 0, vortexHighlight = 0, vortexAcceleration = false, atrPulse = 0 }: AnimalIndicatorsProps) {
   return (
     <group>
       <KuramotoRing order={order} phase={phase} />
+      <VortexSeven speed={vortexSpeed} highlight={vortexHighlight} acceleration={vortexAcceleration} pulse={atrPulse} />
       <SynapticArcRadar correlations={correlations} order={order} />
       <LogarithmicExpansionVector active={alert || order > 0.85} />
     </group>

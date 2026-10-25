@@ -12,7 +12,7 @@ import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -433,6 +433,14 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       collapse: detectEcosystemCollapse(orderHistory.current),
     };
   }, [field?.kind, fieldStep]);
+  const rsiState = useMemo(
+    () => field?.kind === 'metal' || field?.kind === 'animal' ? calculateRsi(indicatorPrices) : undefined,
+    [field?.kind, indicatorPrices],
+  );
+  const atrState = useMemo(
+    () => field?.kind === 'metal' || field?.kind === 'animal' ? calculateAtr(indicatorPrices) : undefined,
+    [field?.kind, indicatorPrices],
+  );
   const [indicatorInput, setIndicatorInput] = useState(0);
   const [indicatorEvents, setIndicatorEvents] = useState({ crossTimestamp: 0, crossDirection: 0, kumoBreakTimestamp: 0, kumoBreakDirection: 0, collapseTimestamp: 0 });
   const lastIndicatorTick = useRef(0);
@@ -582,11 +590,15 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     if (field.kind === 'metal') {
       const jump = fieldStep?.diagnostics?.jumpIntensity ?? 0;
       const reference = prices.at(-1) ?? 0;
-      return calculateBollingerHalfVariance(prices, { jumpIntensity: jump, jumpSize: Math.abs(reference) * 0.0015 });
+      return calculateBollingerHalfVariance(prices, { jumpIntensity: jump, jumpSize: atrJumpSize(reference, atrState) });
     }
     const order = fieldStep?.diagnostics?.kuramotoOrder ?? 0;
     return calculateBollingerHalfVariance(prices, { phaseVariance: 1 - order * order });
-  }, [field?.kind, fieldStep, history]);
+  }, [atrState, field?.kind, fieldStep, history]);
+  const vortex = useMemo(
+    () => calculateVortexSearch(indicatorPrices.at(-1) ?? 0, rsiState, atrState, indicatorVelocity),
+    [atrState, indicatorPrices, indicatorVelocity, rsiState],
+  );
   const bollingerStyle = useMemo(() => {
     if (!fieldStyle || !bollinger) return fieldStyle;
     return {
@@ -604,6 +616,16 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       kumoBreakDirection: indicatorEvents.kumoBreakDirection,
       kumoCenter: ichimokuState && indicatorPrices.at(-1) ? ((ichimokuState.cloudTop + ichimokuState.cloudBottom) / 2 - indicatorPrices.at(-1)!) / indicatorPrices.at(-1)! : 0,
       kumoThickness: ichimokuState && indicatorPrices.at(-1) ? ichimokuState.cloudThickness / indicatorPrices.at(-1)! : 0,
+      rsiValue: rsiState?.value ?? 50,
+      rsiOmega: rsiState?.omega ?? 0,
+      rsiOverheat: rsiState?.overheat ?? 0,
+      atrPulse: atrState?.pulse ?? 0,
+      atrFaultDepth: atrState?.faultDepth ?? 1,
+      animalRsiSpread: fieldStep?.diagnostics?.animalRsiSpread ?? 0,
+      vortexSpeed: vortex.rotationSpeed,
+      vortexSingularity: vortex.singularityPrice,
+      vortexAcceleration: vortex.accelerationZone ? 1 : 0,
+      vortexHighlight: vortex.highlightIndex,
       indicatorVelocity: indicatorVelocity.indicator_velocity,
       targetPriceProjection: indicatorVelocity.target_price_projection,
       animalOrderRise: animalOrderMacd?.macd?.riseStrength ?? 0,
@@ -614,7 +636,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
         metalCleaveCrossTimestamp: metalCleaveCross.timestamp,
       } : {}),
     };
-  }, [animalOrderMacd, bollinger, field?.kind, fieldStyle, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, macdState, metalCleaveCross]);
+  }, [animalOrderMacd, atrState, bollinger, field?.kind, fieldStep, fieldStyle, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, macdState, metalCleaveCross, rsiState, vortex]);
   const visualFieldStyle = useMemo(() => {
     if (!bollingerStyle) return bollingerStyle;
     const fieldStyle = bollingerStyle;

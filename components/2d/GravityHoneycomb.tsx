@@ -24,6 +24,8 @@ export type MetalHoneycombStyle = {
   crossTimestamp?: number;
   sparkBoost?: number;
   distortionHeight?: number;
+  faultDepth?: number;
+  overheat?: number;
 };
 
 export const METAL_CLEAVAGE_LINES = 4;
@@ -201,6 +203,24 @@ export function drawMetalCrystalHoneycomb(
       ctx.lineWidth = selected ? 1.1 + flash * 1.6 : 0.65;
       ctx.stroke();
 
+      if (selected && flash > 0.02) {
+        const depth = Math.max(1, style.faultDepth ?? 1);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, flash * 1.2);
+        ctx.strokeStyle = '#fff6cf';
+        ctx.lineWidth = 0.8 + depth * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y - radius * 0.2);
+        const steps = 5 + Math.round(depth * 2);
+        for (let step = 1; step <= steps; step += 1) {
+          ctx.lineTo(
+            center.x + Math.sin(step * 4.7 + cellIndex) * radius * 0.18 * depth,
+            center.y - radius * 0.2 + step / steps * radius * 0.5 * depth,
+          );
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
       const upperHalf = center.y < height / 2;
       const upperBand = (style.percentB ?? 0.5) > 0.5;
       const crossAge = (style.crossTimestamp ?? 0) > 0 ? Math.max(0, Date.now() - (style.crossTimestamp ?? 0)) : Number.POSITIVE_INFINITY;
@@ -215,7 +235,9 @@ export function drawMetalCrystalHoneycomb(
         ctx.lineTo(center.x + dx, center.y + dy);
         const activeLine = selected && line === fractureLine % METAL_CLEAVAGE_LINES;
         const crossLine = crossFlash > 0.02 && line === (style.crossLine ?? -1);
-        const hot = activeLine ? flash : crossLine ? crossFlash : 0;
+        const overheatSpark = (style.overheat ?? 0) > 0.05 && ((cellIndex * 5 + line + Math.floor(Date.now() / 160)) % Math.max(2, Math.round(14 - (style.overheat ?? 0) * 11)) === 0)
+          ? (style.overheat ?? 0) * 0.7 : 0;
+        const hot = Math.max(activeLine ? flash : crossLine ? crossFlash : 0, overheatSpark);
         const bandBoost = upperHalf && upperBand ? 0.12 : !upperHalf && !upperBand ? 0.06 : 0;
         ctx.globalAlpha = hot > 0.02 ? 0.34 + hot * 0.65 : selected ? 0.28 : 0.11 + bandBoost;
         ctx.strokeStyle = hot > 0.02 ? '#fff6cf' : upperHalf ? '#e2b85a' : '#8a6a3a';
@@ -252,6 +274,11 @@ export function drawMetalCrystalHoneycomb(
 }
 
 export type AnimalVoxelStyle = {
+  vortexSpeed?: number;
+  vortexHighlight?: number;
+  vortexAcceleration?: number;
+  atrPulse?: number;
+  rsiSpread?: number;
   riseStrength?: number;
   collapseTimestamp?: number;
   order: number;
@@ -316,6 +343,10 @@ export function drawAnimalVoxelHoneycomb(
   const chaos = Math.exp(-collapseAge / 1800);
   const heads = 1 + Math.round(rise * 3);
   const head = ((now * (0.12 + order * 0.5 + rise * 0.9) + style.pulsePhase / TAU) % 1) * total;
+  const vortexSpeed = style.vortexSpeed ?? 0;
+  const atrPulse = Math.max(0, Math.min(1, style.atrPulse ?? 0));
+  const breathe = 1 + atrPulse * 0.12 * Math.sin(now * (1.5 + atrPulse * 3));
+  const highlight = Math.floor(style.vortexHighlight ?? -1);
   const mapped = points.map((point, index) => {
     const dx = point.x - midX;
     const dy = point.y - midY;
@@ -323,9 +354,23 @@ export function drawAnimalVoxelHoneycomb(
     const warp = squeeze + (1 - squeeze) * 0.35 * Math.min(1, radial);
     const wobble = Math.sin(now * 1.4 + index * 0.37) * (0.6 + style.phaseSigma * 2.4);
     const scatter = chaos * 26;
+    const cellCenterX = layout.originX + Math.floor(index / ANIMAL_POINTS_PER_CELL / layout.rows) * layout.horizontalStep;
+    const cell = Math.floor(index / ANIMAL_POINTS_PER_CELL);
+    const column = Math.floor(cell / layout.rows);
+    const row = cell % layout.rows;
+    const cellCenterY = layout.originY + row * layout.verticalStep + (column % 2) * layout.verticalStep / 2;
+    const px = point.x - cellCenterX;
+    const py = point.y - cellCenterY;
+    const swirlAngle = now * vortexSpeed * 0.6 + (Math.hypot(px, py) / layout.radius) * vortexSpeed * 1.4;
+    const vx = px * Math.cos(swirlAngle) - py * Math.sin(swirlAngle);
+    const vy = px * Math.sin(swirlAngle) + py * Math.cos(swirlAngle);
+    const gx = cellCenterX + vx;
+    const gy = cellCenterY + vy;
+    const gdx = gx - midX;
+    const gdy = gy - midY;
     return {
-      x: midX + dx * warp + wobble + Math.sin(index * 12.9 + now * 5) * scatter,
-      y: midY + dy * warp + wobble * 0.6 + Math.cos(index * 7.3 + now * 4) * scatter,
+      x: midX + gdx * warp * breathe + wobble + Math.sin(index * 12.9 + now * 5) * scatter,
+      y: midY + gdy * warp * breathe + wobble * 0.6 + Math.cos(index * 7.3 + now * 4) * scatter,
     };
   });
 
@@ -356,9 +401,10 @@ export function drawAnimalVoxelHoneycomb(
   }
   for (let index = 0; index < total; index += 1) {
     const phaseGlow = Math.max(0, Math.sin(now * 2 + (index / ANIMAL_POINTS_PER_CELL) * GOLDEN_ANGLE)) * order;
-    const size = 1.6 + phaseGlow * 1.8;
+    const marked = highlight >= 0 && index % ANIMAL_POINTS_PER_CELL === highlight;
+    const size = 1.6 + phaseGlow * 1.8 + (marked ? 2.2 + (style.vortexAcceleration ? 1.5 : 0) : 0);
     ctx.globalAlpha = 0.28 + phaseGlow * 0.6;
-    ctx.fillStyle = hue;
+    ctx.fillStyle = marked ? (style.vortexAcceleration ? '#fef08a' : '#f9a8d4') : hue;
     ctx.fillRect(mapped[index].x - size / 2, mapped[index].y - size / 2, size, size);
   }
   ctx.restore();

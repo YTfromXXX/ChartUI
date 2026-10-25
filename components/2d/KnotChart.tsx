@@ -64,6 +64,16 @@ export type KnotFieldStyle = {
   metalCleaveCrossLine?: number;
   metalCleaveCrossTimestamp?: number;
   animalPhaseSigma?: number;
+  rsiValue?: number;
+  rsiOmega?: number;
+  rsiOverheat?: number;
+  atrPulse?: number;
+  atrFaultDepth?: number;
+  animalRsiSpread?: number;
+  vortexSpeed?: number;
+  vortexSingularity?: number;
+  vortexAcceleration?: number;
+  vortexHighlight?: number;
   macdDistortionHeight?: number;
   macdAcceleration?: number;
   macdPhaseDifference?: number;
@@ -139,6 +149,16 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   metalCleaveCrossLine: 0,
   metalCleaveCrossTimestamp: 0,
   animalPhaseSigma: 0,
+  rsiValue: 0,
+  rsiOmega: 0,
+  rsiOverheat: 0,
+  atrPulse: 0,
+  atrFaultDepth: 1,
+  animalRsiSpread: 0,
+  vortexSpeed: 0,
+  vortexSingularity: 0,
+  vortexAcceleration: 0,
+  vortexHighlight: 0,
   macdDistortionHeight: 0,
   macdAcceleration: 0,
   macdPhaseDifference: 0,
@@ -992,6 +1012,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       crossTimestamp: activeStyle.metalCleaveCrossTimestamp,
       sparkBoost: activeStyle.macdAcceleration,
       distortionHeight: activeStyle.macdDistortionHeight,
+      faultDepth: activeStyle.atrFaultDepth,
+      overheat: activeStyle.rsiOverheat,
     });
     const tip = { x: targetX, y: targetY };
     const previousTip = previousMetalTip;
@@ -1011,6 +1033,11 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       alert: activeStyle.animalPulseStrength > 0.85,
       riseStrength: activeStyle.animalOrderRise,
       collapseTimestamp: activeStyle.animalCollapseTimestamp,
+      vortexSpeed: activeStyle.vortexSpeed,
+      vortexHighlight: activeStyle.vortexHighlight,
+      vortexAcceleration: activeStyle.vortexAcceleration,
+      atrPulse: activeStyle.atrPulse,
+      rsiSpread: activeStyle.animalRsiSpread,
     });
   } else {
     drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
@@ -1058,6 +1085,22 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       ctx.stroke();
       ctx.restore();
     }
+  }
+  if (activeStyle.vortexSingularity > 0) {
+    const singularityY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.vortexSingularity - minPrice) * yScale));
+    ctx.save();
+    ctx.globalAlpha = activeStyle.vortexAcceleration > 0 ? 0.9 : 0.45;
+    ctx.strokeStyle = activeStyle.vortexAcceleration > 0 ? '#fde047' : '#f9a8d4';
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    ctx.moveTo(plotLeft, singularityY);
+    ctx.lineTo(plotRight, singularityY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(plotRight - 12, singularityY, 4 + (activeStyle.vortexAcceleration > 0 ? 3 : 0), 0, TAU);
+    ctx.stroke();
+    ctx.restore();
   }
   if (activeStyle.targetPriceProjection > 0 && activeStyle.indicatorVelocity !== 0) {
     const projectedY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.targetPriceProjection - minPrice) * yScale));

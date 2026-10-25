@@ -29,6 +29,8 @@ export type FieldDiagnostics = {
   kuramotoOrder?: number;
   kuramotoMeanPhase?: number;
   animalPhases?: number[];
+  animalRsis?: number[];
+  animalRsiSpread?: number;
   animalCorrelationMatrix?: number[][];
   animalAttractorArcanaId?: number;
   animalAttractorDistance?: number;
@@ -1109,6 +1111,10 @@ function animalSimulator(seed: number): FieldSimulator {
       frequencies[index] += (targetFrequency - frequencies[index]) * Math.min(1, dt * 0.8);
     }
 
+    const assetRsis = priceHistories.map((history) => calculateRsi(history)?.value ?? 50);
+    const rsiMean = assetRsis.reduce((sum, value) => sum + value, 0) / count;
+    const rsiPerturbation = assetRsis.map((value) => clamp((value - rsiMean) / 50, -1, 1) * 0.12);
+    const rsiSpread = Math.sqrt(assetRsis.reduce((sum, value) => sum + (value - rsiMean) ** 2, 0) / count) / 50;
     const coupling = 0.9;
     const dynamicCorrelationMatrix = calculateAnimalCorrelationMatrix(returnHistory);
     const phaseVelocities = phases.map((phase, index) => {
@@ -1116,7 +1122,7 @@ function animalSimulator(seed: number): FieldSimulator {
         if (index === otherIndex) return sum;
         return sum + dynamicCorrelationMatrix[index][otherIndex] * Math.sin(otherPhase - phase);
       }, 0) / (count - 1);
-      return frequencies[index] + coupling * interaction;
+      return frequencies[index] + rsiPerturbation[index] + coupling * interaction;
     });
     for (let index = 0; index < count; index += 1) {
       phases[index] = (phases[index] + phaseVelocities[index] * dt + 2 * Math.PI) % (2 * Math.PI);
@@ -1217,6 +1223,8 @@ function animalSimulator(seed: number): FieldSimulator {
       kuramotoOrder: sync.orderParameter,
       kuramotoMeanPhase: sync.meanPhase,
       animalPhases: sync.phases,
+      animalRsis: assetRsis,
+      animalRsiSpread: rsiSpread,
       animalCorrelationMatrix: sync.correlationMatrix,
       animalAttractorArcanaId: attractor.id,
       animalAttractorDistance,
@@ -1775,4 +1783,94 @@ export function detectEcosystemCollapse(orders: readonly number[], lag = 10): { 
   const previous = orders[orders.length - 2];
   const inside = (value: number) => value >= stableBottom && value <= stableTop;
   return { collapsed: inside(previous) && !inside(last) && last < previous, stableTop, stableBottom };
+}
+
+export type RsiState = {
+  value: number;
+  /** 0..1, how far beyond the 70/30 band (scaled to the 100/0 extremes). */
+  overheat: number;
+  /** Signed angular velocity input in [-1, 1] derived from (RSI - 50) / 50. */
+  omega: number;
+};
+
+/** Wilder RSI on a close-only series. */
+export function calculateRsi(values: readonly number[], period = 14): RsiState | undefined {
+  if (values.length < 3) return undefined;
+  const window = Math.min(period, values.length - 1);
+  let gain = 0;
+  let loss = 0;
+  const start = values.length - 1 - window;
+  for (let index = start + 1; index < values.length; index += 1) {
+    const change = values[index] - values[index - 1];
+    if (change >= 0) gain += change;
+    else loss -= change;
+  }
+  const value = loss <= 1e-12 ? (gain <= 1e-12 ? 50 : 100) : 100 - 100 / (1 + gain / loss);
+  const extreme = Math.max(0, Math.abs(value - 50) - 20) / 30;
+  return { value, overheat: clamp(extreme, 0, 1), omega: clamp((value - 50) / 50, -1, 1) };
+}
+
+/** Spark threshold drops as RSI overheats (lower threshold = sparks fire more easily). */
+export function rsiSparkThreshold(base: number, rsi: RsiState | undefined): number {
+  return base * (1 - 0.8 * (rsi?.overheat ?? 0));
+}
+
+export type AtrState = {
+  atr: number;
+  /** ATR relative to price. */
+  ratio: number;
+  /** 0..1 pulse amplitude (breathing). */
+  pulse: number;
+  /** Fault depth scale >= 1 for the honeycomb crack / Poisson jump width. */
+  faultDepth: number;
+};
+
+/** ATR on a close-only series (true range approximated by the absolute close-to-close change). */
+export function calculateAtr(values: readonly number[], period = 14): AtrState | undefined {
+  if (values.length < 3) return undefined;
+  const window = Math.min(period, values.length - 1);
+  let total = 0;
+  for (let index = values.length - window; index < values.length; index += 1) {
+    total += Math.abs(values[index] - values[index - 1]);
+  }
+  const atr = total / window;
+  const price = Math.abs(values[values.length - 1]);
+  const ratio = price > 1e-12 ? atr / price : 0;
+  const pulse = clamp(Math.tanh(ratio * 400), 0, 1);
+  return { atr, ratio, pulse, faultDepth: 1 + pulse * 2.5 };
+}
+
+/** Poisson jump width (fault depth) scaled by ATR. */
+export function atrJumpSize(basePrice: number, atr: AtrState | undefined): number {
+  return Math.abs(basePrice) * 0.0015 * (atr?.faultDepth ?? 1);
+}
+
+export type VortexState = {
+  /** Rotation rate in rad/s for the 7-point cloud vortex. */
+  rotationSpeed: number;
+  /** Pulsation amplitude 0..1 from ATR. */
+  pulse: number;
+  /** Singularity (target price) the vortex funnels toward. */
+  singularityPrice: number;
+  /** True while the manual velocity and RSI omega agree and the histogram accelerates. */
+  accelerationZone: boolean;
+  /** Signed normalised index of the highlighted 7-point hole (0..6). */
+  highlightIndex: number;
+};
+
+/** Couples RSI omega, ATR pulse and the manual up/neutral/down velocity into the Animal vortex search state. */
+export function calculateVortexSearch(
+  price: number,
+  rsi: RsiState | undefined,
+  atr: AtrState | undefined,
+  velocity: IndicatorVelocity,
+): VortexState {
+  const omega = rsi?.omega ?? 0;
+  const manual = clamp(velocity.indicator_velocity, -2, 2);
+  const rotationSpeed = 0.4 + omega * 1.2 + manual * 1.6;
+  const reach = Math.abs(price) * (0.002 + (atr?.ratio ?? 0) * 3);
+  const singularityPrice = price + Math.sign(rotationSpeed - 0.4 || manual) * reach * (1 + Math.abs(manual));
+  const accelerationZone = Math.sign(omega) === Math.sign(manual) && Math.abs(manual) > 0.3 && Math.abs(omega) > 0.2;
+  const highlightIndex = ((Math.round((velocity.target_price_projection - price) / Math.max(reach, 1e-9)) % 7) + 7) % 7;
+  return { rotationSpeed, pulse: atr?.pulse ?? 0, singularityPrice, accelerationZone, highlightIndex };
 }

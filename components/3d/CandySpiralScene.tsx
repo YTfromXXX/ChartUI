@@ -466,6 +466,10 @@ export default function CandySpiralScene({
               order={fieldStyle?.animalPulseStrength ?? 0}
               alert={fieldStyle?.syncAlert ?? false}
               phase={fieldStyle?.animalPulsePhase ?? 0}
+              vortexSpeed={fieldStyle?.vortexSpeed ?? 0}
+              vortexHighlight={fieldStyle?.vortexHighlight ?? 0}
+              vortexAcceleration={(fieldStyle?.vortexAcceleration ?? 0) > 0}
+              atrPulse={fieldStyle?.atrPulse ?? 0}
               correlations={fieldStyle?.animalCorrelations ?? fieldDiagnostics?.animalCorrelationMatrix?.flat() ?? []}
             />
           )}

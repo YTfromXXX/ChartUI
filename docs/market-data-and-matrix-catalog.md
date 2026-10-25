@@ -84,3 +84,13 @@ Pure helpers in `lib/fieldModels.ts`: `calculateMacdPendulum`, `accelerateJumpIn
 | --- | --- | --- |
 | MACD | Double-pendulum phase difference; histogram = Z distortion height of the 3D honeycomb backdrop; histogram acceleration raises Poisson λ and spark count | MACD of r (short − long MA); positive expanding histogram raises synapse pulse count/speed in 2D and 3D |
 | Ichimoku | Tenkan/kijun cross = knot-crossing node; cloud = tension band; cloud break = fault crack + flash | Cloud = stability zone for r; leaving it = ecosystem collapse, braid unravels into chaotic strands |
+
+## RSI / ATR indicator geometry (Metal & Animal)
+
+| Indicator | Metal | Animal |
+|---|---|---|
+| RSI | Maps to spiral angular velocity ω. Above 70 / below 30 lowers the spark threshold and sparks across the whole spiral (`uRsiOverheat`). | Per-commodity RSI differences perturb the Kuramoto phases θ_j, which disturbs the synapse pulses. |
+| ATR | Scales the Poisson jump width (fault depth). The honeycomb crack deepens and widens, and the spiral breathes. | Crowd-psychology amplitude. Wormhole peristalsis becomes more violent. |
+| Vortex search | – | The 7-point cloud spins into a vortex driven by RSI ω, ATR pulse and the manual up/neutral/down velocity. Highlights the singularity price and acceleration zone (2D and 3D). |
+
+Approximation: ATR uses the absolute close-to-close change instead of true range.

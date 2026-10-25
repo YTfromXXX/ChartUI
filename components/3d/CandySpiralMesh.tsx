@@ -201,6 +201,7 @@ export function CandyInstancedMesh({
     uMetalMicroTremor: { value: 0 },
     uMetalSparkCell: { value: -1 },
     uMetalSparkIntensity: { value: 0 },
+    uRsiOverheat: { value: 0 },
     uCandyVibration: { value: 0 },
     uCandyVibrationFrequency: { value: 1 },
     uCandyEmissive: { value: 0.8 },
@@ -239,6 +240,7 @@ uniform float uMetalJumpTime;
 uniform float uMetalMicroTremor;
 uniform float uMetalSparkCell;
 uniform float uMetalSparkIntensity;
+uniform float uRsiOverheat;
 attribute float aCandyCellIndex;
 uniform float uCandyVibration;
 uniform float uCandyVibrationFrequency;
@@ -271,7 +273,10 @@ transformed += normalize(position) * (metalLayer + crystalRidge + crackDisplacem
 vMetalFlash = flashEnvelope * max(crackLine, uMetalMicroTremor * 0.4);
 float sparkCellMatch = 1.0 - step(0.5, abs(aCandyCellIndex - uMetalSparkCell));
 float sparkDivisionLine = smoothstep(0.76, 0.98, abs(sin(position.x * 52.0 + position.y * 37.0 + position.z * 44.0)));
-vMetalSpark = sparkCellMatch * sparkDivisionLine * uMetalSparkIntensity;
+float overheatThreshold = 0.97 - 0.5 * uRsiOverheat;
+float overheatFlicker = step(0.55, fract(sin(aCandyCellIndex * 12.9898 + floor(uMetalTime * 9.0) * 4.1) * 43758.5453));
+float overheatSpark = uRsiOverheat * overheatFlicker * smoothstep(overheatThreshold - 0.2, overheatThreshold, abs(sin(position.x * 61.0 + position.y * 43.0 + position.z * 52.0)));
+vMetalSpark = max(sparkCellMatch * sparkDivisionLine * uMetalSparkIntensity, overheatSpark);
 float rippleRadius = uMetaRippleAge * 2.8;
 float rippleWave = sin((length(instanceMatrix[3].xyz) - rippleRadius) * 18.0);
 float rippleEnvelope = exp(-max(0.0, uMetaRippleAge) * 1.8) * uMetaRippleStrength;
@@ -329,7 +334,7 @@ diffuseColor.rgb = mix(diffuseColor.rgb, actionPotential, clamp(vSynapsePulse * 
 diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapsePulse * 0.9 + uMetaCrackIntensity * 0.12;`,
       );
     };
-    material.customProgramCacheKey = () => 'field-candy-synapse-pulsar-v7';
+    material.customProgramCacheKey = () => 'field-candy-synapse-pulsar-v8';
     return material;
   }, [crystalUniforms]);
   const lastJumpTime = useRef(-1000);
@@ -392,6 +397,7 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
   const collapseSeen = useRef(0);
   const collapseStart = useRef(-1000);
   const animalPhaseClock = useRef(0);
+  const orbitClock = useRef(0);
   const metalSparkCell = useRef(-1);
   const lastCleaveTimestamp = useRef(0);
   const metalStepLevel = useRef(0);
@@ -432,6 +438,14 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
     }
     const chaos = Math.exp(-Math.max(0, elapsed - collapseStart.current) / 2.5);
     animalPhaseClock.current += Math.min(delta, 0.05) * (7 + THREE.MathUtils.clamp(fieldStyle?.animalOrderRise ?? 0, 0, 1) * 9);
+    const rsiOmega = THREE.MathUtils.clamp(fieldStyle?.rsiOmega ?? 0, -1, 1);
+    const rsiOverheat = THREE.MathUtils.clamp(fieldStyle?.rsiOverheat ?? 0, 0, 1);
+    const fieldHasRsi = Boolean(fieldStyle?.metalFieldActive || fieldStyle?.animalPhaseSigma);
+    orbitClock.current += Math.min(delta, 0.05) * orbitSpeed * (fieldHasRsi ? 1 + rsiOmega * 1.5 : 1);
+    const atrPulse = THREE.MathUtils.clamp(fieldStyle?.atrPulse ?? 0, 0, 1);
+    const atrBreath = 1 + atrPulse * 0.05 * Math.sin(elapsed * (1.6 + atrPulse * 2.4));
+    const vortexSpeed = THREE.MathUtils.clamp(fieldStyle?.vortexSpeed ?? 0, -4, 4);
+    crystalUniforms.uRsiOverheat.value = fieldStyle?.metalFieldActive ? rsiOverheat : 0;
     const macdHeight = THREE.MathUtils.clamp(fieldStyle?.macdDistortionHeight ?? 0, -1, 1);
     const cleaveTimestamp = fieldStyle?.metalCleaveCrossTimestamp ?? 0;
     if (cleaveTimestamp > 0 && cleaveTimestamp !== lastCleaveTimestamp.current) {
@@ -498,7 +512,7 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
 
       // Orbital phase advances smoothly with elapsed time
       const layerOffset = config.phase;
-      const phi = layerOffset + 2 * Math.PI * 3.0 * t + (rigidMeta ? metaAngle : elapsed * orbitSpeed)
+      const phi = layerOffset + 2 * Math.PI * 3.0 * t + (rigidMeta ? metaAngle : fieldHasRsi ? orbitClock.current : elapsed * orbitSpeed)
         + (rigidMeta ? 0 : fieldStyle?.candyPhaseOffset ?? 0)
         + (rigidMeta ? 0 : Math.sin(elapsed * 0.62 + candy.cell_index * 0.21) * invasion * 0.075);
       const zStar = drift * t;
@@ -545,9 +559,9 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
       }
       if (wormhole > 0) {
         const throat = 1 - wormhole * wormhole * 0.5 * (1 - ny * ny);
-        const peristalsis = 1 + 0.05 * wormhole * Math.sin(ny * 9 - elapsed * 3);
+        const peristalsis = 1 + (0.05 + atrPulse * 0.1) * wormhole * Math.sin(ny * 9 - elapsed * (3 + atrPulse * 4));
         const taper = throat * peristalsis;
-        const swirl = wormhole * ny * 0.9;
+        const swirl = wormhole * ny * 0.9 + vortexSpeed * 0.12 * (1 - ny * ny) * Math.sin(elapsed * 0.5);
         const wx = tempPosition.x * taper;
         const wz = tempPosition.z * taper;
         tempPosition.x = wx * Math.cos(swirl) - wz * Math.sin(swirl);
@@ -585,6 +599,7 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
         * (resonantCandy ? 1 + invasion * 0.16 : 1);
       tempScale.set(scaleVal * (1 + braidStrength * 0.18), scaleVal, scaleVal * (1 + braidStrength * 0.18));
 
+      tempPosition.multiplyScalar(atrBreath);
       tempMatrix.compose(tempPosition, tempQuat, tempScale);
       meshRef.current.setMatrixAt(i, tempMatrix);
     }
