@@ -102,3 +102,7 @@ Approximation: ATR uses the absolute close-to-close change instead of true range
 | Volume / order book → gravity well | Mass per price band (real volume if supplied, order-book centers from the gravity tensor, otherwise a **dwell-time proxy** – labelled in the HUD). Deep bands sink the honeycomb along Z (2D hex rings, 3D backdrop + `GravityWellShader`). | Same wells; the voxel point cloud sinks into the hole. |
 | Tension–ω Lissajous | Point-reflection symmetry + limit-cycle steadiness → stability. Below 0.55 = chaos: faults cascade toward the well (falling G in 2D and 3D). | Treated as a synchronisation limit cycle. Stable → smooth wormhole wall; unstable → rough wall. |
 | Hacking | `evaluateHackingSingularity`: the manual velocity must match well direction, MACD height sign, vortex acceleration zone and phase-plane stability (alignment ≥ 0.75, each ≥ 0.55). Then the true singularity glows gold (2D line, 3D node, HUD). | Same; the highlighted point of the 7-point cloud turns gold. |
+
+## Observer access to the probability cloud (Crypto)
+
+Pick a recorded quantum singularity from KNOT INVENTORY, then overlay a manual price, size and direction (`observeQuantumCloud`). The panel shows in-cloud probability (Gaussian), direction-aware offset/displacement in cloud widths, edge risk (adverse side) and a wave-collapse flag at the cloud edge. The orbit shell radius follows size and its inclination follows direction/offset. This is a **simulated position**, not an order or realised P&L; the cloud width is derived from the recorded noise amplitude and bounds.

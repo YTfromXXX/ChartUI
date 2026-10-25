@@ -2016,3 +2016,57 @@ export function evaluateHackingSingularity(input: {
     highlightIndex: input.vortex.highlightIndex,
   };
 }
+
+export type ObserverDirection = 'long' | 'short';
+export type ObserverInput = { price: number; size: number; direction: ObserverDirection };
+export type CloudBoundsLike = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+export type CloudObservation = {
+  valid: boolean;
+  /** Observer price offset from the recorded singularity, in units of the cloud half-width. */
+  offset: number;
+  /** Direction-aware displacement of the observed price from the singularity, in cloud widths (+ = in favour). Not realised P&L. */
+  pnlRatio: number;
+  /** 0..1 chance-like score that the observer sits inside the recorded probability cloud (Gaussian over the box). */
+  inCloud: number;
+  /** Orbit shell: radius grows with size, inclination follows direction and offset. */
+  orbitRadius: number;
+  inclination: number;
+  /** 0..1, how close the observer is to the cloud edge on the adverse side. */
+  edgeRisk: number;
+  /** Observer position in the cloud's normalised box (x: -1..1, y: -1..1). */
+  box: { x: number; y: number };
+  collapsed: boolean;
+};
+
+/**
+ * Observer overlay on a recorded quantum trace: the manual price/size/direction is
+ * placed inside the stored point-cloud box. Simulated position, not a real order.
+ */
+export function observeQuantumCloud(
+  trace: { price: number; pointCloudBounds: CloudBoundsLike; maxNoiseAmplitude: number },
+  observer: ObserverInput,
+): CloudObservation {
+  const invalid: CloudObservation = { valid: false, offset: 0, pnlRatio: 0, inCloud: 0, orbitRadius: 0, inclination: 0, edgeRisk: 0, box: { x: 0, y: 0 }, collapsed: false };
+  if (![trace.price, observer.price, observer.size].every(Number.isFinite) || trace.price <= 0 || observer.price <= 0 || observer.size <= 0) return invalid;
+  const { min, max } = trace.pointCloudBounds;
+  const halfY = Math.max((max.y - min.y) / 2, 1e-6);
+  // Cloud half-width in price terms: noise amplitude scaled to the recorded price.
+  const halfWidth = Math.max(trace.price * (Math.abs(trace.maxNoiseAmplitude) * 0.002 + halfY * 0.0005), trace.price * 1e-4);
+  const sign = observer.direction === 'long' ? 1 : -1;
+  const offset = (observer.price - trace.price) / halfWidth;
+  const pnlRatio = (sign * (observer.price - trace.price)) / (2 * halfWidth);
+  const inCloud = Math.exp(-0.5 * offset * offset);
+  const adverseDistance = Math.max(0, -sign * offset);
+  const edgeRisk = clamp(adverseDistance / 2, 0, 1);
+  return {
+    valid: true,
+    offset,
+    pnlRatio,
+    inCloud,
+    orbitRadius: 0.4 + Math.log10(1 + observer.size) * 0.6,
+    inclination: sign * clamp(offset / 3, -1, 1) * (Math.PI / 3),
+    edgeRisk,
+    box: { x: 0, y: clamp(-offset / 3, -1, 1) },
+    collapsed: edgeRisk >= 1,
+  };
+}

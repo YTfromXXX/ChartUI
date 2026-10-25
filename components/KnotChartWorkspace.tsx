@@ -13,7 +13,7 @@ import MatrixLiveFeedback from '@/components/MatrixLiveFeedback';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, observeQuantumCloud, type ObserverDirection, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -187,6 +187,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const cryptoQuantumEvents = useKnotSelection((state) => state.cryptoQuantumEvents);
   const metaPhaseShifts = useKnotSelection((state) => state.metaPhaseShifts);
   const [animalReplayEvent, setAnimalReplayEvent] = useState<AnimalSyncTrace | undefined>(undefined);
+  const [observerIndex, setObserverIndex] = useState(-1);
+  const [observerPrice, setObserverPrice] = useState('');
+  const [observerSize, setObserverSize] = useState('1');
+  const [observerDirection, setObserverDirection] = useState<ObserverDirection>('long');
   const [cryptoReplayEvent, setCryptoReplayEvent] = useState<CryptoQuantumTrace | undefined>(undefined);
   const [metalFeedJumpEvent, setMetalFeedJumpEvent] = useState(false);
   const [selectionLocked, setSelectionLocked] = useState(false);
@@ -600,6 +604,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     () => calculateVortexSearch(indicatorPrices.at(-1) ?? 0, rsiState, atrState, indicatorVelocity),
     [atrState, indicatorPrices, indicatorVelocity, rsiState],
   );
+  const observedTrace = observerIndex >= 0 ? cryptoQuantumEvents[observerIndex] : undefined;
+  const cloudObservation = useMemo(() => {
+    if (!observedTrace) return undefined;
+    const price = Number(observerPrice) || indicatorPrices.at(-1) || observedTrace.price;
+    return observeQuantumCloud(observedTrace, { price, size: Number(observerSize), direction: observerDirection });
+  }, [indicatorPrices, observedTrace, observerDirection, observerPrice, observerSize]);
   const volumeState = useMemo(
     () => calculateVolumeWells(indicatorPrices, {
       bookCenters: gravityTensor?.centers.map((center) => ({ price: center.price, strength: center.strength })),
@@ -1023,6 +1033,40 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   >
                     {cryptoReplayEvent ? 'Stop state replay' : 'Replay latest state'}
                   </button>
+                </div>
+                <div className="mt-2 border border-amber-200/20 bg-amber-100/[0.03] p-2 font-mono text-[8px] text-stone-400" aria-label="Observer access to the probability cloud">
+                  <p className="uppercase tracking-[0.14em] text-amber-100/80">Observer / access the probability cloud (simulated position)</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <select value={observerIndex} onChange={(event) => { setObserverIndex(Number(event.target.value)); setCryptoReplayEvent(undefined); }} aria-label="Recorded singularity" className="border border-white/10 bg-black/40 px-1 py-0.5">
+                      <option value={-1}>select singularity…</option>
+                      {cryptoQuantumEvents.map((trace, index) => (
+                        <option key={`${trace.timestamp}-${index}`} value={index}>{new Date(trace.timestamp).toLocaleTimeString()} · {trace.price.toFixed(2)} · {trace.resonanceArcanaId === 1 ? 'I' : trace.resonanceArcanaId === 18 ? 'XVIII' : '—'}</option>
+                      ))}
+                    </select>
+                    <input value={observerPrice} onChange={(event) => setObserverPrice(event.target.value)} inputMode="decimal" placeholder={`price ${(indicatorPrices.at(-1) ?? 0).toFixed(2)}`} aria-label="Observer price" className="w-24 border border-white/10 bg-black/40 px-1 py-0.5" />
+                    <input value={observerSize} onChange={(event) => setObserverSize(event.target.value)} inputMode="decimal" aria-label="Observer size" className="w-14 border border-white/10 bg-black/40 px-1 py-0.5" />
+                    {(['long', 'short'] as const).map((direction) => (
+                      <button key={direction} type="button" onClick={() => setObserverDirection(direction)} aria-pressed={observerDirection === direction} className={`border px-1.5 py-0.5 uppercase ${observerDirection === direction ? 'border-amber-300/60 text-amber-200' : 'border-white/10'}`}>{direction}</button>
+                    ))}
+                  </div>
+                  {observedTrace && cloudObservation?.valid && (
+                    <>
+                      <p className="mt-1">
+                        in-cloud {(cloudObservation.inCloud * 100).toFixed(0)}% · offset {cloudObservation.offset.toFixed(2)}w · displacement {cloudObservation.pnlRatio.toFixed(2)}w · edge risk {(cloudObservation.edgeRisk * 100).toFixed(0)}%
+                        {cloudObservation.collapsed ? ' · WAVE COLLAPSE' : ''}
+                      </p>
+                      <svg viewBox="0 0 220 76" className="mt-1 h-14 w-full" role="img" aria-label="Observer inside recorded cloud">
+                        <rect x="12" y="8" width="196" height="58" fill="none" stroke="rgba(251,191,36,0.35)" />
+                        <line x1="12" x2="208" y1="37" y2="37" stroke="rgba(255,255,255,0.15)" strokeDasharray="2 3" />
+                        {[1, 2, 3].map((ring) => (
+                          <ellipse key={ring} cx="110" cy={37 + cloudObservation.box.y * 29} rx={(cloudObservation.orbitRadius * 22) * ring / 3} ry={(cloudObservation.orbitRadius * 22) * ring / 3 * Math.abs(Math.cos(cloudObservation.inclination)) * 0.5 + 1} fill="none" stroke={cloudObservation.collapsed ? '#fb7185' : '#fbbf24'} strokeOpacity={0.25 + ring * 0.2} />
+                        ))}
+                        <circle cx="110" cy="37" r="2.5" fill="#a78bfa" />
+                        <circle cx="110" cy={37 + cloudObservation.box.y * 29} r="3.5" fill={cloudObservation.collapsed ? '#fb7185' : '#fbbf24'} />
+                      </svg>
+                    </>
+                  )}
+                  {cloudObservation && !cloudObservation.valid && <p className="mt-1 text-rose-300">Enter a positive price and size.</p>}
                 </div>
                 {cryptoReplayEvent && (
                   <div className="mt-2 border border-violet-200/20 bg-violet-200/[0.035] p-2 font-mono text-[8px] text-violet-50/70" aria-live="polite">
