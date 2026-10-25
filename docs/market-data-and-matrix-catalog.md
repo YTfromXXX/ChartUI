@@ -75,3 +75,12 @@ Future field work should carry stable cell/feature IDs and event timestamps thro
 | --- | --- | --- | --- |
 | Metal | σ⁺ adds λ·E[J²]; σ⁻ is the plain lower half-deviation | 4 cleavage lines per cell (48 cells); a tip crossing a line while %b > 0.5 emits a spark event | Rigid stepping: layered outward uplift above μ; elevator-style accelerated drop when %b falls below 0.5; sparks on the crossed cell |
 | Animal | σ_θ² = 1 − r² (phase dispersion), symmetric | Seeded point cloud per cell joined as a voxel chain; golden-angle pulses; lattice squeezes toward the centre as r rises | Wormhole deformation (throat taper, peristalsis, swirl) plus Kuramoto ring (gold at r > 0.85), 5-node synaptic radar, log-spiral expansion vector at alert |
+
+### Indicator geometry (MACD / Ichimoku)
+
+Pure helpers in `lib/fieldModels.ts`: `calculateMacdPendulum`, `accelerateJumpIntensity`, `calculateIchimoku`, `calculateOrderParameterMacd`, `detectEcosystemCollapse`, `calculateIndicatorVelocity` (`indicator_velocity`, `target_price_projection`; driven by the velocity slider on the 2D chart).
+
+| Indicator | Metal | Animal |
+| --- | --- | --- |
+| MACD | Double-pendulum phase difference; histogram = Z distortion height of the 3D honeycomb backdrop; histogram acceleration raises Poisson λ and spark count | MACD of r (short − long MA); positive expanding histogram raises synapse pulse count/speed in 2D and 3D |
+| Ichimoku | Tenkan/kijun cross = knot-crossing node; cloud = tension band; cloud break = fault crack + flash | Cloud = stability zone for r; leaving it = ecosystem collapse, braid unravels into chaotic strands |

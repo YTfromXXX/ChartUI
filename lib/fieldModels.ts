@@ -1584,3 +1584,195 @@ export function calculateBollingerHalfVariance(
     samples: sample.length,
   };
 }
+
+function emaSeries(values: readonly number[], period: number): number[] {
+  const alpha = 2 / (period + 1);
+  const out: number[] = [];
+  values.forEach((value, index) => {
+    out.push(index === 0 ? value : out[index - 1] + alpha * (value - out[index - 1]));
+  });
+  return out;
+}
+
+export type MacdPendulum = {
+  macd: number;
+  signal: number;
+  histogram: number;
+  histogramRate: number;
+  /** Double-pendulum arm angles: theta1 follows the fast EMA, theta2 the slow EMA, relative to the price scale. */
+  theta1: number;
+  theta2: number;
+  phaseDifference: number;
+  /** Normalised Z-axis distortion height in [-1, 1]. */
+  distortionHeight: number;
+  /** Positive while the histogram is expanding away from zero. */
+  acceleration: number;
+};
+
+/** MACD recast as a double-pendulum phase difference (fast arm vs slow arm). */
+export function calculateMacdPendulum(
+  values: readonly number[],
+  fast = 12,
+  slow = 26,
+  signalPeriod = 9,
+): MacdPendulum | undefined {
+  if (values.length < 4) return undefined;
+  const fastEma = emaSeries(values, fast);
+  const slowEma = emaSeries(values, slow);
+  const macdLine = fastEma.map((value, index) => value - slowEma[index]);
+  const signalLine = emaSeries(macdLine, signalPeriod);
+  const last = values.length - 1;
+  const histogram = macdLine[last] - signalLine[last];
+  const previousHistogram = macdLine[last - 1] - signalLine[last - 1];
+  const scale = Math.max(Math.abs(slowEma[last]) * 0.002, 1e-9);
+  const theta1 = Math.atan((values[last] - fastEma[last]) / scale + (fastEma[last] - slowEma[last]) / scale);
+  const theta2 = Math.atan((fastEma[last] - slowEma[last]) / scale);
+  const histogramRate = (histogram - previousHistogram) / scale;
+  const expanding = Math.sign(histogram) === Math.sign(histogram - previousHistogram) && Math.abs(histogram) > Math.abs(previousHistogram);
+  return {
+    macd: macdLine[last],
+    signal: signalLine[last],
+    histogram,
+    histogramRate,
+    theta1,
+    theta2,
+    phaseDifference: theta1 - theta2,
+    distortionHeight: clamp(Math.tanh(histogram / scale), -1, 1),
+    acceleration: expanding ? clamp(Math.abs(histogramRate), 0, 4) / 4 : 0,
+  };
+}
+
+/** Poisson intensity lifted by MACD histogram acceleration (jump acceleration). */
+export function accelerateJumpIntensity(baseLambda: number, macd: MacdPendulum | undefined): number {
+  return baseLambda * (1 + 3 * (macd?.acceleration ?? 0));
+}
+
+export type IchimokuState = {
+  tenkan: number;
+  kijun: number;
+  senkouA: number;
+  senkouB: number;
+  cloudTop: number;
+  cloudBottom: number;
+  cloudThickness: number;
+  /** +1 golden cross (tenkan over kijun), -1 dead cross, 0 none on the latest sample. */
+  cross: -1 | 0 | 1;
+  /** +1 broke above the cloud, -1 broke below, 0 none on the latest sample. */
+  cloudBreak: -1 | 0 | 1;
+  position: 'above' | 'inside' | 'below';
+};
+
+const midRange = (values: readonly number[], period: number, end: number) => {
+  const slice = values.slice(Math.max(0, end - period + 1), end + 1);
+  return (Math.max(...slice) + Math.min(...slice)) / 2;
+};
+
+/** Ichimoku on a close-only series (9 / 26 / 52, cloud evaluated from the lagged window). */
+export function calculateIchimoku(
+  values: readonly number[],
+  tenkanPeriod = 9,
+  kijunPeriod = 26,
+  senkouBPeriod = 52,
+): IchimokuState | undefined {
+  if (values.length < tenkanPeriod + 2) return undefined;
+  const at = (end: number) => {
+    const tenkan = midRange(values, tenkanPeriod, end);
+    const kijun = midRange(values, Math.min(kijunPeriod, end + 1), end);
+    const senkouA = (tenkan + kijun) / 2;
+    const senkouB = midRange(values, Math.min(senkouBPeriod, end + 1), end);
+    return { tenkan, kijun, senkouA, senkouB, top: Math.max(senkouA, senkouB), bottom: Math.min(senkouA, senkouB) };
+  };
+  const last = values.length - 1;
+  const lag = Math.min(kijunPeriod, Math.max(1, Math.floor(last / 2)));
+  const now = at(last);
+  const previous = at(last - 1);
+  // The plotted cloud at "now" was produced `lag` samples ago.
+  const cloudNow = at(last - lag);
+  const cloudBefore = at(Math.max(0, last - lag - 1));
+  const price = values[last];
+  const previousPrice = values[last - 1];
+  const sideOf = (p: number, top: number, bottom: number) => (p > top ? 1 : p < bottom ? -1 : 0);
+  const sideNow = sideOf(price, cloudNow.top, cloudNow.bottom);
+  const sidePrevious = sideOf(previousPrice, cloudBefore.top, cloudBefore.bottom);
+  const diffNow = now.tenkan - now.kijun;
+  const diffPrevious = previous.tenkan - previous.kijun;
+  return {
+    tenkan: now.tenkan,
+    kijun: now.kijun,
+    senkouA: cloudNow.senkouA,
+    senkouB: cloudNow.senkouB,
+    cloudTop: cloudNow.top,
+    cloudBottom: cloudNow.bottom,
+    cloudThickness: cloudNow.top - cloudNow.bottom,
+    cross: diffPrevious <= 0 && diffNow > 0 ? 1 : diffPrevious >= 0 && diffNow < 0 ? -1 : 0,
+    cloudBreak: sideNow !== sidePrevious && sideNow !== 0 && sidePrevious !== sideNow ? (sideNow as 1 | -1) : 0,
+    position: sideNow > 0 ? 'above' : sideNow < 0 ? 'below' : 'inside',
+  };
+}
+
+export type IndicatorVelocity = {
+  indicator_velocity: number;
+  target_price_projection: number;
+};
+
+/**
+ * Internal state for the honeycomb velocity input. `userInput` in [-1, 1] is the
+ * up/neutral/down control; histogram height and cloud thickness scale the response.
+ */
+export function calculateIndicatorVelocity(
+  price: number,
+  macd: MacdPendulum | undefined,
+  ichimoku: IchimokuState | undefined,
+  userInput = 0,
+): IndicatorVelocity {
+  const height = macd?.distortionHeight ?? 0;
+  const cloudRatio = ichimoku && Math.abs(price) > 1e-9 ? ichimoku.cloudThickness / Math.abs(price) : 0;
+  const direction = clamp(userInput, -1, 1);
+  const velocity = direction * (0.25 + Math.abs(height)) + height * 0.35;
+  const reach = Math.abs(price) * (0.0015 + cloudRatio * 0.5);
+  return {
+    indicator_velocity: velocity,
+    target_price_projection: price + velocity * reach * 10,
+  };
+}
+
+export type AnimalOrderMacd = {
+  macd: number;
+  signal: number;
+  histogram: number;
+  /** 0..1, grows while the histogram is positive and expanding (sync build-up). */
+  riseStrength: number;
+};
+
+/** MACD on the Kuramoto order parameter r (short MA minus long MA). */
+export function calculateOrderParameterMacd(orders: readonly number[], shortPeriod = 5, longPeriod = 20): AnimalOrderMacd | undefined {
+  if (orders.length < 4) return undefined;
+  const shortMa = emaSeries(orders, shortPeriod);
+  const longMa = emaSeries(orders, longPeriod);
+  const line = shortMa.map((value, index) => value - longMa[index]);
+  const signal = emaSeries(line, 5);
+  const last = orders.length - 1;
+  const histogram = line[last] - signal[last];
+  const previous = line[last - 1] - signal[last - 1];
+  const growing = histogram > 0 && histogram > previous;
+  return {
+    macd: line[last],
+    signal: signal[last],
+    histogram,
+    riseStrength: growing ? clamp(histogram * 12, 0, 1) : histogram > 0 ? clamp(histogram * 4, 0, 0.4) : 0,
+  };
+}
+
+/** Ecosystem collapse: r leaves the stability zone (cloud) built from its lagged mean +/- range. */
+export function detectEcosystemCollapse(orders: readonly number[], lag = 10): { collapsed: boolean; stableTop: number; stableBottom: number } | undefined {
+  if (orders.length < lag + 4) return undefined;
+  const window = orders.slice(-(lag + 12), -lag);
+  const mean = window.reduce((sum, value) => sum + value, 0) / window.length;
+  const spread = Math.max(0.03, (Math.max(...window) - Math.min(...window)) / 2);
+  const stableTop = Math.min(1, mean + spread);
+  const stableBottom = Math.max(0, mean - spread);
+  const last = orders[orders.length - 1];
+  const previous = orders[orders.length - 2];
+  const inside = (value: number) => value >= stableBottom && value <= stableTop;
+  return { collapsed: inside(previous) && !inside(last) && last < previous, stableTop, stableBottom };
+}

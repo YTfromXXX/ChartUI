@@ -64,6 +64,19 @@ export type KnotFieldStyle = {
   metalCleaveCrossLine?: number;
   metalCleaveCrossTimestamp?: number;
   animalPhaseSigma?: number;
+  macdDistortionHeight?: number;
+  macdAcceleration?: number;
+  macdPhaseDifference?: number;
+  ichimokuCrossTimestamp?: number;
+  ichimokuCrossDirection?: number;
+  kumoBreakTimestamp?: number;
+  kumoBreakDirection?: number;
+  kumoCenter?: number;
+  kumoThickness?: number;
+  indicatorVelocity?: number;
+  targetPriceProjection?: number;
+  animalOrderRise?: number;
+  animalCollapseTimestamp?: number;
   animalWormhole?: number;
   animalCorrelations?: readonly number[];
   candyMass?: number;
@@ -126,6 +139,19 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   metalCleaveCrossLine: 0,
   metalCleaveCrossTimestamp: 0,
   animalPhaseSigma: 0,
+  macdDistortionHeight: 0,
+  macdAcceleration: 0,
+  macdPhaseDifference: 0,
+  ichimokuCrossTimestamp: 0,
+  ichimokuCrossDirection: 0,
+  kumoBreakTimestamp: 0,
+  kumoBreakDirection: 0,
+  kumoCenter: 0,
+  kumoThickness: 0,
+  indicatorVelocity: 0,
+  targetPriceProjection: 0,
+  animalOrderRise: 0,
+  animalCollapseTimestamp: 0,
   animalWormhole: 0,
   animalCorrelations: [],
   candyMass: 1,
@@ -964,6 +990,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       crossCell: activeStyle.metalCleaveCrossCell,
       crossLine: activeStyle.metalCleaveCrossLine,
       crossTimestamp: activeStyle.metalCleaveCrossTimestamp,
+      sparkBoost: activeStyle.macdAcceleration,
+      distortionHeight: activeStyle.macdDistortionHeight,
     });
     const tip = { x: targetX, y: targetY };
     const previousTip = previousMetalTip;
@@ -981,9 +1009,67 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
       phaseSigma: activeStyle.animalPhaseSigma,
       pulsePhase: activeStyle.animalPulsePhase,
       alert: activeStyle.animalPulseStrength > 0.85,
+      riseStrength: activeStyle.animalOrderRise,
+      collapseTimestamp: activeStyle.animalCollapseTimestamp,
     });
   } else {
     drawGravityHoneycomb(ctx, width, height, gravityTensor, frame * 16.67);
+  }
+  if (activeStyle.kumoThickness > 0) {
+    const toY = (price: number) => Math.max(plotTop, Math.min(plotBottom, plotBottom - (price - minPrice) * yScale));
+    const cloudMid = currentPrice * (1 + activeStyle.kumoCenter);
+    const half = currentPrice * activeStyle.kumoThickness / 2;
+    const top = toY(cloudMid + half);
+    const bottom = toY(cloudMid - half);
+    const breakAge = activeStyle.kumoBreakTimestamp > 0 ? Date.now() - activeStyle.kumoBreakTimestamp : Number.POSITIVE_INFINITY;
+    const fault = Math.exp(-breakAge / 900);
+    ctx.save();
+    ctx.globalAlpha = 0.12 + fault * 0.25;
+    ctx.fillStyle = activeStyle.metalFieldActive ? '#d4a94a' : '#34d399';
+    ctx.fillRect(plotLeft, top, plotRight - plotLeft, Math.max(2, bottom - top));
+    if (fault > 0.03) {
+      ctx.globalAlpha = fault;
+      ctx.strokeStyle = activeStyle.metalFieldActive ? '#fff1b8' : '#fb7185';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(targetX - 40, top);
+      for (let step = 1; step <= 6; step += 1) {
+        ctx.lineTo(targetX - 40 + step * 14 + Math.sin(step * 5.1) * 6, top + (bottom - top) * step / 6);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (activeStyle.ichimokuCrossTimestamp > 0) {
+    const crossAge = Date.now() - activeStyle.ichimokuCrossTimestamp;
+    const node = Math.exp(-crossAge / 2500);
+    if (node > 0.03) {
+      ctx.save();
+      ctx.globalAlpha = node;
+      ctx.strokeStyle = activeStyle.ichimokuCrossDirection >= 0 ? '#fbbf24' : '#67e8f9';
+      ctx.lineWidth = 1.2;
+      const radius = 6 + (1 - node) * 18;
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, radius, 0, TAU);
+      ctx.moveTo(targetX - radius * 1.4, targetY - radius * 1.4);
+      ctx.lineTo(targetX + radius * 1.4, targetY + radius * 1.4);
+      ctx.moveTo(targetX - radius * 1.4, targetY + radius * 1.4);
+      ctx.lineTo(targetX + radius * 1.4, targetY - radius * 1.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  if (activeStyle.targetPriceProjection > 0 && activeStyle.indicatorVelocity !== 0) {
+    const projectedY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.targetPriceProjection - minPrice) * yScale));
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = activeStyle.indicatorVelocity > 0 ? '#86efac' : '#fda4af';
+    ctx.beginPath();
+    ctx.moveTo(targetX, targetY);
+    ctx.lineTo(plotRight - 6, projectedY);
+    ctx.stroke();
+    ctx.restore();
   }
   const pricePhase = ((currentPrice - minPrice) / priceRange) * TAU + currentAngle;
   drawComplexPlaneGuides(ctx, width, height, gravityTarget.x, gravityTarget.y, currentTension, pricePhase, frame, guidePointer, selectedKnotIds, gridTimeScale, shellScale, intrusionRotation, patternOffset);

@@ -388,6 +388,10 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
   });
 
   // Requirement 4: DNA-like self-rotation + orbital revolution along 4 prediction spirals
+  const kumoBreakSeen = useRef(0);
+  const collapseSeen = useRef(0);
+  const collapseStart = useRef(-1000);
+  const animalPhaseClock = useRef(0);
   const metalSparkCell = useRef(-1);
   const lastCleaveTimestamp = useRef(0);
   const metalStepLevel = useRef(0);
@@ -414,6 +418,21 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
       metalEventStrength.current = THREE.MathUtils.clamp(fieldStyle?.metalLightningIntensity ?? 0, 0, 1);
       lastJumpTime.current = elapsed;
     }
+    const kumoBreak = fieldStyle?.metalFieldActive ? fieldStyle.kumoBreakTimestamp ?? 0 : 0;
+    if (kumoBreak > 0 && kumoBreak !== kumoBreakSeen.current) {
+      kumoBreakSeen.current = kumoBreak;
+      lastJumpTime.current = elapsed;
+      metalEventStartTime.current = elapsed;
+      metalEventStrength.current = 1;
+    }
+    const collapseStamp = fieldStyle?.animalCollapseTimestamp ?? 0;
+    if (collapseStamp > 0 && collapseStamp !== collapseSeen.current) {
+      collapseSeen.current = collapseStamp;
+      collapseStart.current = elapsed;
+    }
+    const chaos = Math.exp(-Math.max(0, elapsed - collapseStart.current) / 2.5);
+    animalPhaseClock.current += Math.min(delta, 0.05) * (7 + THREE.MathUtils.clamp(fieldStyle?.animalOrderRise ?? 0, 0, 1) * 9);
+    const macdHeight = THREE.MathUtils.clamp(fieldStyle?.macdDistortionHeight ?? 0, -1, 1);
     const cleaveTimestamp = fieldStyle?.metalCleaveCrossTimestamp ?? 0;
     if (cleaveTimestamp > 0 && cleaveTimestamp !== lastCleaveTimestamp.current) {
       lastCleaveTimestamp.current = cleaveTimestamp;
@@ -453,10 +472,10 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
     crystalUniforms.uCandyVibration.value = vibration * 0.025;
     crystalUniforms.uCandyVibrationFrequency.value = THREE.MathUtils.clamp(fieldStyle?.candyVibrationFrequency ?? 1, 0.2, 5);
     crystalUniforms.uCandyEmissive.value = THREE.MathUtils.clamp(fieldStyle?.candyEmissive ?? 0.8, 0, 2);
-    crystalUniforms.uAnimalTime.value = elapsed;
+    crystalUniforms.uAnimalTime.value = animalPhaseClock.current / 7;
     crystalUniforms.uAnimalSync.value = THREE.MathUtils.clamp(fieldStyle?.animalPulseStrength ?? 0, 0, 1);
     crystalUniforms.uAnimalPhase.value = THREE.MathUtils.clamp(fieldStyle?.animalPulsePhase ?? 0, -Math.PI, Math.PI);
-    crystalUniforms.uAnimalBraid.value = THREE.MathUtils.clamp(fieldStyle?.animalBraidStrength ?? 0, 0, 1);
+    crystalUniforms.uAnimalBraid.value = THREE.MathUtils.clamp(fieldStyle?.animalBraidStrength ?? 0, 0, 1) * (1 - chaos);
     crystalUniforms.uMetaTime.value = elapsed;
     crystalUniforms.uMetaPulsarMass.value = THREE.MathUtils.clamp(fieldStyle?.metaPulsarMass ?? 0, 0, 3);
     crystalUniforms.uMetaCrackIntensity.value = THREE.MathUtils.clamp(fieldStyle?.metaCrackIntensity ?? 0, 0, 1);
@@ -502,13 +521,20 @@ diffuseColor.rgb *= 1.0 + 0.2 * crystalBand + uCandyEmissive * 0.035 + vSynapseP
 
       // Position in world coordinates
       tempPosition.set(nx * r, ny * r, nz * r);
-      const braidStrength = THREE.MathUtils.clamp(fieldStyle?.animalBraidStrength ?? 0, 0, 1);
+      const braidStrength = THREE.MathUtils.clamp(fieldStyle?.animalBraidStrength ?? 0, 0, 1) * (1 - chaos);
       const braidAngle = braidStrength * (t - 0.5) * 0.48 + (fieldStyle?.animalPulsePhase ?? 0) * braidStrength * 0.08;
       const braidRadiusScale = 1 - braidStrength * 0.3;
       const braidedX = tempPosition.x * braidRadiusScale;
       const braidedZ = tempPosition.z * braidRadiusScale;
       tempPosition.x = braidedX * Math.cos(braidAngle) - braidedZ * Math.sin(braidAngle);
       tempPosition.z = braidedX * Math.sin(braidAngle) + braidedZ * Math.cos(braidAngle);
+      if (chaos > 0.02) {
+        const seed = candy.cell_index * 12.9898 + candy.t * 78.233;
+        tempPosition.x += Math.sin(seed + elapsed * 3.1) * chaos * radius * 0.12;
+        tempPosition.y += Math.cos(seed * 1.3 + elapsed * 2.7) * chaos * radius * 0.1;
+        tempPosition.z += Math.sin(seed * 0.7 + elapsed * 3.7) * chaos * radius * 0.12;
+      }
+      if (macdHeight !== 0) tempPosition.y += macdHeight * radius * 0.09 * Math.sin(candy.cell_index * 0.9 + elapsed * 0.8);
       if (rigidStep !== 0) {
         const layerStep = Math.floor(candy.t * 6) / 6;
         const lift = rigidStep > 0 ? rigidStep * (0.35 + layerStep) : rigidStep * (0.6 + (candy.cell_index % 6) * 0.1);

@@ -17,7 +17,7 @@ import {
   type CandyPointsResponse,
 } from '@/lib/candyPoints';
 import AnimalIndicators from './AnimalIndicators';
-import { AnimalVoxelBackdrop, MetalHoneycombBackdrop } from './FieldBackdrop';
+import { AnimalVoxelBackdrop, KumoBand, MetalHoneycombBackdrop } from './FieldBackdrop';
 import CandyXRPhysics from './CandyXRPhysics';
 import { CandyInstancedMesh, CryptoPointCloud, CyberpunkPriceSphere } from './CandySpiralMesh';
 
@@ -113,7 +113,9 @@ function MetalFractureEffect({
   cellIndex,
   intensity,
   eventTimestamp,
+  sparkBoost = 0,
 }: {
+  sparkBoost?: number;
   cellIndex: number;
   intensity: number;
   eventTimestamp: number;
@@ -160,7 +162,7 @@ function MetalFractureEffect({
     bolt.setAttribute('position', new THREE.Float32BufferAttribute(boltVertices, 3));
 
     const sparkPositions: number[] = [];
-    for (let spark = 0; spark < 20; spark += 1) {
+    for (let spark = 0; spark < 48; spark += 1) {
       const phase = spark * goldenAngle;
       const spread = 0.04 + ((spark * 17) % 11) * 0.012;
       sparkPositions.push(
@@ -196,6 +198,7 @@ function MetalFractureEffect({
       sparkMaterialRef.current.visible = opacity > 0.02;
       sparkMaterialRef.current.size = 0.035 + opacity * 0.075;
     }
+    sparkGeometry.setDrawRange(0, 12 + Math.round(THREE.MathUtils.clamp(sparkBoost, 0, 1) * 36));
   });
 
   return (
@@ -424,16 +427,27 @@ export default function CandySpiralScene({
           <CyberpunkPriceSphere radius={2.0} price={currentPrice} symbol={symbol} wuxingPhase={wuxingPhase} eyeMode={spiralEyeMode && !xrMode} />
           {!spiralEyeMode && <FloatingPriceTag price={currentPrice} radius={2.0} />}
           {showSpirals && <SpiralGuideLines radius={2.0} />}
+          {(fieldName === 'metal' || fieldName === 'animal') && (fieldStyle?.kumoThickness ?? 0) > 0 && (
+            <KumoBand
+              field={fieldName}
+              center={fieldStyle?.kumoCenter ?? 0}
+              thickness={fieldStyle?.kumoThickness ?? 0}
+              breakTimestamp={fieldStyle?.kumoBreakTimestamp ?? 0}
+              collapseTimestamp={fieldStyle?.animalCollapseTimestamp ?? 0}
+            />
+          )}
           {fieldName === 'metal' && (
             <MetalFractureEffect
+              sparkBoost={fieldStyle?.macdAcceleration ?? 0}
               cellIndex={fieldStyle?.metalFractureCell ?? 0}
               intensity={fieldStyle?.metalLightningIntensity ?? 0}
-              eventTimestamp={fieldStyle?.metalLightningTimestamp ?? 0}
+              eventTimestamp={Math.max(fieldStyle?.metalLightningTimestamp ?? 0, fieldStyle?.kumoBreakTimestamp ?? 0)}
             />
           )}
 
           {fieldName === 'metal' && (
             <MetalHoneycombBackdrop
+              distortionHeight={fieldStyle?.macdDistortionHeight ?? 0}
               fractureCell={fieldStyle?.metalFractureCell ?? 0}
               crossCell={fieldStyle?.metalCleaveCrossCell ?? 0}
               crossTimestamp={fieldStyle?.metalCleaveCrossTimestamp ?? 0}

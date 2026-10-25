@@ -12,7 +12,7 @@ import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
-import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, calculateBollingerHalfVariance, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import { useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -411,9 +411,50 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     () => field?.kind === 'metal' ? checkMetalResonance(matrixAnalysis.analysis) : undefined,
     [field?.kind, matrixAnalysis],
   );
+  const indicatorPrices = useMemo(() => history.map((tick) => tick.price), [history]);
+  const macdState = useMemo(
+    () => field?.kind === 'metal' || field?.kind === 'animal' ? calculateMacdPendulum(indicatorPrices) : undefined,
+    [field?.kind, indicatorPrices],
+  );
+  const ichimokuState = useMemo(
+    () => field?.kind === 'metal' || field?.kind === 'animal' ? calculateIchimoku(indicatorPrices) : undefined,
+    [field?.kind, indicatorPrices],
+  );
+  const orderHistory = useRef<number[]>([]);
+  const animalOrderMacd = useMemo(() => {
+    if (field?.kind !== 'animal') {
+      orderHistory.current = [];
+      return undefined;
+    }
+    const order = fieldStep?.diagnostics?.kuramotoOrder;
+    if (order !== undefined) orderHistory.current = [...orderHistory.current, order].slice(-96);
+    return {
+      macd: calculateOrderParameterMacd(orderHistory.current),
+      collapse: detectEcosystemCollapse(orderHistory.current),
+    };
+  }, [field?.kind, fieldStep]);
+  const [indicatorInput, setIndicatorInput] = useState(0);
+  const [indicatorEvents, setIndicatorEvents] = useState({ crossTimestamp: 0, crossDirection: 0, kumoBreakTimestamp: 0, kumoBreakDirection: 0, collapseTimestamp: 0 });
+  const lastIndicatorTick = useRef(0);
+  useEffect(() => {
+    const stamp = latestTick?.timestamp ?? history.length;
+    if (!ichimokuState || stamp === lastIndicatorTick.current) return;
+    lastIndicatorTick.current = stamp;
+    const now = Date.now();
+    setIndicatorEvents((current) => ({
+      ...current,
+      ...(ichimokuState.cross !== 0 ? { crossTimestamp: now, crossDirection: ichimokuState.cross } : {}),
+      ...(ichimokuState.cloudBreak !== 0 ? { kumoBreakTimestamp: now, kumoBreakDirection: ichimokuState.cloudBreak } : {}),
+      ...(animalOrderMacd?.collapse?.collapsed ? { collapseTimestamp: now } : {}),
+    }));
+  }, [animalOrderMacd, history.length, ichimokuState, latestTick?.timestamp]);
+  const indicatorVelocity = useMemo(
+    () => calculateIndicatorVelocity(indicatorPrices.at(-1) ?? 0, macdState, ichimokuState, indicatorInput),
+    [ichimokuState, indicatorInput, indicatorPrices, macdState],
+  );
   const metalJumpIntensity = useMemo(
-    () => field?.kind === 'metal' ? adaptMetalJumpIntensity(1 / 90, matrixAnalysis.analysis) : 0,
-    [field?.kind, matrixAnalysis],
+    () => field?.kind === 'metal' ? accelerateJumpIntensity(adaptMetalJumpIntensity(1 / 90, matrixAnalysis.analysis), macdState) : 0,
+    [field?.kind, macdState, matrixAnalysis],
   );
   const metalJumpActive = field?.kind === 'metal'
     && (Boolean(fieldStep?.diagnostics?.poissonJump) || metalFeedJumpEvent);
@@ -554,13 +595,26 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
       bollingerBandwidth: bollinger.bandwidth,
       bollingerSigmaUp: bollinger.sigmaUp,
       bollingerSigmaDown: bollinger.sigmaDown,
+      macdDistortionHeight: macdState?.distortionHeight ?? 0,
+      macdAcceleration: macdState?.acceleration ?? 0,
+      macdPhaseDifference: macdState?.phaseDifference ?? 0,
+      ichimokuCrossTimestamp: indicatorEvents.crossTimestamp,
+      ichimokuCrossDirection: indicatorEvents.crossDirection,
+      kumoBreakTimestamp: indicatorEvents.kumoBreakTimestamp,
+      kumoBreakDirection: indicatorEvents.kumoBreakDirection,
+      kumoCenter: ichimokuState && indicatorPrices.at(-1) ? ((ichimokuState.cloudTop + ichimokuState.cloudBottom) / 2 - indicatorPrices.at(-1)!) / indicatorPrices.at(-1)! : 0,
+      kumoThickness: ichimokuState && indicatorPrices.at(-1) ? ichimokuState.cloudThickness / indicatorPrices.at(-1)! : 0,
+      indicatorVelocity: indicatorVelocity.indicator_velocity,
+      targetPriceProjection: indicatorVelocity.target_price_projection,
+      animalOrderRise: animalOrderMacd?.macd?.riseStrength ?? 0,
+      animalCollapseTimestamp: indicatorEvents.collapseTimestamp,
       ...(field?.kind === 'metal' && metalCleaveCross ? {
         metalCleaveCrossCell: metalCleaveCross.cell,
         metalCleaveCrossLine: metalCleaveCross.line,
         metalCleaveCrossTimestamp: metalCleaveCross.timestamp,
       } : {}),
     };
-  }, [bollinger, field?.kind, fieldStyle, metalCleaveCross]);
+  }, [animalOrderMacd, bollinger, field?.kind, fieldStyle, ichimokuState, indicatorEvents, indicatorPrices, indicatorVelocity, macdState, metalCleaveCross]);
   const visualFieldStyle = useMemo(() => {
     if (!bollingerStyle) return bollingerStyle;
     const fieldStyle = bollingerStyle;
@@ -1045,7 +1099,13 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                     <KnotChart onMetalCleaveCross={setMetalCleaveCross} tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
-                    <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
+                    {(field?.kind === 'metal' || field?.kind === 'animal') && (
+                  <label className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/40 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-stone-300">
+                    velocity {indicatorVelocity.indicator_velocity.toFixed(2)} → {indicatorVelocity.target_price_projection.toFixed(2)}
+                    <input type="range" min={-1} max={1} step={0.05} value={indicatorInput} onChange={(event) => setIndicatorInput(Number(event.target.value))} aria-label="Indicator velocity input" />
+                  </label>
+                )}
+                <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
                   </div>
                   <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
                 </div>

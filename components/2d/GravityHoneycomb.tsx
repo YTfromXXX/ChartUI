@@ -22,6 +22,8 @@ export type MetalHoneycombStyle = {
   crossCell?: number;
   crossLine?: number;
   crossTimestamp?: number;
+  sparkBoost?: number;
+  distortionHeight?: number;
 };
 
 export const METAL_CLEAVAGE_LINES = 4;
@@ -191,8 +193,9 @@ export function drawMetalCrystalHoneycomb(
         else ctx.lineTo(vertex.x, vertex.y);
       });
       ctx.closePath();
-      ctx.globalAlpha = selected ? 0.22 + flash * 0.25 : 0.14;
-      ctx.fillStyle = selected ? '#fbbf24' : '#101b28';
+      ctx.globalAlpha = selected ? 0.22 + flash * 0.25 : 0.14 + Math.abs(style.distortionHeight ?? 0) * 0.12 * (0.5 + 0.5 * Math.sin(cellIndex * 0.7 + Date.now() / 900));
+      const height = style.distortionHeight ?? 0;
+      ctx.fillStyle = selected ? '#fbbf24' : height > 0.05 ? '#1b2a18' : height < -0.05 ? '#2a1418' : '#101b28';
       ctx.fill();
       ctx.strokeStyle = selected && flash > 0.02 ? '#fff1b8' : '#d8bd76';
       ctx.lineWidth = selected ? 1.1 + flash * 1.6 : 0.65;
@@ -224,8 +227,9 @@ export function drawMetalCrystalHoneycomb(
           ctx.shadowColor = '#ffd166';
           ctx.shadowBlur = 5 + hot * 14;
           const sparkPhase = Date.now() / 44;
-          for (let spark = 0; spark < 3; spark += 1) {
-            const t = (sparkPhase * 0.013 + spark * 0.31) % 1;
+          const sparkCount = 3 + Math.round(Math.max(0, Math.min(1, style.sparkBoost ?? 0)) * 9);
+          for (let spark = 0; spark < sparkCount; spark += 1) {
+            const t = (sparkPhase * 0.013 + spark * (0.93 / sparkCount)) % 1;
             ctx.beginPath();
             ctx.arc(center.x + dx * (2 * t - 1), center.y + dy * (2 * t - 1), 0.8 + hot * 1.4, 0, TAU);
             ctx.fill();
@@ -248,6 +252,8 @@ export function drawMetalCrystalHoneycomb(
 }
 
 export type AnimalVoxelStyle = {
+  riseStrength?: number;
+  collapseTimestamp?: number;
   order: number;
   phaseSigma: number;
   pulsePhase: number;
@@ -305,14 +311,22 @@ export function drawAnimalVoxelHoneycomb(
   const midY = height / 2;
   const now = Date.now() / 1000;
   const total = points.length;
-  const head = ((now * (0.12 + order * 0.5) + style.pulsePhase / TAU) % 1) * total;
+  const rise = Math.max(0, Math.min(1, style.riseStrength ?? 0));
+  const collapseAge = (style.collapseTimestamp ?? 0) > 0 ? Math.max(0, Date.now() - (style.collapseTimestamp ?? 0)) : Number.POSITIVE_INFINITY;
+  const chaos = Math.exp(-collapseAge / 1800);
+  const heads = 1 + Math.round(rise * 3);
+  const head = ((now * (0.12 + order * 0.5 + rise * 0.9) + style.pulsePhase / TAU) % 1) * total;
   const mapped = points.map((point, index) => {
     const dx = point.x - midX;
     const dy = point.y - midY;
     const radial = Math.hypot(dx, dy) / Math.max(1, Math.min(width, height) * 0.5);
     const warp = squeeze + (1 - squeeze) * 0.35 * Math.min(1, radial);
     const wobble = Math.sin(now * 1.4 + index * 0.37) * (0.6 + style.phaseSigma * 2.4);
-    return { x: midX + dx * warp + wobble, y: midY + dy * warp + wobble * 0.6 };
+    const scatter = chaos * 26;
+    return {
+      x: midX + dx * warp + wobble + Math.sin(index * 12.9 + now * 5) * scatter,
+      y: midY + dy * warp + wobble * 0.6 + Math.cos(index * 7.3 + now * 4) * scatter,
+    };
   });
 
   ctx.save();
@@ -325,10 +339,14 @@ export function drawAnimalVoxelHoneycomb(
     for (const target of targets) {
       if (target >= total) continue;
       const b = mapped[target];
-      const wrapped = Math.min(Math.abs(index - head), total - Math.abs(index - head));
+      let wrapped = total;
+      for (let pulse = 0; pulse < heads; pulse += 1) {
+        const position = (head + pulse * total / heads) % total;
+        wrapped = Math.min(wrapped, Math.abs(index - position), total - Math.abs(index - position));
+      }
       const glow = Math.exp(-(wrapped * wrapped) / (18 + order * 40)) * (0.3 + order * 0.7);
       ctx.globalAlpha = 0.07 + glow * 0.6;
-      ctx.strokeStyle = glow > 0.25 ? '#ecfdf5' : hue;
+      ctx.strokeStyle = chaos > 0.3 ? '#fb7185' : glow > 0.25 ? '#ecfdf5' : hue;
       ctx.lineWidth = 0.4 + glow * 1.4;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);

@@ -30,6 +30,7 @@ function hexReach(angle: number) {
 }
 
 type MetalBackdropProps = {
+  distortionHeight?: number;
   fractureCell: number;
   crossCell: number;
   crossTimestamp: number;
@@ -37,7 +38,7 @@ type MetalBackdropProps = {
 };
 
 /** Metal: the 2D 48-cell crystal honeycomb with 4 cleavage lines, rendered as a backdrop plane. */
-export function MetalHoneycombBackdrop({ fractureCell, crossCell, crossTimestamp, percentB }: MetalBackdropProps) {
+export function MetalHoneycombBackdrop({ distortionHeight = 0, fractureCell, crossCell, crossTimestamp, percentB }: MetalBackdropProps) {
   const { hexLines, cleaveLines } = useMemo(() => {
     const hex: number[] = [];
     const cleave: number[] = [];
@@ -66,8 +67,18 @@ export function MetalHoneycombBackdrop({ fractureCell, crossCell, crossTimestamp
   const hexMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#d8bd76', transparent: true, opacity: 0.22, depthWrite: false, toneMapped: false }), []);
   const cleaveMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#b38b42', transparent: true, opacity: 0.14, depthWrite: false, toneMapped: false }), []);
   const flashRef = useRef<THREE.Mesh>(null);
+  const hexBase = useMemo(() => Float32Array.from(hexLines.getAttribute('position').array as ArrayLike<number>), [hexLines]);
   const flashMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: '#fff1b8', transparent: true, opacity: 0, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }), []);
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    const attr = hexLines.getAttribute('position') as THREE.BufferAttribute;
+    const lift = THREE.MathUtils.clamp(distortionHeight, -1, 1) * 1.1;
+    const t = clock.getElapsedTime();
+    for (let index = 0; index < attr.count; index += 1) {
+      const x = hexBase[index * 3];
+      const y = hexBase[index * 3 + 1];
+      attr.setZ(index, lift * Math.sin(x * 0.8 + y * 0.6 + t * 0.9) * Math.exp(-(x * x + y * y) / 30));
+    }
+    attr.needsUpdate = true;
     const mesh = flashRef.current;
     if (!mesh) return;
     const cell = crossTimestamp > 0 ? crossCell : fractureCell;
@@ -163,6 +174,72 @@ export function AnimalVoxelBackdrop({ order, phaseSigma, phase }: AnimalBackdrop
     <group position={[0, 0, BACKDROP_Z]} scale={1.9}>
       <primitive object={lineObject} />
       <primitive object={pointObject} />
+    </group>
+  );
+}
+
+type KumoBandProps = {
+  field: 'metal' | 'animal';
+  center: number;
+  thickness: number;
+  breakTimestamp: number;
+  collapseTimestamp: number;
+};
+
+const KUMO_SCALE = 40;
+
+/** Ichimoku cloud as a tension band (Metal crystal layer) or stability zone (Animal) around the spiral. */
+export function KumoBand({ field, center, thickness, breakTimestamp, collapseTimestamp }: KumoBandProps) {
+  const groupRef = useRef<THREE.Group>(null);
+  const bandRef = useRef<THREE.Mesh>(null);
+  const crackRef = useRef<THREE.LineSegments>(null);
+  const material = useMemo(() => new THREE.MeshBasicMaterial({
+    color: field === 'metal' ? '#d4a94a' : '#34d399',
+    transparent: true,
+    opacity: 0.12,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  }), [field]);
+  const crackMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: field === 'metal' ? '#fff1b8' : '#fb7185', transparent: true, opacity: 0, depthWrite: false, toneMapped: false }), [field]);
+  const crackGeometry = useMemo(() => {
+    const values: number[] = [];
+    const segments = 28;
+    for (let step = 0; step < segments; step += 1) {
+      const a0 = step / segments * Math.PI * 2;
+      const a1 = (step + 1) / segments * Math.PI * 2;
+      const j0 = Math.sin(step * 12.9) * 0.5;
+      const j1 = Math.sin((step + 1) * 12.9) * 0.5;
+      values.push(Math.cos(a0) * 2.28, j0, Math.sin(a0) * 2.28, Math.cos(a1) * 2.28, j1, Math.sin(a1) * 2.28);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3));
+    return geometry;
+  }, []);
+  useFrame(() => {
+    const group = groupRef.current;
+    const band = bandRef.current;
+    if (!group || !band) return;
+    const height = THREE.MathUtils.clamp(thickness * KUMO_SCALE, 0.06, 1.6);
+    group.position.y = THREE.MathUtils.lerp(group.position.y, THREE.MathUtils.clamp(center * KUMO_SCALE, -2, 2), 0.1);
+    band.scale.y = THREE.MathUtils.lerp(band.scale.y, height, 0.1);
+    const stamp = field === 'metal' ? breakTimestamp : collapseTimestamp;
+    const age = stamp > 0 ? Math.max(0, Date.now() - stamp) : Number.POSITIVE_INFINITY;
+    const fault = Math.exp(-age / 1200);
+    material.opacity = 0.1 + fault * 0.25;
+    crackMaterial.opacity = fault;
+    if (crackRef.current) {
+      crackRef.current.visible = fault > 0.03;
+      crackRef.current.scale.y = height * 1.6;
+    }
+  });
+  return (
+    <group ref={groupRef}>
+      <mesh ref={bandRef} material={material}>
+        <cylinderGeometry args={[2.25, 2.25, 1, 64, 1, true]} />
+      </mesh>
+      <lineSegments ref={crackRef} geometry={crackGeometry} material={crackMaterial} visible={false} />
     </group>
   );
 }
