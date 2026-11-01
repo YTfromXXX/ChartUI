@@ -79,7 +79,20 @@ export type MetaPhaseShiftTrace = {
   crackIntensity: number;
 };
 
+export type SigilSnapshot = {
+  timestamp: number;
+  field: 'metal' | 'animal' | 'crypto' | 'meta';
+  text: string;
+  reason: string;
+  price: number;
+  arcanaId: number;
+  direction: 'long' | 'short' | 'flat';
+  params: { dots: number; border: string; vortexTurns: number; strokeWidth: number; detectorBits: string };
+};
+
 type KnotSelectionState = {
+  sigilSnapshots: SigilSnapshot[];
+  recordSigilSnapshot: (snapshot: SigilSnapshot) => void;
   selectedKnots: number[];
   tracesByKnot: Record<number, KnotResonanceTrace[]>;
   metalFractures: MetalFractureTrace[];
@@ -109,6 +122,15 @@ export const useKnotSelection = create<KnotSelectionState>()(persist((set) => ({
   animalSyncEvents: [],
   cryptoQuantumEvents: [],
   metaPhaseShifts: [],
+  sigilSnapshots: [],
+  recordSigilSnapshot: (snapshot) => {
+    if (!Number.isFinite(snapshot.timestamp) || !Number.isFinite(snapshot.price) || snapshot.price <= 0 || !snapshot.text) return;
+    set((state) => {
+      const last = state.sigilSnapshots.at(-1);
+      if (last && last.field === snapshot.field && last.reason === snapshot.reason && snapshot.timestamp - last.timestamp < 5000) return state;
+      return { sigilSnapshots: [...state.sigilSnapshots.slice(-49), snapshot] };
+    });
+  },
   toggleKnot: (knotId) => {
     if (!Number.isInteger(knotId) || knotId < 0 || knotId >= MAJOR_ARCANA_KNOTS.length) return;
     set((state) => ({
@@ -240,5 +262,6 @@ export const useKnotSelection = create<KnotSelectionState>()(persist((set) => ({
     animalSyncEvents: state.animalSyncEvents,
     cryptoQuantumEvents: state.cryptoQuantumEvents,
     metaPhaseShifts: state.metaPhaseShifts,
+    sigilSnapshots: state.sigilSnapshots,
   }),
 }));

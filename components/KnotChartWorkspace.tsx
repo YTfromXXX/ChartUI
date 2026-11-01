@@ -14,6 +14,9 @@ import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
 import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, observeQuantumCloud, calculateCryptoPositionMetrics, type CryptoPositionState, type ObserverDirection, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
+import SigilHologram from '@/components/SigilHologram';
+import { getLatestDetectorMask } from '@/components/2d/GravityHoneycomb';
+import { generateSigil, type SigilDirection, type SigilSingularity } from '@/lib/sigilGenerator';
 import { MAJOR_ARCANA_KNOTS, useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
 
@@ -750,6 +753,94 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
     }
     return fieldStyle;
   }, [animalReplayEvent, bollingerStyle, cryptoReplayEvent, field?.kind]);
+  const sigilExtra = useMemo(() => (
+    field?.kind === 'crypto' || field?.kind === 'meta'
+      ? { macd: calculateMacdPendulum(indicatorPrices), ichimoku: calculateIchimoku(indicatorPrices), rsi: calculateRsi(indicatorPrices), atr: calculateAtr(indicatorPrices) }
+      : undefined
+  ), [field?.kind, indicatorPrices]);
+  const sigilMacd = macdState ?? sigilExtra?.macd;
+  const sigilIchimoku = ichimokuState ?? sigilExtra?.ichimoku;
+  const sigilRsi = rsiState ?? sigilExtra?.rsi;
+  const sigilAtr = atrState ?? sigilExtra?.atr;
+  const sigilNesting = visualFieldStyle?.metaNesting;
+  const sigilPrice = indicatorPrices.at(-1) ?? 0;
+  let sigil: ReturnType<typeof generateSigil> | undefined;
+  if (field && visualFieldStyle) {
+    const kind = field.kind;
+    const step = indicatorPrices.length > 1 ? sigilPrice - indicatorPrices[indicatorPrices.length - 2] : 0;
+    let direction: SigilDirection = step > 0 ? 'long' : step < 0 ? 'short' : 'flat';
+    if (kind === 'crypto' && cryptoPosition) direction = cryptoPosition.direction;
+    else if (kind === 'metal' || kind === 'animal') direction = indicatorVelocity.indicator_velocity > 0.05 ? 'long' : indicatorVelocity.indicator_velocity < -0.05 ? 'short' : 'flat';
+    let singularity: SigilSingularity = null;
+    if ((kind === 'metal' || kind === 'animal') && hack?.locked) singularity = 'hack-lock';
+    else if (kind === 'crypto' && cryptoPosition && positionMetrics?.valid) {
+      if (positionMetrics.annihilation > 0.6) singularity = 'liquidation-collapse';
+      else if (cryptoPosition.targetPrice && (cryptoPosition.direction === 'long' ? sigilPrice >= cryptoPosition.targetPrice : sigilPrice <= cryptoPosition.targetPrice)) singularity = 'target-reached';
+    } else if (kind === 'meta' && (sigilNesting?.slipCount ?? 0) > 0) singularity = 'shell-slip';
+    const resonant = visualFieldStyle.cryptoResonanceArcanaId === 1 || visualFieldStyle.cryptoResonanceArcanaId === 18;
+    sigil = generateSigil({
+      field: kind,
+      kuramotoR: fieldStep?.diagnostics?.kuramotoOrder ?? 0,
+      xauStress: visualFieldStyle.invasionStrength ?? 0,
+      noiseStress: kind === 'crypto' ? Math.max(resonant ? 0.85 : 0, Math.min(1, (visualFieldStyle.cryptoNoiseAmplitude ?? 0) * 2)) : 0,
+      wellDepth: kind === 'meta' ? sigilNesting?.parentWellDepth ?? 0 : volumeState.maxDepth,
+      faultStress: Math.max(
+        lissajous.chaos && kind !== 'crypto' ? 0.9 : 0,
+        sigilIchimoku && sigilIchimoku.cloudBreak !== 0 ? 0.9 : 0,
+        visualFieldStyle.metaCrackIntensity ?? 0,
+        kind === 'crypto' ? positionMetrics?.annihilation ?? 0 : 0,
+      ),
+      macdAcceleration: sigilMacd?.acceleration ?? 0,
+      cloud: sigilIchimoku ? sigilIchimoku.position : 'none',
+      rsi: sigilRsi?.value ?? 50,
+      atr: sigilAtr?.pulse ?? 0,
+      direction,
+      detectorMask: kind === 'crypto' && positionMetrics?.valid ? getLatestDetectorMask() : 0,
+      singularity,
+    });
+  }
+  const lastSnapshotReason = useRef<string | null>(null);
+  const sigilReason = sigil?.singularity ?? null;
+  useEffect(() => {
+    if (!sigil || !field || !sigilReason) {
+      lastSnapshotReason.current = null;
+      return;
+    }
+    if (lastSnapshotReason.current === sigilReason) return;
+    lastSnapshotReason.current = sigilReason;
+    useKnotSelection.getState().recordSigilSnapshot({
+      timestamp: Date.now(),
+      field: field.kind,
+      text: sigil.text,
+      reason: sigilReason,
+      price: sigilPrice,
+      arcanaId: sigil.arcanaId,
+      direction: sigil.direction,
+      params: { dots: sigil.dots, border: sigil.border, vortexTurns: sigil.vortexTurns, strokeWidth: sigil.strokeWidth, detectorBits: sigil.detectorBits },
+    });
+  }, [field, sigil, sigilPrice, sigilReason]);
+  const sigilSnapshots = useKnotSelection((state) => state.sigilSnapshots);
+  const sigilHud = sigil ? (
+    <div className="absolute right-4 top-4 flex flex-col items-end gap-1">
+      <SigilHologram sigil={sigil} />
+      {sigilSnapshots.filter((snapshot) => snapshot.field === field?.kind).slice(-3).reverse().map((snapshot) => (
+        <button
+          key={snapshot.timestamp}
+          type="button"
+          onClick={() => {
+            if (field?.kind !== 'crypto') return;
+            setPositionDirection(snapshot.direction === 'short' ? 'short' : 'long');
+            recallGlyph(snapshot.arcanaId, snapshot.price);
+            setPositionEdited(true);
+          }}
+          title={field?.kind === 'crypto' ? 'Recall this snapshot into the position form' : 'Saved to KNOT INVENTORY'}
+          className="max-w-[190px] truncate border border-amber-200/30 bg-black/50 px-1.5 py-0.5 text-left font-mono text-[8px] text-amber-100 hover:bg-amber-200/10"
+        >
+          {new Date(snapshot.timestamp).toLocaleTimeString()} {snapshot.text}
+        </button>
+      ))}
+    </div>
+  ) : null;
   useEffect(() => {
     const quote = metalFeed.quote;
     const resonance = metalResonance;
@@ -1261,6 +1352,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                   <div className="relative h-[560px] min-h-[480px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
                     <KnotChart onMetalCleaveCross={setMetalCleaveCross} tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
+                    {sigilHud}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                     {(field?.kind === 'metal' || field?.kind === 'animal') && (
                   <>
@@ -1291,7 +1383,8 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
                 <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
                 {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
-                <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
+                {sigilHud}
+                    <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
                 <div className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600">T-2 history / T-1 echo / crossing margin ε</div>
                 </div>
                 <KnotGlyphPalette selectedIds={selectedKnotIds} onToggle={toggleKnot} onClear={() => setSelectedKnotIds([])} page={inventoryPage} onPageChange={(delta) => setInventoryPage((current) => (current + delta + 4) % 4)} locked={selectionLocked} />
