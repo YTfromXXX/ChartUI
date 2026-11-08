@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Dices } from 'lucide-react';
+import { ArrowLeft, Dices, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from '@/lib/retroGrid';
@@ -40,7 +40,10 @@ export default function RetroGridPage() {
       <div className="mx-auto max-w-5xl space-y-5">
         <header className="flex items-center justify-between">
           <h1 className="text-xl tracking-[0.3em] text-cyan-300">RETRO GRID // CHROMA DRIFT</h1>
-          <Link href="/oracle-api" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Oracle</Link>
+          <nav className="flex items-center gap-4">
+            <Link href="/cure-api/experiments" className="flex items-center gap-1 text-sm text-cyan-200 hover:text-white"><FlaskConical size={14} /> Hypothesis Lab</Link>
+            <Link href="/oracle-api" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Oracle</Link>
+          </nav>
         </header>
 
         <section className="flex flex-wrap items-center gap-4 rounded border border-fuchsia-500/30 bg-black/40 p-3 text-sm">

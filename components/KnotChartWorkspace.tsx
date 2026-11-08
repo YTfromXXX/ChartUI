@@ -19,6 +19,8 @@ import { getLatestDetectorMask } from '@/components/2d/GravityHoneycomb';
 import { generateSigil, type SigilDirection, type SigilSingularity } from '@/lib/sigilGenerator';
 import { MAJOR_ARCANA_KNOTS, useKnotSelection, type AnimalSyncTrace, type CryptoQuantumTrace } from '@/hooks/useKnotSelection';
 import { METAL_INSTRUMENT_CATALOG } from '@/lib/metalMarketData';
+import { useCureAPIStore } from '@/lib/cureApiStore';
+import AnimalProjectionMirror from '@/cloudmaintenance/AnimalProjectionMirror';
 
 const MAX_TICKS = 256;
 const DEFAULT_SYMBOL = 'BTCUSD';
@@ -184,6 +186,8 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [isGuideTracking, setIsGuideTracking] = useState(false);
   const [guidePointer, setGuidePointer] = useState<GuidePointer>({ x: 0.72, y: 0.22 });
   const [selectedKnotIds, setSelectedKnotIds] = useState<number[]>([]);
+  const unlockedPredictionCell = useCureAPIStore((state) => state.unlockedPredictionCell);
+  const decoherenceVector = useCureAPIStore((state) => state.decoherenceVector);
   const metalFractureCount = useKnotSelection((state) => state.metalFractures.length);
   const animalSyncEventCount = useKnotSelection((state) => state.animalSyncEvents.length);
   const animalSyncEvents = useKnotSelection((state) => state.animalSyncEvents);
@@ -210,6 +214,7 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [intrusionRotation, setIntrusionRotation] = useState(0);
   const [patternOffset, setPatternOffset] = useState(0);
   const [viewMode, setViewMode] = useState<'2d' | '3d' | 'split'>('split');
+  const [animalMirrorEnabled, setAnimalMirrorEnabled] = useState(true);
   const lastTickTimestamp = useRef<number | undefined>(undefined);
   const lastMetalDebugTimestamp = useRef<number | undefined>(undefined);
   const lastProcessedMetalQuote = useRef<MetalQuote | undefined>(undefined);
@@ -994,7 +999,20 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-100/[0.06] text-amber-200"><Activity className="h-5 w-5" /></div>
             <div><p className="font-mono text-[9px] uppercase tracking-[0.38em] text-cyan-200/60">Native projection workspace</p><h1 className="mt-1 text-xl tracking-[0.14em] text-cyan-50 sm:text-2xl">{field?.title ?? 'BTCUSD / KNOT PROJECTION'}</h1></div>
           </div>
-          <div className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500"><Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link>{(field?.kind === 'crypto' || field?.kind === 'meta') && <MatrixLiveFeedback kind={field.kind} diagnostics={fieldStep?.diagnostics} inventoryCount={field.kind === 'crypto' ? cryptoQuantumEvents.length : metaPhaseShifts.length} />}<span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning && (field?.kind !== 'metal' || metalFeed.quote?.source === 'LIVE') ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : field?.kind === 'metal' && isRunning ? 'bg-amber-300' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `${field?.kind === 'metal' && metalFeed.quote?.source !== 'LIVE' ? 'fallback' : 'live'} / ${streamLabel}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span></div>
+          <div className="flex flex-wrap items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-500">
+            {unlockedPredictionCell >= 0 && (
+              <button
+                type="button"
+                onClick={() => toggleKnot(unlockedPredictionCell % 22)}
+                disabled={selectionLocked}
+                className="border border-cyan-200/35 px-2 py-1 text-cyan-100 hover:bg-cyan-100/10 disabled:opacity-40"
+                title={decoherenceVector ? `Resolved direction ${decoherenceVector.map((value) => value.toFixed(2)).join(', ')}` : 'Unlocked by Cure-API observer'}
+              >
+                Add unlocked cell {String(unlockedPredictionCell + 1).padStart(2, '0')} to inventory
+              </button>
+            )}
+            <Link href="/tickets" className="border border-white/10 px-2 py-1 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100">Ticket ledger</Link>{(field?.kind === 'crypto' || field?.kind === 'meta') && <MatrixLiveFeedback kind={field.kind} diagnostics={fieldStep?.diagnostics} inventoryCount={field.kind === 'crypto' ? cryptoQuantumEvents.length : metaPhaseShifts.length} />}<span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${isConnected && isRunning && (field?.kind !== 'metal' || metalFeed.quote?.source === 'LIVE') ? 'bg-emerald-300 shadow-[0_0_12px_#6ee7b7]' : field?.kind === 'metal' && isRunning ? 'bg-amber-300' : 'bg-stone-600'}`} /> {isRunning ? isConnected ? `${field?.kind === 'metal' && metalFeed.quote?.source !== 'LIVE' ? 'fallback' : 'live'} / ${streamLabel}` : 'awaiting BTCUSD feed' : 'paused'}</span><span className="hidden text-stone-700 sm:inline">canvas / requestAnimationFrame</span>
+          </div>
         </header>
 
         <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -1340,9 +1358,25 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 >
                   Dual Split View
                 </button>
+                {field?.kind === 'animal' && (
+                  <button
+                    type="button"
+                    aria-pressed={animalMirrorEnabled}
+                    onClick={() => setAnimalMirrorEnabled((enabled) => !enabled)}
+                    className={`px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.14em] transition ${
+                      animalMirrorEnabled
+                        ? 'border border-emerald-300/60 bg-emerald-300/10 text-emerald-100'
+                        : 'border border-white/10 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    {animalMirrorEnabled ? '48 Mirror / on' : '48 Mirror / off'}
+                  </button>
+                )}
               </div>
               <span className="hidden font-mono text-[8px] uppercase tracking-[0.16em] text-stone-500 sm:inline">
-                48-Cell Fibonacci • 4 Timeline Spirals • InstancedMesh
+                {field?.kind === 'animal' && animalMirrorEnabled
+                  ? '48 Mirrored Cells • Permanent Y Axis • Accelerated Projection'
+                  : '48-Cell Fibonacci • 4 Timeline Spirals • InstancedMesh'}
               </span>
             </div>
 
@@ -1351,6 +1385,17 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                 <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
                   <div className="relative h-[560px] min-h-[480px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
                     <KnotChart onMetalCleaveCross={setMetalCleaveCross} tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[480px] w-full" height={560} maxTicks={MAX_TICKS} />
+                    {field?.kind === 'animal' && animalMirrorEnabled && (
+                      <AnimalProjectionMirror
+                        volatility={latestTick?.volatility ?? 0}
+                        tension={latestTick?.tension ?? 0}
+                        syncOrder={fieldStep?.diagnostics?.kuramotoOrder ?? 0}
+                        attractorStrength={fieldStep?.diagnostics?.animalAttractorStrength ?? 0}
+                        braidTension={fieldStep?.diagnostics?.animalBraidTension ?? 0}
+                        meanPhase={fieldStep?.diagnostics?.kuramotoMeanPhase ?? 0}
+                        directionalStrength={fieldStep?.diagnostics?.directionalStrength ?? 0}
+                      />
+                    )}
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                     {sigilHud}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>
@@ -1382,6 +1427,17 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
               <div className="grid flex-none gap-4 xl:grid-cols-[minmax(0,1fr)_184px]">
                 <div className="relative h-[620px] min-h-[520px] overflow-hidden rounded-2xl border border-cyan-200/15 bg-[#030a12]/90 shadow-[0_0_90px_rgba(34,211,238,0.09)]">
                 <KnotChart tick={latestTick} timeline={timeline} history={history} gravityTensor={gravityTensor} futureProjection={futureProjection} fieldStyle={visualFieldStyle} guideTracking={isGuideTracking} guidePointer={guidePointer} onGuideTrackingChange={setIsGuideTracking} onGuidePointerChange={updateGuidePointer} selectedKnotIds={selectedKnotIds} gridTimeScale={gridTimeScale} shellScale={shellScale} intrusionRotation={intrusionRotation} patternOffset={patternOffset} onGesture={handleGesture} className="h-full min-h-[520px] w-full" height={620} maxTicks={MAX_TICKS} />
+                {field?.kind === 'animal' && animalMirrorEnabled && (
+                  <AnimalProjectionMirror
+                    volatility={latestTick?.volatility ?? 0}
+                    tension={latestTick?.tension ?? 0}
+                    syncOrder={fieldStep?.diagnostics?.kuramotoOrder ?? 0}
+                    attractorStrength={fieldStep?.diagnostics?.animalAttractorStrength ?? 0}
+                    braidTension={fieldStep?.diagnostics?.animalBraidTension ?? 0}
+                    meanPhase={fieldStep?.diagnostics?.kuramotoMeanPhase ?? 0}
+                    directionalStrength={fieldStep?.diagnostics?.directionalStrength ?? 0}
+                  />
+                )}
                 {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
                 {sigilHud}
                     <div className="pointer-events-none absolute left-4 top-4 font-mono text-[9px] uppercase tracking-[0.22em] text-stone-600">P<tspan className="normal-case">t</tspan> / live projection</div>

@@ -4,6 +4,7 @@ import { ArrowLeft, Orbit } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import SpiralEyeLadder from '@/components/SpiralEyeLadder';
 
 const AxisParticleScene = dynamic(() => import('@/components/3d/AxisParticleScene'), {
   ssr: false,
@@ -111,6 +112,8 @@ export default function OracleApiPage() {
         <section className="h-96 overflow-hidden rounded-xl border border-white/10 bg-black">
           <AxisParticleScene />
         </section>
+
+        <SpiralEyeLadder candies={candies} apiConnected={!error && candies.length === 384} />
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <h2 className="mb-2 text-sm text-slate-300">Time-to-Target (→ radial, log) × Price offset (↑ Y axis, signed log)</h2>

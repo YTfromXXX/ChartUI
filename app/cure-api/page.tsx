@@ -4,6 +4,7 @@ import { ArrowLeft, HeartPulse } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mulberry32 } from '@/lib/retroGrid';
+import CureApiInitialMenu from '@/components/CureApiInitialMenu';
 import { GLOBAL, ROLES, type CourtRole } from './params';
 
 type Cell = { role: CourtRole; x: number; y: number; z: number; a: number; b: number };
@@ -100,11 +101,16 @@ export default function CureApiPage() {
   const total = cells.current.length;
 
   return (
-    <main className="min-h-screen bg-[#03020a] p-6 font-mono text-slate-100">
+    <>
+      <CureApiInitialMenu />
+      <main className="min-h-screen bg-[#03020a] p-6 font-mono text-slate-100">
       <div className="mx-auto max-w-5xl space-y-5">
         <header className="flex items-center justify-between">
-          <h1 className="flex items-center gap-2 text-xl tracking-[0.3em] text-rose-300"><HeartPulse size={18} /> CURE API // CELL CONVERGENCE</h1>
-          <Link href="/oracle-api" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Oracle</Link>
+          <h1 className="flex items-center gap-2 text-xl tracking-[0.3em] text-rose-300"><HeartPulse size={18} /> CELL CONVERGENCE // DIAGNOSTIC</h1>
+          <div className="flex gap-3">
+            <Link href="/cure-api/experiments" className="text-sm text-cyan-200 hover:text-white">Hypothesis Lab</Link>
+            <Link href="/oracle-api" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Oracle</Link>
+          </div>
         </header>
 
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_17rem]">
@@ -126,6 +132,7 @@ export default function CureApiPage() {
           </aside>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
