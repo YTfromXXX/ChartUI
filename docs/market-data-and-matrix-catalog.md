@@ -127,3 +127,10 @@ Pick a recorded quantum singularity from KNOT INVENTORY, then overlay a manual p
 - Core attractor (I / IV / X / XVI), suit (Metal=Wands, Animal=Cups, Crypto=Swords, Meta=Pentacles), MACD dots, Ichimoku border, RSI vortex turns, ATR stroke.
 - Singularities (hack lock, target reached, liquidation collapse, Meta shell slip) turn the sigil gold and save a snapshot to KNOT INVENTORY (`sigilSnapshots`, de-duplicated within 5 s). Crypto snapshots can be recalled into the position form.
 - Crypto/Meta indicators are close-only approximations; stress mappings are heuristic.
+
+## 384 Spiral Candy grid API (`spiral_candy_grid.py`)
+
+- `GET /api/v1/oracle/spiral-grid?scale_dial=<0..1>` returns 384 candies (48 Fibonacci cells × 4 waveforms × 2 polarities). Out-of-range or non-finite dials are clamped to `[0, 1]`.
+- Radius follows `r = a · exp(b · ω)`; the dial shifts `ln a` linearly, so the whole grid zooms by 3 decades across the dial (`log10_radius_min/max` move by `3 × Δdial`).
+- Cells 0/1/46/47 are the element singularities (Wands/Cups/Swords/Pentacles); the other 44 map 22 Major Arcana × Light/Shadow.
+- `/oracle-api` renders a single snapshot; `/oracle-api/experiments` sweeps the dial (parameters in `app/oracle-api/params.ts`) and checks the log-linear zoom. All RR / time-to-target values are geometric, synthetic quantities.

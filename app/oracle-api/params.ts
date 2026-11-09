@@ -1,46 +1,39 @@
-// Free-form parameter sheet for /cure for oracle api (experimental, tune freely).
-// A "cell" is a point that converges into the sphere; its court role decides the shell
-// it settles on, how strongly it is pulled, and its colour.
+// Free-form parameter sheet for /oracle-api/experiments (experimental, tune freely).
+// The lab sweeps `scale_dial` across the 384 Spiral Candy grid served by
+// GET /api/v1/oracle/spiral-grid and compares the snapshots side by side.
 
-export type CourtRole = 'KING' | 'QUEEN' | 'KNIGHT' | 'PAGE' | 'EX';
+export const WAVEFORMS = ['SURGE', 'CONTINUATION', 'RANGE', 'CRASH'] as const;
+export type Waveform = (typeof WAVEFORMS)[number];
 
-export type RoleParams = {
-  glyph: string;
-  /** Share of cells assigned to the role (normalised at runtime). */
-  weight: number;
-  /** Shell radius as a fraction of the sphere radius (0 = core, 1 = surface). */
-  shell: number;
-  /** Pull strength toward the shell; higher converges faster. */
-  pull: number;
-  /** Tangential swirl; positive = clockwise seen from +Y. */
-  swirl: number;
-  /** Position jitter, as a fraction of the sphere radius. */
-  jitter: number;
-  hue: number;
-  /** Matrix effect each role maps to (lib/arcanaMatrix archetypes). */
-  archetype: 'inertia' | 'equilibrium' | 'flow' | 'volatility' | 'rupture';
+export const SUITS = ['WANDS', 'CUPS', 'SWORDS', 'PENTACLES'] as const;
+export type Suit = (typeof SUITS)[number];
+
+export const SUIT_COLORS: Record<Suit, string> = {
+  WANDS: '#f97316',
+  CUPS: '#38bdf8',
+  SWORDS: '#a78bfa',
+  PENTACLES: '#4ade80',
 };
 
-export const ROLES: Record<CourtRole, RoleParams> = {
-  KING: { glyph: '♚', weight: 0.08, shell: 0.12, pull: 1.4, swirl: 0.1, jitter: 0.03, hue: 48, archetype: 'inertia' },
-  QUEEN: { glyph: '♛', weight: 0.12, shell: 0.3, pull: 1.1, swirl: -0.25, jitter: 0.05, hue: 300, archetype: 'equilibrium' },
-  KNIGHT: { glyph: '♞', weight: 0.25, shell: 0.62, pull: 0.8, swirl: 0.9, jitter: 0.08, hue: 190, archetype: 'flow' },
-  PAGE: { glyph: '♟', weight: 0.35, shell: 0.85, pull: 0.55, swirl: 0.35, jitter: 0.1, hue: 140, archetype: 'volatility' },
-  EX: { glyph: '✕', weight: 0.2, shell: 1.0, pull: 0.3, swirl: -0.7, jitter: 0.18, hue: 0, archetype: 'rupture' },
+export const WAVE_COLORS: Record<Waveform, string> = {
+  SURGE: '#22d3ee',
+  CONTINUATION: '#a3e635',
+  RANGE: '#facc15',
+  CRASH: '#fb7185',
 };
 
-export const GLOBAL = {
-  cellCount: 1800,
-  /** Sphere radius in px at zoom 1. */
-  sphereRadius: 220,
-  /** Core density -> overall convergence speed multiplier. */
-  density: 0.6,
-  /** Seconds for the full cycle of the breathing (diastole/systole) of the shell. */
-  breathPeriod: 9,
-  breathDepth: 0.08,
-  /** Self-healing: fraction of EX cells re-seeded each second into the PAGE shell. */
-  cureRate: 0.04,
-  rotationSpeed: 0.12,
+export const SWEEP = {
+  /** Number of evenly spaced dial snapshots requested from the API (inclusive of both ends). */
+  steps: 5,
+  /** Default dial range; the API clamps to [0, 1]. */
+  from: 0,
+  to: 1,
+  /** Decades the backend shifts ln(a) by over the full dial (spiral_candy_grid.ZOOM_LOG_SPAN = ln 1000). */
+  expectedDecadesPerDial: 3,
+  /** Candies with RR at or above this are counted as "actionable" in the summary. */
+  rrThreshold: 2,
+  /** Concurrent API requests during a sweep. */
+  concurrency: 3,
 };
 
-export type CureState = typeof GLOBAL;
+export type SweepConfig = typeof SWEEP;

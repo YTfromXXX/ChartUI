@@ -97,7 +97,10 @@ export default function OracleApiPage() {
             <p className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-cyan-300"><Orbit size={14} /> METADOGG ORACLE API</p>
             <h1 className="text-2xl font-semibold">384 Spiral Candy · Singularity Axis</h1>
           </div>
-          <Link href="/" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Back</Link>
+          <nav className="flex items-center gap-4">
+            <Link href="/oracle-api/experiments" className="text-sm text-cyan-200 hover:text-white">Dial Sweep Lab</Link>
+            <Link href="/" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Back</Link>
+          </nav>
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">

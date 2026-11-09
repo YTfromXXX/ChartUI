@@ -68,3 +68,15 @@ def test_time_to_target_and_risk_reward():
     metal_top = min(candies, key=lambda c: c["gravity"]["distances"]["WANDS"])
     avg = sum(c["gravity"]["time_factor"] for c in candies) / len(candies)
     assert metal_top["gravity"]["time_factor"] < avg
+
+
+def test_endpoint_radius_range_zooms_three_decades_and_clamps():
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+    lo = client.get("/api/v1/oracle/spiral-grid", params={"scale_dial": 0.0}).json()
+    hi = client.get("/api/v1/oracle/spiral-grid", params={"scale_dial": 1.0}).json()
+    assert math.isclose(hi["log10_radius_min"] - lo["log10_radius_min"], 3.0, rel_tol=1e-9)
+    assert math.isclose(hi["log10_radius_max"] - lo["log10_radius_max"], 3.0, rel_tol=1e-9)
+    clamped = client.get("/api/v1/oracle/spiral-grid", params={"scale_dial": 5.0}).json()
+    assert clamped["scale_dial"] == 1.0
