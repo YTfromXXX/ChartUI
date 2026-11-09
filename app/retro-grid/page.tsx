@@ -14,6 +14,7 @@ import { PATTERN_ANALYSIS, kitItem } from '@/lib/cureKit';
 import EmergenceSugoroku from '@/components/cure/EmergenceSugoroku';
 import SandstormBlock from '@/components/cure/SandstormBlock';
 import IdleCrash from '@/components/cure/IdleCrash';
+import QuizQuantum from '@/components/cure/QuizQuantum';
 import { glitterAmount } from '@/lib/retroBlocks';
 import { GreenCardKit } from '@/app/cure-api/TSMonsterEngine';
 
@@ -87,6 +88,30 @@ export default function RetroGridPage() {
     if (page === 'A') setSimulationMode('hypothesisA');
     if (page === 'B') setSimulationMode('hypothesisB');
   }, [setSimulationMode]);
+
+  // Famiポート 19 fires クイズクオンタム: switch to page B and bring the quiz into view.
+  useEffect(() => {
+    const onFire = () => {
+      setSimulationMode('hypothesisB');
+      window.history.replaceState(null, '', '?page=B');
+      window.setTimeout(() => document.getElementById('quiz-quantum')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    };
+    window.addEventListener('quiz-quantum:fire', onFire);
+    return () => window.removeEventListener('quiz-quantum:fire', onFire);
+  }, [setSimulationMode]);
+
+  // Split view: report this frame's state to the parent so it can compose A and B.
+  useEffect(() => {
+    if (window.parent === window) return undefined;
+    const post = () => {
+      let stored: string | null = null;
+      try { stored = JSON.parse(localStorage.getItem('chartui-cure-api-state') ?? 'null')?.state?.simulationMode ?? null; } catch { stored = null; }
+      window.parent.postMessage({ type: 'retro-grid-status', page: activeSymbol === 'BTCUSD' ? 'A' : 'B', simulationMode, storedMode: stored, timeframe, simulationSpeed, at: Date.now() }, window.location.origin);
+    };
+    post();
+    const timer = window.setInterval(post, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeSymbol, simulationMode, timeframe, simulationSpeed]);
 
   useEffect(() => {
     setSelectedCells([]);
@@ -362,6 +387,8 @@ export default function RetroGridPage() {
         </section>
 
         <IdleCrash page={activeSymbol === 'BTCUSD' ? 'A' : 'B'} />
+
+        {activeSymbol === 'XAUUSD' && <QuizQuantum />}
 
         <EmergenceSugoroku page={activeSymbol === 'BTCUSD' ? 'A' : 'B'} />
 

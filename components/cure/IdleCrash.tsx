@@ -28,11 +28,19 @@ export default function IdleCrash({ page }: { page: 'A' | 'B' }) {
     return Math.max(400, regulation.strobeIntervalMs);
   }, [simulationSpeed]);
 
+  // クイズクオンタム holds the loop while it is open.
+  const [held, setHeld] = useState(false);
   useEffect(() => {
-    if (simulationSpeed === 0) return undefined;
+    const onActive = (event: Event) => setHeld(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener('quiz-quantum:active', onActive);
+    return () => window.removeEventListener('quiz-quantum:active', onActive);
+  }, []);
+
+  useEffect(() => {
+    if (simulationSpeed === 0 || held) return undefined;
     const timer = window.setInterval(() => setState(stepIdleCrash), tickMs);
     return () => window.clearInterval(timer);
-  }, [tickMs, simulationSpeed]);
+  }, [tickMs, simulationSpeed, held]);
 
   // A pane shattered: finish the effect, then move A -> B (or B -> A) and start a new lap.
   useEffect(() => {
@@ -63,7 +71,7 @@ export default function IdleCrash({ page }: { page: 'A' | 'B' }) {
           <p className="text-[9px] uppercase tracking-[0.3em] text-amber-200">IDLECRASH · 22 Famiポート · page {page} · lap {state.lap}</p>
           <p className="mt-1 text-[10px] text-slate-400">Answer the old woman behind the No.9 pillar (A/B mend SIDE MENU, C/D mend POP UP). Idling raises the crash multiplier; when a pane shatters, page {page} moves to page {page === 'A' ? 'B' : 'A'}.</p>
         </div>
-        <span className="font-mono text-[10px] text-slate-400">×{state.multiplier.toFixed(2)} · tick {state.tick} · {Math.round(tickMs)} ms</span>
+        <span className="font-mono text-[10px] text-slate-400">×{state.multiplier.toFixed(2)} · tick {state.tick} · {held ? 'held by クイズクオンタム' : `${Math.round(tickMs)} ms`}</span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
@@ -169,7 +177,7 @@ export default function IdleCrash({ page }: { page: 'A' | 'B' }) {
                 <button
                   key={port.no}
                   type="button"
-                  onClick={() => setDualFor(port.dual ? port.no : null)}
+                  onClick={() => { if (port.no === 19) window.dispatchEvent(new Event('quiz-quantum:fire')); setDualFor(port.dual ? port.no : null); }}
                   title={`${port.no}. ${port.title}${port.note ? ` — ${port.note}` : ''}${port.filled ? ' (filled)' : ''}`}
                   className="aspect-square rounded-sm border font-mono text-[8px]"
                   style={{
