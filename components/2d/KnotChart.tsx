@@ -1,9 +1,10 @@
 'use client';
 
+import type { MetaNesting } from '@/lib/fieldModels';
 import { debugMetrics } from '@/lib/debugMetrics';
 import { createCrossingStore, drawSegmentsWithGaps, findCrossings, setSegment } from '@/lib/knotCrossings';
 import { useEffect, useRef, type MouseEvent, type TouchEvent } from 'react';
-import { drawAnimalVoxelHoneycomb, drawCryptoDetectorHoneycomb, drawGravityHoneycomb, drawGravityWells, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
+import { drawAnimalVoxelHoneycomb, drawCryptoDetectorHoneycomb, drawGravityHoneycomb, drawGravityWells, drawMetaHierarchicalHoneycomb, drawLissajousInset, drawMetalCrystalHoneycomb, findCleavageCrossing, gravityDrift, type TrueGravityTensor } from './GravityHoneycomb';
 
 export type KnotTick = {
   timestamp?: number;
@@ -135,6 +136,7 @@ export type KnotFieldStyle = {
   metaRippleTimestamp?: number;
   metaPreviousArcanaId?: number;
   metaTargetArcanaId?: number;
+  metaNesting?: MetaNesting;
 };
 
 const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
@@ -225,6 +227,7 @@ const NEUTRAL_STYLE: Required<KnotFieldStyle> = {
   cryptoResonanceArcanaId: -1,
   cryptoResonancePoint: { x: 0, y: 0, z: 0 },
   metaPulsarMass: 1,
+  metaNesting: { parentSymbol: '', parentMass: 0, parentWellDepth: 0, outerStepIndex: 0, shells: [], slipCount: 0, ready: false, slipTimestamp: 0 },
   metaQuantizedAngle: 0,
   metaQuantizedStep: false,
   metaQuantizedStepIndex: 0,
@@ -1055,6 +1058,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, size: CanvasSize, buffer: Kn
         activeCleaveHandler?.({ cell: crossing.cell, line: crossing.line, timestamp: lastCleaveCrossAt });
       }
     }
+  } else if (activeStyle.metaNesting.shells.length > 0) {
+    drawMetaHierarchicalHoneycomb(ctx, width, height, activeStyle.metaNesting, Date.now());
   } else if (activeStyle.cryptoPositionActive > 0 && activeStyle.cryptoPositionEntry > 0) {
     const entryY = Math.max(plotTop, Math.min(plotBottom, plotBottom - (activeStyle.cryptoPositionEntry - minPrice) * yScale));
     drawCryptoDetectorHoneycomb(ctx, width, height, {

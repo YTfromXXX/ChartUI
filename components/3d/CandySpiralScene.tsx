@@ -18,6 +18,7 @@ import {
 } from '@/lib/candyPoints';
 import AnimalIndicators from './AnimalIndicators';
 import { AnimalVoxelBackdrop, GravityWellShader, KumoBand, MetalHoneycombBackdrop } from './FieldBackdrop';
+import { MetaNestedPolyhedra } from './MetaPolyhedra';
 import { CryptoOrbitalShell } from './CryptoOrbital';
 import CandyXRPhysics from './CandyXRPhysics';
 import { CandyInstancedMesh, CryptoPointCloud, CyberpunkPriceSphere } from './CandySpiralMesh';
@@ -504,6 +505,18 @@ export default function CandySpiralScene({
             <>
               <CryptoPointCloud candies={candies} radius={2.0} fieldStyle={fieldStyle} onHoverCandy={hoverCandy} />
               {orbital && <CryptoOrbitalShell {...orbital} />}
+            </>
+          ) : fieldName === 'meta' && fieldStyle?.metaNesting?.shells.length ? (
+            <>
+              <CandyInstancedMesh
+                candies={candies}
+                radius={2.0}
+                orbitSpeed={orbitSpeed}
+                spinSpeed={spinSpeed}
+                onHoverCandy={hoverCandy}
+                fieldStyle={fieldStyle}
+              />
+              <MetaNestedPolyhedra nesting={fieldStyle.metaNesting} />
             </>
           ) : (
             <CandyInstancedMesh
