@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import type { MatrixBuildResult } from '@/lib/matrixBuilder';
+import type { OddField } from '@/lib/cureOrbit';
 
 export type CureTimeframe = '1m' | '5m' | '15m' | '1H' | '4H' | '1D';
 export type PlaceholderState = 'idle' | '⚪︎' | '◻︎' | '(expand)' | '(extend)';
@@ -100,6 +101,8 @@ export type CureAPIState = {
   decoherenceVector: ProjectionVector | null;
   decoherenceNonce: number;
   unlockedPredictionCell: number;
+  /** Odd-return field measured on the retro grid; drives the Cure mover's free orbit. */
+  oddField: OddField | null;
   setTimeframe: (timeframe: CureTimeframe) => void;
   setVolatilityIndex: (value: number) => void;
   setNewsFeedText: (text: string) => void;
@@ -117,6 +120,7 @@ export type CureAPIState = {
   setProjectionMetrics: (metrics: Partial<CureAPIState['projectionMetrics']>) => void;
   appendProjectionBlock: (block: ProjectionBlock) => void;
   observeSingularity: (vector: ProjectionVector) => void;
+  setOddField: (field: OddField | null) => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -143,6 +147,7 @@ export const useCureAPIStore = create<CureAPIState>()(
       decoherenceVector: null,
       decoherenceNonce: 0,
       unlockedPredictionCell: -1,
+      oddField: null,
       setTimeframe: (timeframe) => set({ timeframe }),
       setVolatilityIndex: (value) => set({ volatilityIndex: clamp(value, 0, 1) }),
       setNewsFeedText: (newsFeedText) => set({ newsFeedText }),
@@ -184,6 +189,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         decoherenceNonce: state.decoherenceNonce + 1,
         unlockedPredictionCell: (state.unlockedPredictionCell + 1) % 48,
       })),
+      setOddField: (oddField) => set({ oddField }),
     }),
     {
       name: 'chartui-cure-api-state',
@@ -206,6 +212,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         decoherenceVector: state.decoherenceVector,
         decoherenceNonce: state.decoherenceNonce,
         unlockedPredictionCell: state.unlockedPredictionCell,
+        oddField: state.oddField,
       }),
     },
   ),

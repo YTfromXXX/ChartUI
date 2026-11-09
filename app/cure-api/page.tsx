@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mulberry32 } from '@/lib/retroGrid';
 import CureApiInitialMenu from '@/components/CureApiInitialMenu';
-import { useCureAPIStore } from '@/lib/cureApiStore';
+import { useCureAPIStore, type PlaceholderState } from '@/lib/cureApiStore';
 import { GLOBAL, ROLES, type CourtRole } from './params';
 
 type Cell = { role: CourtRole; x: number; y: number; z: number; a: number; b: number };
@@ -15,6 +15,49 @@ const ROLE_KEYS = Object.keys(ROLES) as CourtRole[];
 const HEADER_SCALE = 0.62;
 const CANVAS_W = 1100;
 const CANVAS_H = 340;
+
+const BALLOON_INFLATE = 1.4;
+const BALLOON_FLIGHT = 3.6;
+
+/**
+ * EX = 0 release: a balloon inflates from 0 to 1 at the sphere center, then drifts up and away.
+ * Its shape follows the placeholder intervention pattern.
+ */
+function drawBalloon(ctx: CanvasRenderingContext2D, w: number, h: number, R: number, age: number, pattern: PlaceholderState) {
+  const inflate = Math.min(1, age / BALLOON_INFLATE);
+  const scale = 1 - (1 - inflate) ** 3;
+  const flight = Math.max(0, (age - BALLOON_INFLATE) / BALLOON_FLIGHT);
+  const x = w / 2 + Math.sin(age * 2.6) * R * 0.22 * flight + flight * R * 0.7;
+  const y = h / 2 - flight * flight * (h / 2 + R * 1.3);
+  const alpha = 1 - Math.max(0, (flight - 0.7) / 0.3);
+  let size = R * 0.42 * scale;
+  let sx = 1; let sy = 1.15;
+  if (pattern === '(expand)') { size *= 1.35 + 0.05 * Math.sin(age * 8); sy = 1.05; }
+  if (pattern === '(extend)') { sx = 1.6; sy = 0.8; }
+  if (pattern === '⚪︎') sy = 1;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, alpha);
+  // String
+  ctx.strokeStyle = 'rgba(253,164,175,0.7)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, y + size * sy);
+  ctx.quadraticCurveTo(x + Math.sin(age * 5) * 10, y + size * sy + 30, x - 4, y + size * sy + 60); ctx.stroke();
+  // Body
+  const gradient = ctx.createRadialGradient(x - size * 0.3, y - size * 0.4, size * 0.1, x, y, size * 1.4);
+  gradient.addColorStop(0, '#ffe4e6'); gradient.addColorStop(0.45, '#fb7185'); gradient.addColorStop(1, '#a21caf');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  if (pattern === '◻︎') {
+    const half = size * 0.95; const r = size * 0.3;
+    ctx.roundRect(x - half, y - half, half * 2, half * 2, r);
+  } else {
+    ctx.ellipse(x, y, size * sx, size * sy, 0, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(scale.toFixed(2), x, y + 4);
+  ctx.restore();
+}
 
 type ExTrace = { start: number; lastOneAt: number | null; zeroAt: number | null; elapsed: number };
 
@@ -62,6 +105,7 @@ export default function CureApiPage() {
     if (!canvas || !ctx) return undefined;
     const R = GLOBAL.sphereRadius * HEADER_SCALE;
     let lastEx = -1;
+    let balloonStart: number | null = null;
     let raf = 0; let last = performance.now(); let t = 0; let statTimer = 0;
     const rand = mulberry32(4242);
 
@@ -113,6 +157,11 @@ export default function CureApiPage() {
       }
 
       ctx.strokeStyle = 'rgba(251,113,133,0.3)'; ctx.beginPath(); ctx.arc(w / 2, h / 2, R * breath, 0, Math.PI * 2); ctx.stroke();
+      if (balloonStart !== null) {
+        const age = t - balloonStart;
+        if (age > BALLOON_INFLATE + BALLOON_FLIGHT) balloonStart = null;
+        else drawBalloon(ctx, w, h, R, age, useCureAPIStore.getState().placeholderState);
+      }
 
       const ex = counts.EX;
       const tr = trace.current;
@@ -120,6 +169,7 @@ export default function CureApiPage() {
       if (ex === 1 && tr.lastOneAt === null) tr.lastOneAt = t;
       if (ex === 0 && lastEx > 0) {
         tr.zeroAt = t;
+        balloonStart = t;
         useCureAPIStore.getState().setExParameter(0);
       }
       tr.elapsed = t;

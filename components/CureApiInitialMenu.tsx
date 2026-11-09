@@ -13,6 +13,7 @@ import {
 } from '@/lib/cureApiStore';
 import CureProjectionEngine from '@/components/cure/CureProjectionEngine';
 import ArcanaLoopBinder from '@/components/cure/ArcanaLoopBinder';
+import { orbitPath, orbitPoint } from '@/lib/cureOrbit';
 
 const PLACEHOLDER_OPTIONS: Exclude<PlaceholderState, 'idle'>[] = ['⚪︎', '◻︎', '(expand)', '(extend)'];
 
@@ -31,6 +32,8 @@ function OrbitalPet() {
   const timeframe = useCureAPIStore((state) => state.timeframe);
   const volatility = useCureAPIStore((state) => state.volatilityIndex);
   const activatePlaceholder = useCureAPIStore((state) => state.activatePlaceholder);
+  const pattern = useCureAPIStore((state) => state.placeholderState);
+  const oddField = useCureAPIStore((state) => state.oddField);
   const orbitSpeed = TIMEFRAME_ORBIT_SPEED[timeframe];
   const strobeInterval = TIMEFRAME_STROBE_INTERVAL_MS[timeframe];
 
@@ -53,10 +56,10 @@ function OrbitalPet() {
       }
       pulse *= Math.exp(-dt * 3.2);
       const noise = volatility * (Math.sin(now * 0.0093) * 7 + Math.sin(now * 0.023) * 3.5);
-      const rx = 135 + Math.cos(phase * 2.2) * noise;
-      const ry = 78 + Math.sin(phase * 1.7) * noise;
-      const x = Math.cos(phase) * rx;
-      const y = Math.sin(phase) * ry;
+      // Placeholder = intervention pattern; the odd-return field widens the orbit into a free curve.
+      const base = orbitPoint(phase, pattern, oddField, now / 1000);
+      const x = base.x + Math.cos(phase * 2.2) * noise;
+      const y = base.y + Math.sin(phase * 1.7) * noise;
       const angle = phase * 90;
       node.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${angle.toFixed(1)})`);
       node.setAttribute('opacity', (0.72 + pulse * 0.28).toFixed(2));
@@ -66,7 +69,7 @@ function OrbitalPet() {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [orbitSpeed, strobeInterval, volatility]);
+  }, [orbitSpeed, strobeInterval, volatility, pattern, oddField]);
 
   return (
     <g
@@ -142,6 +145,7 @@ export default function CureApiInitialMenu() {
   const setExParameter = useCureAPIStore((state) => state.setExParameter);
   const arcanaParameters = useCureAPIStore((state) => state.arcanaParameters);
   const simulationMode = useCureAPIStore((state) => state.simulationMode);
+  const oddField = useCureAPIStore((state) => state.oddField);
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const resetArcanaParameters = useCureAPIStore((state) => state.resetArcanaParameters);
   const [placeholderText, setPlaceholderText] = useState('');
@@ -210,9 +214,10 @@ export default function CureApiInitialMenu() {
                 <circle cx="320" cy="155" r="4" fill="#fff" filter="url(#petGlow)" />
                 <text x="320" y="188" textAnchor="middle" fill="#94a3b8" fontSize="8" letterSpacing="2">SPIRAL EYE / ORIGIN</text>
                 <g transform="translate(320 155)">
+                  <path d={orbitPath(placeholderState, oddField)} fill="none" stroke="#e879f9" strokeOpacity=".35" strokeWidth="1" strokeDasharray="1 4" />
                   <OrbitalPet />
                 </g>
-                <text x="320" y="292" textAnchor="middle" fill="#64748b" fontSize="8">ORBIT × {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)} · STROBE {TIMEFRAME_STROBE_INTERVAL_MS[timeframe]} ms</text>
+                <text x="320" y="292" textAnchor="middle" fill="#64748b" fontSize="8">ORBIT × {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)} · STROBE {TIMEFRAME_STROBE_INTERVAL_MS[timeframe]} ms · {placeholderState === 'idle' ? 'NO INTERVENTION' : `PATTERN ${placeholderState}`} · ODD FIELD {oddField ? `${oddField.tension.toFixed(2)} / ${(oddField.oddRatio * 100).toFixed(0)}% odd` : '— (open retro grid)'}</text>
               </svg>
               <div className="flex flex-wrap items-center gap-3 text-[9px] text-slate-400">
                 <span className="inline-flex items-center gap-1"><Activity size={12} className="text-rose-300" /> Orbit speed {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)}×</span>

@@ -9,6 +9,7 @@ import { TIMEFRAME_STROBE_INTERVAL_MS, useCureAPIStore } from '@/lib/cureApiStor
 import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from '@/lib/retroGrid';
 import { splitSpiralPaths, type SplitKey } from '@/lib/cureSplit';
 import CureSplitIndex from '@/components/cure/CureSplitIndex';
+import HoneycombSingularity from '@/components/cure/HoneycombSingularity';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
@@ -108,6 +109,14 @@ export default function RetroGridPage() {
       return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity, pixels };
     }),
     [activeSymbol, chartNoise, chartVelocity, noiseFrame, seed, strobeSeconds, volatilityIndex],
+  );
+
+  // Retro-grid instrument: each square's noise weighted by its flow (stable between strobe frames).
+  const retroValues = useMemo(
+    () => retroBlocks.map((block) => Number((block.cellNoise * block.cellVelocity).toFixed(4))),
+    // retroBlocks re-renders every strobe frame, but these two fields do not depend on the frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [retroBlocks.map((block) => `${block.cellNoise.toFixed(4)}:${block.cellVelocity.toFixed(4)}`).join('|')],
   );
 
   const toggleCell = (id: number) => {
@@ -344,6 +353,8 @@ export default function RetroGridPage() {
             </form>
           )}
         </section>
+
+        <HoneycombSingularity retroValues={retroValues} selectedCells={selectedCells} cureCell={cureCell} />
 
         <CureSplitIndex current={activeSymbol === 'BTCUSD' ? 'retroA' : 'retroB'} active={activeSplit} onSelect={setActiveSplit} />
       </div>
