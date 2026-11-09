@@ -2,21 +2,108 @@
 
 import { ArrowLeft, Dices, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useMarketStream } from '@/hooks/useMarketStream';
+import { TIMEFRAME_STROBE_INTERVAL_MS, useCureAPIStore } from '@/lib/cureApiStore';
 import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from '@/lib/retroGrid';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
+const RETRO_BLOCK_LABELS = ['HEADER', 'BOTTOM', 'SIDE MENU', 'POP UP'] as const;
+const MAX_SELECTED_CELLS = 7;
+
+function generatePixelPattern(seed: number, intensity: number, accentShift: number, frame: number) {
+  const rows: boolean[] = [];
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const phase = frame * 0.73 + accentShift;
+      const grain = Math.sin((row + seed * 1.7) * 12.9898 + (col + phase) * 78.233) * 43758.5453;
+      const random = grain - Math.floor(grain);
+      const wave = Math.sin((row + col * 0.7 + phase) * (0.75 + intensity)) * 0.5 + 0.5;
+      rows.push(random > 0.88 - intensity * 0.38 || wave > 0.91 - intensity * 0.18);
+    }
+  }
+  return rows;
+}
 
 export default function RetroGridPage() {
   const [seed, setSeed] = useState(1984);
   const [chaos, setChaos] = useState(0.35);
   const [hovered, setHovered] = useState<RegionId | null>(null);
+  const [noiseFrame, setNoiseFrame] = useState(0);
+  const [selectedCells, setSelectedCells] = useState<number[]>([]);
+  const [cureText, setCureText] = useState('');
+  const [isCureFormOpen, setIsCureFormOpen] = useState(false);
+  const simulationSpeed = useCureAPIStore((state) => state.simulationSpeed);
+  const volatilityIndex = useCureAPIStore((state) => state.volatilityIndex);
+  const timeframe = useCureAPIStore((state) => state.timeframe);
+  const simulationMode = useCureAPIStore((state) => state.simulationMode);
+  const activeSymbol = simulationMode === 'hypothesisA' ? 'BTCUSD' : 'XAUUSD';
+  const { marketDataMap, isConnected } = useMarketStream(
+    process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals',
+    activeSymbol,
+  );
+  const marketData = marketDataMap[activeSymbol];
+  const chartData = marketData?.chart_data;
+  const hasMarketChart = Boolean(chartData && chartData.close > 0);
 
   const colors = useMemo(() => cellColors(seed, chaos), [seed, chaos]);
   const counts = useMemo(() => regionCounts(), []);
+  const strobeIntervalMs = TIMEFRAME_STROBE_INTERVAL_MS[timeframe] || 220;
+  const relativeRange = hasMarketChart && chartData
+    ? Math.max(0, chartData.high - chartData.low) / chartData.close
+    : volatilityIndex * 0.001;
+  const relativeBody = hasMarketChart && chartData
+    ? Math.abs(chartData.close - chartData.open) / chartData.close
+    : volatilityIndex * 0.0005;
+  const chartNoise = Math.min(1, Math.max(0.04, relativeRange * 420 + relativeBody * 280));
+  const chartVelocity = Math.min(2.5, Math.max(0.1, relativeBody * 900 + relativeRange * 120));
+  const strobeSeconds = Math.max(
+    0.08,
+    strobeIntervalMs / 1000 / Math.max(0.25, simulationSpeed) / (0.65 + chartVelocity * 0.7),
+  );
+  const localSand = chartNoise * (0.8 + chartVelocity * 0.2);
 
-  // Region contours: draw an edge wherever neighbouring cells belong to different regions.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNoiseFrame((frame) => frame + 1), strobeSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [strobeSeconds]);
+
+  useEffect(() => {
+    setSelectedCells([]);
+    setCureText('');
+    setIsCureFormOpen(false);
+  }, [activeSymbol]);
+
+  const retroBlocks = useMemo(
+    () => Array.from({ length: 22 }, (_, index) => {
+      const region = Object.values(REGIONS)[index % Object.keys(REGIONS).length];
+      const baseColor = region.tint ?? '#67e8f9';
+      const accent = activeSymbol === 'BTCUSD'
+        ? (index % 2 === 0 ? '#9be7ff' : '#ffb86b')
+        : (index % 2 === 0 ? '#fff1b8' : '#f4a261');
+      const cellNoise = Math.min(1, chartNoise * (0.72 + (index % 7) * 0.055) + (index % 4) * 0.025);
+      const cellVelocity = chartVelocity * (0.78 + (index % 5) * 0.09);
+      const intensity = Math.min(1, cellNoise * 0.72 + volatilityIndex * 0.18 + (index % 5) * 0.025);
+      const label = RETRO_BLOCK_LABELS[index % RETRO_BLOCK_LABELS.length];
+      const symbolSeed = activeSymbol.split('').reduce((value, char) => value + char.charCodeAt(0), 0);
+      const pixels = generatePixelPattern(seed + symbolSeed + index * 3, intensity, index * 0.81, noiseFrame);
+      const duration = Math.max(0.45, strobeSeconds * (1.55 - Math.min(1, cellVelocity * 0.25)));
+      return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity, pixels, duration };
+    }),
+    [activeSymbol, chartNoise, chartVelocity, noiseFrame, seed, strobeSeconds, volatilityIndex],
+  );
+
+  const toggleCell = (id: number) => {
+    setSelectedCells((current) => current.includes(id)
+      ? current.filter((selectedId) => selectedId !== id)
+      : current.length < MAX_SELECTED_CELLS ? [...current, id] : current);
+    setIsCureFormOpen(false);
+  };
+
+  const sourceCell = selectedCells[0];
+  const cureCell = selectedCells[1];
+
   const edges = useMemo(() => {
     const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
     for (let r = 0; r < GRID; r += 1) {
@@ -37,7 +124,38 @@ export default function RetroGridPage() {
 
   return (
     <main className="min-h-screen bg-[#07030f] p-6 font-mono text-fuchsia-100">
-      <div className="mx-auto max-w-5xl space-y-5">
+      <style jsx>{`
+        @keyframes retroPulse {
+          0% {
+            transform: translateY(0px) scale(0.985);
+            filter: brightness(0.82) saturate(0.8);
+          }
+          35% {
+            transform: translateY(-2px) scale(1.01);
+            filter: brightness(1.08) saturate(1.2);
+          }
+          100% {
+            transform: translateY(1px) scale(1);
+            filter: brightness(1.24) saturate(1.45);
+          }
+        }
+        @keyframes retroSand {
+          0% {
+            transform: translate3d(-2px, 0, 0);
+            opacity: 0.42;
+          }
+          50% {
+            transform: translate3d(2px, 1px, 0);
+            opacity: 0.9;
+          }
+          100% {
+            transform: translate3d(-1px, -1px, 0);
+            opacity: 0.52;
+          }
+        }
+      `}</style>
+
+      <div className="mx-auto max-w-6xl space-y-5">
         <header className="flex items-center justify-between">
           <h1 className="text-xl tracking-[0.3em] text-cyan-300">RETRO GRID // CHROMA DRIFT</h1>
           <nav className="flex items-center gap-4">
@@ -86,6 +204,135 @@ export default function RetroGridPage() {
             ))}
           </aside>
         </div>
+
+        <section className="rounded border border-cyan-300/30 bg-[#050b12]/90 p-4 shadow-[0_0_28px_rgba(34,211,238,0.08)]">
+          <div className="mb-4 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.25em] text-cyan-200">
+            <div>
+              <p className="text-cyan-300">VR / MR // permanent y axis mesh</p>
+              <h2 className="mt-1 text-sm tracking-[0.18em] text-white">22-square drifter lattice / {activeSymbol}</h2>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className={`rounded border px-2 py-1 ${hasMarketChart ? 'border-emerald-300/30 text-emerald-200' : 'border-amber-300/30 text-amber-200'}`}>
+                {hasMarketChart ? 'CHART FEED' : 'SIMULATED NOISE'}
+              </span>
+              <span className="rounded border border-cyan-400/30 bg-cyan-400/5 px-2 py-1 text-cyan-100">
+                {timeframe} / {simulationSpeed.toFixed(1)}x · {strobeSeconds.toFixed(2)}s
+              </span>
+            </div>
+          </div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400">
+            <span>
+              {hasMarketChart && chartData
+                ? `${activeSymbol} ${chartData.close.toLocaleString(undefined, { maximumFractionDigits: 4 })} · range ${(relativeRange * 100).toFixed(3)}% · flow ${chartVelocity.toFixed(2)}`
+                : `${activeSymbol} chart waiting${isConnected ? ' · feed connected, awaiting candle' : ' · backend disconnected'}`}
+            </span>
+            <span>{selectedCells.length}/{MAX_SELECTED_CELLS} cells selected · 22/22 noise fields</span>
+          </div>
+
+          <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300"
+              style={{ width: `${Math.min(100, 18 + localSand * 62)}%`, animation: `retroSand ${Math.max(0.15, strobeSeconds)}s ease-in-out infinite alternate` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {retroBlocks.map((block) => (
+              <div
+                key={block.id}
+                className={`relative rounded-xl border bg-[#080d16] p-2 transition-colors ${
+                  selectedCells.includes(block.id) ? 'border-cyan-200/70' : 'border-white/10'
+                }`}
+                style={{
+                  animation: `retroPulse ${block.duration}s ease-in-out infinite alternate`,
+                  boxShadow: selectedCells.includes(block.id) ? `0 0 24px ${block.accent}66` : `0 0 18px ${block.baseColor}55`,
+                }}
+              >
+                <button
+                  type="button"
+                  aria-pressed={selectedCells.includes(block.id)}
+                  aria-label={`Select noise cell ${block.id}, ${block.label}, ${block.cellNoise.toFixed(2)} noise`}
+                  onClick={() => toggleCell(block.id)}
+                  className="absolute inset-2 z-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200"
+                />
+                <div className="relative h-32 overflow-hidden rounded-lg border border-white/10 bg-[#040812]">
+                  <div className="absolute inset-x-0 top-0 h-[22%]" style={{ background: block.baseColor, opacity: 0.9 }} />
+                  <div className="absolute left-0 top-[18%] h-[62%] w-[18%] rounded-r-md" style={{ background: block.accent, opacity: 0.7 }} />
+                  <div className="absolute right-0 top-[28%] h-[42%] w-[34%] rounded-l-md border border-white/10" style={{ background: block.baseColor, opacity: 0.55 }} />
+                  <div className="absolute inset-x-0 bottom-0 h-[18%]" style={{ background: block.baseColor, opacity: 0.8 }} />
+                  <div className="absolute inset-0 grid grid-cols-8 grid-rows-8 gap-[3px] p-2">
+                    {block.pixels.map((active, index) => (
+                      <span
+                        key={`${block.id}-${index}`}
+                        className="rounded-[2px] transition-all"
+                        style={{
+                          background: active ? block.accent : 'rgba(148, 163, 184, 0.1)',
+                          opacity: active ? Math.min(1, 0.38 + block.intensity) : 0.12 + block.cellNoise * 0.12,
+                          boxShadow: active ? `0 0 8px ${block.accent}` : 'none',
+                          transform: active ? `translateY(${Math.sin((index + block.id) * 0.8 + noiseFrame) * 1.2}px)` : 'translateY(0)',
+                          animation: active ? `retroSand ${block.duration}s steps(2, end) infinite alternate` : 'none',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {block.id === cureCell && (
+                    <button
+                      type="button"
+                      aria-label={`Open Cure note for cell ${block.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsCureFormOpen(true);
+                      }}
+                      className="absolute left-1/2 top-1/2 z-20 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/80 bg-cyan-100/20 text-[8px] font-bold text-white shadow-[0_0_24px_rgba(103,232,249,.95)]"
+                    >
+                      CURE
+                    </button>
+                  )}
+                  {selectedCells.includes(block.id) && (
+                    <span className="pointer-events-none absolute right-2 top-2 z-20 grid h-5 w-5 place-items-center rounded-full border border-white/60 bg-black/80 text-[9px] text-white">
+                      {selectedCells.indexOf(block.id) + 1}
+                    </span>
+                  )}
+                </div>
+                <div className="pointer-events-none mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-[0.12em] text-slate-300">
+                  <span style={{ color: block.baseColor }}>{block.label} · #{block.id}</span>
+                  <span className="text-right text-slate-400">N {block.cellNoise.toFixed(2)} / V {block.cellVelocity.toFixed(2)}</span>
+                </div>
+                {block.id === sourceCell && cureCell && (
+                  <p className="pointer-events-none mt-1 text-[8px] uppercase tracking-widest text-cyan-200">NOISE SOURCE → CURE #{cureCell}</p>
+                )}
+              </div>
+            ))}
+          </div>
+          {selectedCells.length === 0 && (
+            <p className="mt-4 text-[10px] text-slate-500">Select any cell to add it to the observation set. The first is the noise source; the second defines its Cure convergence point.</p>
+          )}
+          {selectedCells.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-[10px]">
+              <p className="text-slate-300">
+                {sourceCell && cureCell
+                  ? `CELL #${sourceCell} NOISE CONVERGES AT CURE CENTER #${cureCell}. Tap the center to write a note.`
+                  : 'Choose a second cell to place the Cure convergence center.'}
+              </p>
+              <button type="button" onClick={() => { setSelectedCells([]); setIsCureFormOpen(false); }} className="rounded border border-white/15 px-2 py-1 text-slate-400 hover:text-white">CLEAR CELLS</button>
+            </div>
+          )}
+          {isCureFormOpen && cureCell && (
+            <form className="mt-3 rounded-lg border border-cyan-200/30 bg-black/40 p-3" onSubmit={(event) => event.preventDefault()}>
+              <label htmlFor="cure-note" className="mb-2 block text-[10px] uppercase tracking-[0.18em] text-cyan-200">
+                Cure center · {activeSymbol} · cell #{cureCell}
+              </label>
+              <textarea
+                id="cure-note"
+                value={cureText}
+                onChange={(event) => setCureText(event.target.value)}
+                placeholder="Record an observation about the converging noise pattern…"
+                rows={3}
+                className="w-full resize-y rounded border border-white/10 bg-[#05090e] p-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-cyan-200/50"
+              />
+            </form>
+          )}
+        </section>
       </div>
     </main>
   );

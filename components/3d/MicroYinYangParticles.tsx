@@ -29,6 +29,7 @@ const vertexShader = /* glsl */ `
   varying float vSide;
   varying float vAlpha;
   varying float vHeat;
+  varying float vSeed;
 
   void main() {
     float speed = (0.05 + 0.07 * aRand.z) * uHeat;
@@ -59,6 +60,7 @@ const vertexShader = /* glsl */ `
     vSide = aSide;
     vHeat = uHeat;
     vAlpha = envelope * (0.35 + 0.65 * aRand.z);
+    vSeed = aSeed;
   }
 `;
 
@@ -66,17 +68,38 @@ const fragmentShader = /* glsl */ `
   varying float vSide;
   varying float vAlpha;
   varying float vHeat;
+  varying float vSeed;
 
   void main() {
-    vec2 c = gl_PointCoord - 0.5;
-    float d = length(c);
-    if (d > 0.5) discard;
-    float soft = smoothstep(0.5, 0.0, d);
-    vec3 yang = mix(vec3(0.35, 0.65, 1.0), vec3(0.9, 0.97, 1.0), soft);   // blue-white
-    vec3 yin = mix(vec3(0.5, 0.02, 0.05), vec3(0.12, 0.0, 0.02), 1.0 - soft); // red-black
-    vec3 color = vSide > 0.0 ? yang : yin;
-    float alpha = vAlpha * soft * (vSide > 0.0 ? 0.9 : 0.8) * clamp(0.6 + 0.4 * vHeat, 0.0, 1.5);
-    gl_FragColor = vec4(color, alpha);
+    vec2 point = (gl_PointCoord - 0.5) * 2.0;
+    float radius = length(point);
+    if (radius > 1.0) discard;
+
+    // Shade each point as a tiny sphere, with a soft atmospheric halo.
+    float sphereDepth = sqrt(max(1.0 - radius * radius, 0.0));
+    vec3 normal = normalize(vec3(point, sphereDepth));
+    vec3 lightDirection = normalize(vec3(-0.42, 0.58, 0.72));
+    float diffuse = max(dot(normal, lightDirection), 0.0);
+    float rim = pow(1.0 - sphereDepth, 2.2);
+    float core = exp(-radius * radius * 9.0);
+    float halo = exp(-radius * radius * 3.2);
+    float pulse = 0.88 + 0.12 * sin(vSeed * 31.0 + vHeat * 2.0);
+
+    vec3 rimColor = vSide > 0.0 ? vec3(0.12, 0.38, 0.95) : vec3(0.19, 0.008, 0.025);
+    vec3 bodyColor = vSide > 0.0 ? vec3(0.30, 0.68, 1.0) : vec3(0.68, 0.035, 0.075);
+    vec3 coreColor = vSide > 0.0 ? vec3(0.91, 0.97, 1.0) : vec3(1.0, 0.24, 0.29);
+    vec3 color = mix(rimColor, bodyColor, clamp(diffuse * 0.72 + (1.0 - rim) * 0.28, 0.0, 1.0));
+    color = mix(color, coreColor, core * 0.92);
+
+    vec2 highlightOffset = point - vec2(-0.18, 0.2);
+    float highlight = exp(-dot(highlightOffset, highlightOffset) * 110.0);
+    color += (vSide > 0.0 ? vec3(0.72, 0.86, 1.0) : vec3(1.0, 0.42, 0.38)) * highlight * 0.7;
+    color += (vSide > 0.0 ? vec3(0.12, 0.42, 1.0) : vec3(0.62, 0.015, 0.045)) * rim * 0.6;
+
+    float sideGain = vSide > 0.0 ? 0.92 : 0.78;
+    float alpha = vAlpha * (core * 0.76 + halo * 0.24) * sideGain * pulse;
+    alpha *= clamp(0.72 + 0.28 * vHeat, 0.0, 1.35);
+    gl_FragColor = vec4(color * (0.82 + diffuse * 0.28), alpha);
   }
 `;
 
@@ -118,6 +141,7 @@ export default function MicroYinYangParticles({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
+        toneMapped: false,
         uniforms: {
           uTime: { value: 0 },
           uHeat: { value: heat },

@@ -188,6 +188,10 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
   const [selectedKnotIds, setSelectedKnotIds] = useState<number[]>([]);
   const unlockedPredictionCell = useCureAPIStore((state) => state.unlockedPredictionCell);
   const decoherenceVector = useCureAPIStore((state) => state.decoherenceVector);
+  const cureTimeframe = useCureAPIStore((state) => state.timeframe);
+  const cureVolatilityIndex = useCureAPIStore((state) => state.volatilityIndex);
+  const curePlaceholderState = useCureAPIStore((state) => state.placeholderState);
+  const cureArcanaParameters = useCureAPIStore((state) => state.arcanaParameters);
   const metalFractureCount = useKnotSelection((state) => state.metalFractures.length);
   const animalSyncEventCount = useKnotSelection((state) => state.animalSyncEvents.length);
   const animalSyncEvents = useKnotSelection((state) => state.animalSyncEvents);
@@ -1394,6 +1398,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                         braidTension={fieldStep?.diagnostics?.animalBraidTension ?? 0}
                         meanPhase={fieldStep?.diagnostics?.kuramotoMeanPhase ?? 0}
                         directionalStrength={fieldStep?.diagnostics?.directionalStrength ?? 0}
+                        timeframe={cureTimeframe}
+                        volatilityIndex={cureVolatilityIndex}
+                        placeholderState={curePlaceholderState}
+                        arcanaParameters={cureArcanaParameters}
+                        history={history}
+                        latestPrice={latestTick?.price ?? 0}
                       />
                     )}
                     {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}
@@ -1436,6 +1446,12 @@ export default function KnotChartWorkspace({ field }: { field?: FieldConfig }) {
                     braidTension={fieldStep?.diagnostics?.animalBraidTension ?? 0}
                     meanPhase={fieldStep?.diagnostics?.kuramotoMeanPhase ?? 0}
                     directionalStrength={fieldStep?.diagnostics?.directionalStrength ?? 0}
+                    timeframe={cureTimeframe}
+                    volatilityIndex={cureVolatilityIndex}
+                    placeholderState={curePlaceholderState}
+                    arcanaParameters={cureArcanaParameters}
+                    history={history}
+                    latestPrice={latestTick?.price ?? 0}
                   />
                 )}
                 {!latestTick && <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-100/50">Awaiting live market data</div>}

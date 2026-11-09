@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import AuthSessionProvider from "@/components/AuthSessionProvider";
 import CureProjectionEffects from "@/components/CureProjectionEffects";
+import TestToZeroHeader from "@/components/TestToZeroHeader";
 import "./globals.css";
 
 const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
@@ -13,5 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${display.variable} ${mono.variable}`}><AuthSessionProvider><CureProjectionEffects />{children}</AuthSessionProvider></body></html>;
+  return <html lang="en"><body className={`${display.variable} ${mono.variable}`}><AuthSessionProvider><CureProjectionEffects /><TestToZeroHeader />{children}</AuthSessionProvider></body></html>;
 }

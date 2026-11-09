@@ -2,11 +2,11 @@ export type RegionId = 'header' | 'side' | 'bottom' | 'popup';
 
 export const GRID = 16;
 
-export const REGIONS: Record<RegionId, { label: string; role: string; share: number; hue: number }> = {
-  header: { label: 'HEADER', role: 'NAV / STATUS', share: 0.25, hue: 190 },
-  side: { label: 'SIDE MENU', role: 'ROUTES / FILTERS', share: 0.3125, hue: 300 },
-  bottom: { label: 'BOTTOM', role: 'TICKER / CONSOLE', share: 0.125, hue: 45 },
-  popup: { label: 'POPUP', role: 'DIALOG / DETAIL', share: 0.3125, hue: 12 },
+export const REGIONS: Record<RegionId, { label: string; role: string; share: number; hue: number; tint: string }> = {
+  header: { label: 'HEADER', role: 'NAV / STATUS', share: 0.25, hue: 190, tint: '#67e8f9' },
+  side: { label: 'SIDE MENU', role: 'ROUTES / FILTERS', share: 0.3125, hue: 300, tint: '#f5d0fe' },
+  bottom: { label: 'BOTTOM', role: 'TICKER / CONSOLE', share: 0.125, hue: 45, tint: '#fbbf24' },
+  popup: { label: 'POPUP', role: 'DIALOG / DETAIL', share: 0.3125, hue: 12, tint: '#fb7185' },
 };
 
 // Width of the side menu per row inside the 10 rows between header and bottom.
