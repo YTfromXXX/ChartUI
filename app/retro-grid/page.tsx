@@ -1,12 +1,14 @@
 'use client';
 
-import { ArrowLeft, Dices, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Dices, FlaskConical, HeartPulse } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useBtcUsdTicker } from '@/hooks/useBtcUsdTicker';
 import { useMetalFeed } from '@/hooks/useMetalFeed';
 import { TIMEFRAME_STROBE_INTERVAL_MS, useCureAPIStore } from '@/lib/cureApiStore';
 import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from '@/lib/retroGrid';
+import { splitSpiralPaths, type SplitKey } from '@/lib/cureSplit';
+import CureSplitIndex from '@/components/cure/CureSplitIndex';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
@@ -35,6 +37,8 @@ export default function RetroGridPage() {
   const [selectedCells, setSelectedCells] = useState<number[]>([]);
   const [cureText, setCureText] = useState('');
   const [isCureFormOpen, setIsCureFormOpen] = useState(false);
+  const [activeSplit, setActiveSplit] = useState<SplitKey | null>(null);
+  const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const simulationSpeed = useCureAPIStore((state) => state.simulationSpeed);
   const volatilityIndex = useCureAPIStore((state) => state.volatilityIndex);
   const timeframe = useCureAPIStore((state) => state.timeframe);
@@ -74,6 +78,13 @@ export default function RetroGridPage() {
     const timer = window.setInterval(() => setNoiseFrame((frame) => frame + 1), strobeSeconds * 1000);
     return () => window.clearInterval(timer);
   }, [strobeSeconds]);
+
+  // Retro grid page A = hypothesis A (BTCUSD), page B = hypothesis B (XAUUSD); `?page=` selects it.
+  useEffect(() => {
+    const page = new URLSearchParams(window.location.search).get('page')?.toUpperCase();
+    if (page === 'A') setSimulationMode('hypothesisA');
+    if (page === 'B') setSimulationMode('hypothesisB');
+  }, [setSimulationMode]);
 
   useEffect(() => {
     setSelectedCells([]);
@@ -150,6 +161,7 @@ export default function RetroGridPage() {
         <header className="flex items-center justify-between">
           <h1 className="text-xl tracking-[0.3em] text-cyan-300">RETRO GRID // CHROMA DRIFT</h1>
           <nav className="flex items-center gap-4">
+            <Link href="/cure-api" className="flex items-center gap-1 text-sm text-rose-300 hover:text-white"><HeartPulse size={14} /> Cure-API</Link>
             <Link href="/cure-api/experiments" className="flex items-center gap-1 text-sm text-cyan-200 hover:text-white"><FlaskConical size={14} /> Hypothesis Lab</Link>
             <Link href="/oracle-api" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"><ArrowLeft size={14} /> Oracle</Link>
           </nav>
@@ -268,6 +280,13 @@ export default function RetroGridPage() {
                     ))}
                   </div>
                   {block.id === cureCell && (
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden="true">
+                      {splitSpiralPaths(50, 50, 46, { noise: block.cellNoise, seed: block.id, frame: noiseFrame }).map(({ part, d }) => (
+                        <path key={part.key} d={d} fill="none" stroke={part.color} strokeLinecap="round" strokeWidth={activeSplit === part.key ? 2.6 : 1.3} opacity={activeSplit && activeSplit !== part.key ? 0.45 : 0.95} />
+                      ))}
+                    </svg>
+                  )}
+                  {block.id === cureCell && (
                     <button
                       type="button"
                       aria-label={`Open Cure note for cell ${block.id}`}
@@ -325,6 +344,8 @@ export default function RetroGridPage() {
             </form>
           )}
         </section>
+
+        <CureSplitIndex current={activeSymbol === 'BTCUSD' ? 'retroA' : 'retroB'} active={activeSplit} onSelect={setActiveSplit} />
       </div>
     </main>
   );

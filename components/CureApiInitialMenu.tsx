@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, ChevronDown, Expand, MoveHorizontal, RotateCcw, Sparkles } from 'lucide-react';
+import { Activity, ChevronDown, Expand, HeartPulse, MoveHorizontal, RotateCcw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
   type PlaceholderState,
 } from '@/lib/cureApiStore';
 import CureProjectionEngine from '@/components/cure/CureProjectionEngine';
+import ArcanaLoopBinder from '@/components/cure/ArcanaLoopBinder';
 
 const PLACEHOLDER_OPTIONS: Exclude<PlaceholderState, 'idle'>[] = ['⚪︎', '◻︎', '(expand)', '(extend)'];
 
@@ -83,9 +84,9 @@ function OrbitalPet() {
         if (event.key === 'Enter' || event.key === ' ') activatePlaceholder();
       }}
     >
-      <circle r="13" fill="#22d3ee" fillOpacity=".15" />
-      <circle r="7" fill="#cffafe" fillOpacity=".18" />
-      <circle r="5" fill="#e0f2fe" stroke="#67e8f9" strokeWidth="1.5" />
+      <circle r="13" fill="#fb7185" fillOpacity=".15" />
+      <circle r="7" fill="#ffe4e6" fillOpacity=".18" />
+      <circle r="5" fill="#fff1f2" stroke="#fda4af" strokeWidth="1.5" />
       <circle cx="-1.5" cy="-1.5" r="1.2" fill="white" />
     </g>
   );
@@ -94,10 +95,10 @@ function OrbitalPet() {
 function LensCell({ arcana, index }: { arcana: ArcanaParameter; index: number }) {
   const setArcanaAngle = useCureAPIStore((state) => state.setArcanaAngle);
   return (
-    <label className="group min-w-0 rounded border border-cyan-100/10 bg-black/45 p-2 transition-colors hover:border-cyan-200/50">
+    <label className="group min-w-0 rounded border border-emerald-100/10 bg-black/45 p-2 transition-colors hover:border-emerald-200/50">
       <div className="flex items-center gap-2">
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-100/20 bg-cyan-100/[0.05] text-lg text-cyan-100"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-emerald-100/20 bg-emerald-100/[0.05] text-lg text-emerald-100"
           data-silhouette-id={arcana.silhouetteId}
           aria-label={`${arcana.name} silhouette placeholder`}
           title={arcana.silhouetteId}
@@ -110,7 +111,7 @@ function LensCell({ arcana, index }: { arcana: ArcanaParameter; index: number })
         </span>
       </div>
       <span className="mt-2 flex items-center justify-between text-[8px] uppercase tracking-wider text-slate-500">
-        Angle <output className="font-mono text-cyan-200">{arcana.angle.toFixed(0)}°</output>
+        Angle <output className="font-mono text-emerald-200">{arcana.angle.toFixed(0)}°</output>
       </span>
       <input
         aria-label={`${arcana.name} angle`}
@@ -120,7 +121,7 @@ function LensCell({ arcana, index }: { arcana: ArcanaParameter; index: number })
         step="1"
         value={arcana.angle}
         onChange={(event) => setArcanaAngle(arcana.id, Number(event.target.value))}
-        className="mt-1 h-1 w-full accent-cyan-300"
+        className="mt-1 h-1 w-full accent-emerald-300"
       />
     </label>
   );
@@ -150,26 +151,26 @@ export default function CureApiInitialMenu() {
   }, [exParameter]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#05080e] p-4 font-mono text-slate-100 sm:p-6">
+    <main className="relative min-h-screen overflow-hidden bg-[#0c0510] p-4 font-mono text-slate-100 sm:p-6">
       <CureLayer layer={2} className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_22%_42%,rgba(34,211,238,.12),transparent_38%),linear-gradient(130deg,#05080e,#090d14_55%,#09070b)]" />
-        <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(148,163,184,.3)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.3)_1px,transparent_1px)] [background-size:32px_32px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_22%_42%,rgba(251,113,133,.16),transparent_38%),linear-gradient(130deg,#0c0510,#140a18_55%,#0a0710)]" />
+        <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(251,113,133,.22)_1px,transparent_1px),linear-gradient(90deg,rgba(251,113,133,.22)_1px,transparent_1px)] [background-size:32px_32px]" />
       </CureLayer>
 
       <CureLayer layer={4} className="relative mx-auto max-w-[1500px] space-y-4">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div>
-            <p className="text-[9px] uppercase tracking-[0.35em] text-cyan-300">ChartUI · Cure-API</p>
+            <p className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.35em] text-rose-300"><HeartPulse size={11} className="cure-heartbeat" /> ChartUI · Cure-API</p>
             <h1 className="mt-1 text-xl font-semibold tracking-wide sm:text-2xl">Initial Menu / Matrix Observatory</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="flex gap-1" aria-label="Hypothesis projection mode">
-            <button type="button" aria-label="Hypothesis A expand mode" aria-pressed={simulationMode === 'hypothesisA'} onClick={() => setSimulationMode('hypothesisA')} className={`flex h-8 w-8 items-center justify-center rounded-full border ${simulationMode === 'hypothesisA' ? 'border-cyan-100/60 bg-cyan-100/10 text-cyan-100' : 'border-white/10 text-stone-500'}`}><Expand className="h-3.5 w-3.5" /></button>
-            <button type="button" aria-label="Hypothesis B extend mode" aria-pressed={simulationMode === 'hypothesisB'} onClick={() => setSimulationMode('hypothesisB')} className={`flex h-8 w-8 items-center justify-center rounded-full border ${simulationMode === 'hypothesisB' ? 'border-cyan-100/60 bg-cyan-100/10 text-cyan-100' : 'border-white/10 text-stone-500'}`}><MoveHorizontal className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Hypothesis A expand mode" aria-pressed={simulationMode === 'hypothesisA'} onClick={() => setSimulationMode('hypothesisA')} className={`flex h-8 w-8 items-center justify-center rounded-full border ${simulationMode === 'hypothesisA' ? 'border-rose-100/60 bg-rose-100/10 text-rose-100' : 'border-white/10 text-stone-500'}`}><Expand className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Hypothesis B extend mode" aria-pressed={simulationMode === 'hypothesisB'} onClick={() => setSimulationMode('hypothesisB')} className={`flex h-8 w-8 items-center justify-center rounded-full border ${simulationMode === 'hypothesisB' ? 'border-rose-100/60 bg-rose-100/10 text-rose-100' : 'border-white/10 text-stone-500'}`}><MoveHorizontal className="h-3.5 w-3.5" /></button>
           </div>
           <nav aria-label="Analysis navigation" className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider">
-            <Link href="/matrix" className="border border-cyan-200/20 px-3 py-2 text-cyan-100 hover:border-cyan-200/60">Matrix</Link>
-            <Link href="/knot-chart" className="border border-cyan-200/20 px-3 py-2 text-cyan-100 hover:border-cyan-200/60">Knot Chart · 48</Link>
+            <Link href="/matrix" className="border border-rose-200/20 px-3 py-2 text-rose-100 hover:border-rose-200/60">Matrix</Link>
+            <Link href="/knot-chart" className="border border-rose-200/20 px-3 py-2 text-rose-100 hover:border-rose-200/60">Knot Chart · 48</Link>
             <Link href="/oracle-api" className="border border-white/10 px-3 py-2 text-slate-300 hover:border-white/30">Oracle</Link>
             <Link href="/cure-api/experiments" className="border border-white/10 px-3 py-2 text-slate-300 hover:border-white/30">Experiment</Link>
           </nav>
@@ -180,29 +181,29 @@ export default function CureApiInitialMenu() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,.8fr)]">
           <section className="flex min-w-0 flex-col gap-3">
-            <div className="relative overflow-hidden rounded-lg border border-cyan-200/15 bg-black/40 p-3">
+            <div className="relative overflow-hidden rounded-lg border border-rose-200/15 bg-black/40 p-3">
               <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-[10px] uppercase tracking-[0.22em] text-cyan-100">SPIRAL EYE · orbital cell field</h2>
+                <h2 className="text-[10px] uppercase tracking-[0.22em] text-rose-100">SPIRAL EYE · orbital cell field</h2>
                 <label className="flex items-center gap-2 text-[9px] text-slate-400">
                   Timeframe
-                  <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as typeof timeframe)} className="border border-white/10 bg-slate-950 px-2 py-1 text-cyan-100">
+                  <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as typeof timeframe)} className="border border-white/10 bg-slate-950 px-2 py-1 text-rose-100">
                     {CURE_TIMEFRAMES.map((item) => <option key={item}>{item}</option>)}
                   </select>
                 </label>
               </div>
               <svg viewBox="0 0 640 310" className="h-[240px] w-full sm:h-[310px]" role="img" aria-label="Dotted orbital track with an interactive moving cell">
                 <defs>
-                  <radialGradient id="eyeGlow"><stop stopColor="#67e8f9" stopOpacity=".4" /><stop offset="1" stopColor="#67e8f9" stopOpacity="0" /></radialGradient>
+                  <radialGradient id="eyeGlow"><stop stopColor="#fda4af" stopOpacity=".4" /><stop offset="1" stopColor="#fda4af" stopOpacity="0" /></radialGradient>
                   <filter id="petGlow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                 </defs>
-                <ellipse cx="320" cy="155" rx="135" ry="78" fill="none" stroke="#67e8f9" strokeOpacity=".44" strokeDasharray="2 7" strokeWidth="1.5" />
+                <ellipse cx="320" cy="155" rx="135" ry="78" fill="none" stroke="#fda4af" strokeOpacity=".44" strokeDasharray="2 7" strokeWidth="1.5" />
                 <ellipse cx="320" cy="155" rx="112" ry="60" fill="none" stroke="#94a3b8" strokeOpacity=".13" strokeDasharray="1 9" />
                 {Array.from({ length: 48 }, (_, index) => {
                   const angle = (index / 48) * Math.PI * 2;
                   const x = 320 + Math.cos(angle) * 135;
                   const y = 155 + Math.sin(angle) * 78;
                   const active = index % Math.max(1, Math.round(TIMEFRAME_STROBE_INTERVAL_MS[timeframe] / 80)) === 0;
-                  return <circle key={index} cx={x} cy={y} r={active ? 2 : 1} fill={active ? '#67e8f9' : '#64748b'} opacity={active ? 0.85 : 0.4} />;
+                  return <circle key={index} cx={x} cy={y} r={active ? 2 : 1} fill={active ? '#fda4af' : '#64748b'} opacity={active ? 0.85 : 0.4} />;
                 })}
                 <circle cx="320" cy="155" r={70 + volatility * 55} fill="url(#eyeGlow)" opacity=".55" />
                 <circle cx="320" cy="155" r="16" fill="none" stroke="#f8fafc" strokeOpacity=".45" />
@@ -214,7 +215,7 @@ export default function CureApiInitialMenu() {
                 <text x="320" y="292" textAnchor="middle" fill="#64748b" fontSize="8">ORBIT × {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)} · STROBE {TIMEFRAME_STROBE_INTERVAL_MS[timeframe]} ms</text>
               </svg>
               <div className="flex flex-wrap items-center gap-3 text-[9px] text-slate-400">
-                <span className="inline-flex items-center gap-1"><Activity size={12} className="text-cyan-300" /> Orbit speed {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)}×</span>
+                <span className="inline-flex items-center gap-1"><Activity size={12} className="text-rose-300" /> Orbit speed {TIMEFRAME_ORBIT_SPEED[timeframe].toFixed(2)}×</span>
                 <label className="flex min-w-[180px] flex-1 items-center gap-2">
                   Volatility {volatility.toFixed(2)}
                   <input aria-label="Volatility index" type="range" min="0" max="1" step=".01" value={volatility} onChange={(event) => setVolatility(Number(event.target.value))} className="flex-1 accent-fuchsia-300" />
@@ -231,8 +232,8 @@ export default function CureApiInitialMenu() {
                 <h2 className="text-[10px] uppercase tracking-[0.22em] text-violet-200">Placeholder / cell type definition</h2>
                 <span className="text-[9px] text-slate-500">{placeholderActive ? 'INPUT ACTIVE' : placeholderState === 'idle' ? 'CATCH CELL TO ACTIVATE' : 'TYPE SET'}</span>
               </div>
-              <div className={`flex min-h-11 items-center gap-2 border px-3 transition-colors ${placeholderActive ? 'border-cyan-200/60 bg-cyan-100/[0.06]' : 'border-white/10 bg-black/40'}`}>
-                <span className="text-cyan-200"><Sparkles size={14} /></span>
+              <div className={`flex min-h-11 items-center gap-2 border px-3 transition-colors ${placeholderActive ? 'border-rose-200/60 bg-rose-100/[0.06]' : 'border-white/10 bg-black/40'}`}>
+                <span className="text-rose-200"><Sparkles size={14} /></span>
                 <input
                   aria-label="Placeholder definition"
                   value={placeholderText}
@@ -246,14 +247,14 @@ export default function CureApiInitialMenu() {
                 </button>
               </div>
               {placeholderActive && (
-                <CureLayer layer={7} className="absolute bottom-14 left-3 right-3 rounded border border-cyan-200/35 bg-[#080e17] p-2 shadow-2xl sm:left-auto sm:w-72">
+                <CureLayer layer={7} className="absolute bottom-14 left-3 right-3 rounded border border-rose-200/35 bg-[#140812] p-2 shadow-2xl sm:left-auto sm:w-72">
                   <div className="mb-1 flex items-center justify-between px-1 text-[9px] uppercase tracking-wider text-slate-400">
                     <span>Choose cell type</span>
                     <button type="button" onClick={closePlaceholder} aria-label="Close type menu" className="px-1 text-slate-500 hover:text-white">×</button>
                   </div>
                   <div className="grid grid-cols-2 gap-1">
                     {PLACEHOLDER_OPTIONS.map((option) => (
-                      <button key={option} type="button" onClick={() => useCureAPIStore.getState().setPlaceholderState(option)} className={`border px-2 py-2 text-xs hover:border-cyan-200/60 ${placeholderState === option ? 'border-cyan-200/60 bg-cyan-200/10 text-cyan-100' : 'border-white/10 text-slate-300'}`}>
+                      <button key={option} type="button" onClick={() => useCureAPIStore.getState().setPlaceholderState(option)} className={`border px-2 py-2 text-xs hover:border-rose-200/60 ${placeholderState === option ? 'border-rose-200/60 bg-rose-200/10 text-rose-100' : 'border-white/10 text-slate-300'}`}>
                         {option}
                       </button>
                     ))}
@@ -261,6 +262,8 @@ export default function CureApiInitialMenu() {
                 </CureLayer>
               )}
             </div>
+
+            {exParameter === 0 && <ArcanaLoopBinder />}
 
             <CureLayer layer={6} className="relative overflow-hidden rounded border border-amber-200/15 bg-black/50">
               <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[9px] uppercase tracking-[0.2em] text-amber-200"><Activity size={12} /> News Tab Zone</div>
@@ -272,10 +275,10 @@ export default function CureApiInitialMenu() {
             </CureLayer>
           </section>
 
-          <aside className="min-h-0 rounded-lg border border-cyan-200/15 bg-black/35 p-3">
+          <aside className="min-h-0 rounded-lg border border-rose-200/15 bg-black/35 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <p className="text-[9px] uppercase tracking-[0.25em] text-cyan-300">ARCANA / 22 LENSES</p>
+                <p className="text-[9px] uppercase tracking-[0.25em] text-rose-300">ARCANA / 22 LENSES</p>
                 <h2 className="text-sm text-slate-100">Angle instruments</h2>
               </div>
               <button type="button" onClick={resetArcanaParameters} title="Reset all lens angles" className="rounded border border-white/10 p-2 text-slate-400 hover:text-white"><RotateCcw size={13} /></button>
@@ -289,8 +292,10 @@ export default function CureApiInitialMenu() {
       </CureLayer>
       <style jsx>{`
         .cure-news-ticker { width: max-content; animation: cureTicker 24s linear infinite; }
+        :global(.cure-heartbeat) { animation: cureHeart 0.83s ease-in-out infinite; transform-origin: center; }
+        @keyframes cureHeart { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.25); } 30% { transform: scale(0.95); } 45% { transform: scale(1.12); } }
         @keyframes cureTicker { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
-        @media (prefers-reduced-motion: reduce) { .cure-news-ticker { animation: none; width: auto; white-space: normal; } }
+        @media (prefers-reduced-motion: reduce) { .cure-news-ticker { animation: none; width: auto; white-space: normal; } :global(.cure-heartbeat) { animation: none; } }
       `}</style>
     </main>
   );
