@@ -12,26 +12,15 @@ import CureSplitIndex from '@/components/cure/CureSplitIndex';
 import HoneycombSingularity from '@/components/cure/HoneycombSingularity';
 import { PATTERN_ANALYSIS, kitItem } from '@/lib/cureKit';
 import EmergenceSugoroku from '@/components/cure/EmergenceSugoroku';
+import SandstormBlock from '@/components/cure/SandstormBlock';
+import IdleCrash from '@/components/cure/IdleCrash';
+import { glitterAmount } from '@/lib/retroBlocks';
 import { GreenCardKit } from '@/app/cure-api/TSMonsterEngine';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
 const RETRO_BLOCK_LABELS = ['HEADER', 'BOTTOM', 'SIDE MENU', 'POP UP'] as const;
 const MAX_SELECTED_CELLS = 7;
-
-function generatePixelPattern(seed: number, intensity: number, accentShift: number, frame: number) {
-  const rows: boolean[] = [];
-  for (let row = 0; row < 8; row += 1) {
-    for (let col = 0; col < 8; col += 1) {
-      const phase = frame * 0.73 + accentShift;
-      const grain = Math.sin((row + seed * 1.7) * 12.9898 + (col + phase) * 78.233) * 43758.5453;
-      const random = grain - Math.floor(grain);
-      const wave = Math.sin((row + col * 0.7 + phase) * (0.75 + intensity)) * 0.5 + 0.5;
-      rows.push(random > 0.88 - intensity * 0.38 || wave > 0.91 - intensity * 0.18);
-    }
-  }
-  return rows;
-}
 
 export default function RetroGridPage() {
   const [seed, setSeed] = useState(1984);
@@ -42,6 +31,7 @@ export default function RetroGridPage() {
   const [cureText, setCureText] = useState('');
   const [isCureFormOpen, setIsCureFormOpen] = useState(false);
   const [activeSplit, setActiveSplit] = useState<SplitKey | null>(null);
+  const [stormMode, setStormMode] = useState<'core' | 'shell'>('core');
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const intuitionChoice = useCureAPIStore((state) => state.intuitionChoice);
   const simulationSpeed = useCureAPIStore((state) => state.simulationSpeed);
@@ -115,11 +105,9 @@ export default function RetroGridPage() {
       const cellVelocity = chartVelocity * (0.78 + (index % 5) * 0.09);
       const intensity = Math.min(1, cellNoise * 0.72 + volatilityIndex * 0.18 + (index % 5) * 0.025);
       const label = RETRO_BLOCK_LABELS[index % RETRO_BLOCK_LABELS.length];
-      const symbolSeed = activeSymbol.split('').reduce((value, char) => value + char.charCodeAt(0), 0);
-      const pixels = generatePixelPattern(seed + symbolSeed + index * 3, intensity, index * 0.81, noiseFrame);
-      return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity, pixels };
+      return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity };
     }),
-    [activeSymbol, chartNoise, chartVelocity, noiseFrame, seed, strobeSeconds, volatilityIndex],
+    [activeSymbol, chartNoise, chartVelocity, volatilityIndex],
   );
 
   // Retro-grid instrument: each square's noise weighted by its flow (stable between strobe frames).
@@ -273,79 +261,75 @@ export default function RetroGridPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            {retroBlocks.map((block) => (
-              <div
-                key={block.id}
-                className={`relative rounded-xl border bg-[#080d16] p-2 transition-colors ${
-                  selectedCells.includes(block.id) ? 'border-cyan-200/70' : 'border-white/10'
-                }`}
-                style={{
-                  boxShadow: selectedCells.includes(block.id) ? `0 0 24px ${block.accent}66` : `0 0 18px ${block.baseColor}55`,
-                }}
-              >
-                <button
-                  type="button"
-                  aria-pressed={selectedCells.includes(block.id)}
-                  aria-label={`Select noise cell ${block.id}, ${block.label}, ${kitItem(block.id).name}, ${block.cellNoise.toFixed(2)} noise`}
-                  title={`#${block.id} ${kitItem(block.id).name} · ${kitItem(block.id).role}`}
-                  onClick={() => toggleCell(block.id)}
-                  className="absolute inset-2 z-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200"
-                />
-                <div className="relative h-32 overflow-hidden rounded-lg border border-white/10 bg-[#040812]">
-                  <div className="absolute inset-x-0 top-0 h-[22%]" style={{ background: block.baseColor, opacity: 0.9 }} />
-                  <div className="absolute left-0 top-[18%] h-[62%] w-[18%] rounded-r-md" style={{ background: block.accent, opacity: 0.7 }} />
-                  <div className="absolute right-0 top-[28%] h-[42%] w-[34%] rounded-l-md border border-white/10" style={{ background: block.baseColor, opacity: 0.55 }} />
-                  <div className="absolute inset-x-0 bottom-0 h-[18%]" style={{ background: block.baseColor, opacity: 0.8 }} />
-                  <div className="absolute inset-0 grid grid-cols-8 grid-rows-8 gap-[3px] p-2">
-                    {block.pixels.map((active, index) => (
-                      <span
-                        key={`${block.id}-${index}`}
-                        className="rounded-[2px] transition-all"
-                        style={{
-                          background: active ? block.accent : 'rgba(148, 163, 184, 0.1)',
-                          opacity: active ? Math.min(1, 0.38 + block.intensity) : 0.12 + block.cellNoise * 0.12,
-                          boxShadow: active ? `0 0 8px ${block.accent}` : 'none',
-                          transform: active ? `translateY(${Math.sin((index + block.id) * 0.8 + noiseFrame) * 1.2}px)` : 'translateY(0)',
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400">
+            <span>
+              SANDSTORM · strobe {strobeSeconds.toFixed(2)}s → {glitterAmount(strobeSeconds) < 0.25 ? 'gentle drift' : glitterAmount(strobeSeconds) < 0.7 ? 'shimmer' : 'glitter'} · experiment clock ×{simulationSpeed.toFixed(1)}{simulationSpeed === 0 ? ' (frozen)' : ''}
+            </span>
+            <span className="flex items-center gap-1">
+              {(['core', 'shell'] as const).map((mode) => (
+                <button key={mode} type="button" aria-pressed={stormMode === mode} onClick={() => setStormMode(mode)} className={`border px-2 py-0.5 ${stormMode === mode ? 'border-cyan-200/60 text-cyan-100' : 'border-white/10 text-slate-500'}`}>
+                  {mode === 'core' ? 'Y-axis core' : 'cylinder shell'}
+                </button>
+              ))}
+              <Link href="/cure-api/experiments" className="ml-1 text-cyan-300 hover:text-white">experiments →</Link>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-11">
+            {retroBlocks.map((block) => {
+              const selected = selectedCells.includes(block.id);
+              return (
+                <div
+                  key={block.id}
+                  className={`relative rounded-md border bg-[#080d16] p-1 transition-colors ${selected ? 'border-cyan-200/70' : 'border-white/10'}`}
+                  style={{ boxShadow: selected ? `0 0 18px ${block.accent}66` : `0 0 10px ${block.baseColor}33` }}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    aria-label={`Select noise cell ${block.id}, ${block.label}, ${kitItem(block.id).name}, ${block.cellNoise.toFixed(2)} noise`}
+                    title={`#${block.id} ${kitItem(block.id).name} · ${kitItem(block.id).role} · N ${block.cellNoise.toFixed(2)} / V ${block.cellVelocity.toFixed(2)}`}
+                    onClick={() => toggleCell(block.id)}
+                    className="absolute inset-1 z-10 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200"
+                  />
+                  <div className="relative aspect-square overflow-hidden rounded border border-white/10 bg-[#040812]">
+                    <SandstormBlock id={block.id} seed={seed} chaos={chaos} strobe={strobeSeconds} mode={stormMode} />
+                    {block.id === cureCell && (
+                      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden="true">
+                        {splitSpiralPaths(50, 50, 46, { noise: block.cellNoise, seed: block.id, frame: noiseFrame }).map(({ part, d }) => (
+                          <path key={part.key} d={d} fill="none" stroke={part.color} strokeLinecap="round" strokeWidth={activeSplit === part.key ? 3.2 : 1.8} opacity={activeSplit && activeSplit !== part.key ? 0.45 : 0.95} />
+                        ))}
+                      </svg>
+                    )}
+                    {block.id === cureCell && (
+                      <button
+                        type="button"
+                        aria-label={`Open Cure note for cell ${block.id}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsCureFormOpen(true);
                         }}
-                      />
-                    ))}
+                        className="absolute left-1/2 top-1/2 z-20 grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/80 bg-cyan-100/20 text-[7px] font-bold text-white shadow-[0_0_24px_rgba(103,232,249,.95)]"
+                      >
+                        CURE
+                      </button>
+                    )}
+                    {selected && (
+                      <span className="pointer-events-none absolute right-1 top-1 z-20 grid h-4 w-4 place-items-center rounded-full border border-white/60 bg-black/80 text-[8px] text-white">
+                        {selectedCells.indexOf(block.id) + 1}
+                      </span>
+                    )}
                   </div>
-                  {block.id === cureCell && (
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden="true">
-                      {splitSpiralPaths(50, 50, 46, { noise: block.cellNoise, seed: block.id, frame: noiseFrame }).map(({ part, d }) => (
-                        <path key={part.key} d={d} fill="none" stroke={part.color} strokeLinecap="round" strokeWidth={activeSplit === part.key ? 2.6 : 1.3} opacity={activeSplit && activeSplit !== part.key ? 0.45 : 0.95} />
-                      ))}
-                    </svg>
-                  )}
-                  {block.id === cureCell && (
-                    <button
-                      type="button"
-                      aria-label={`Open Cure note for cell ${block.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setIsCureFormOpen(true);
-                      }}
-                      className="absolute left-1/2 top-1/2 z-20 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/80 bg-cyan-100/20 text-[8px] font-bold text-white shadow-[0_0_24px_rgba(103,232,249,.95)]"
-                    >
-                      CURE
-                    </button>
-                  )}
-                  {selectedCells.includes(block.id) && (
-                    <span className="pointer-events-none absolute right-2 top-2 z-20 grid h-5 w-5 place-items-center rounded-full border border-white/60 bg-black/80 text-[9px] text-white">
-                      {selectedCells.indexOf(block.id) + 1}
-                    </span>
+                  <p className="pointer-events-none mt-1 truncate text-[8px] text-slate-300">
+                    <span style={{ color: block.baseColor }}>#{block.id}</span> {kitItem(block.id).name}
+                    {intuitionChoice?.kitId === block.id && <span className="ml-1 rounded border border-white/40 px-0.5 text-white">直感</span>}
+                  </p>
+                  {block.id === sourceCell && cureCell && (
+                    <p className="pointer-events-none text-[7px] uppercase tracking-wider text-cyan-200">→ CURE #{cureCell}</p>
                   )}
                 </div>
-                <div className="pointer-events-none mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-[0.12em] text-slate-300">
-                  <span style={{ color: block.baseColor }}>{block.label} · #{block.id} · <span className="normal-case text-slate-200">{kitItem(block.id).name}</span>{intuitionChoice?.kitId === block.id && <span className="ml-1 rounded border border-white/40 px-1 text-white">直感</span>}</span>
-                  <span className="text-right text-slate-400">N {block.cellNoise.toFixed(2)} / V {block.cellVelocity.toFixed(2)}</span>
-                </div>
-                {block.id === sourceCell && cureCell && (
-                  <p className="pointer-events-none mt-1 text-[8px] uppercase tracking-widest text-cyan-200">NOISE SOURCE → CURE #{cureCell}</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
           {selectedCells.length === 0 && (
             <p className="mt-4 text-[10px] text-slate-500">Select any cell to add it to the observation set. The first is the noise source; the second defines its Cure convergence point.</p>
@@ -376,6 +360,8 @@ export default function RetroGridPage() {
             </form>
           )}
         </section>
+
+        <IdleCrash page={activeSymbol === 'BTCUSD' ? 'A' : 'B'} />
 
         <EmergenceSugoroku page={activeSymbol === 'BTCUSD' ? 'A' : 'B'} />
 
