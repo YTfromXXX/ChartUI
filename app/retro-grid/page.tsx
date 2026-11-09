@@ -10,6 +10,7 @@ import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from
 import { splitSpiralPaths, type SplitKey } from '@/lib/cureSplit';
 import CureSplitIndex from '@/components/cure/CureSplitIndex';
 import HoneycombSingularity from '@/components/cure/HoneycombSingularity';
+import { PATTERN_ANALYSIS, kitItem } from '@/lib/cureKit';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
@@ -40,6 +41,7 @@ export default function RetroGridPage() {
   const [isCureFormOpen, setIsCureFormOpen] = useState(false);
   const [activeSplit, setActiveSplit] = useState<SplitKey | null>(null);
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
+  const intuitionChoice = useCureAPIStore((state) => state.intuitionChoice);
   const simulationSpeed = useCureAPIStore((state) => state.simulationSpeed);
   const volatilityIndex = useCureAPIStore((state) => state.volatilityIndex);
   const timeframe = useCureAPIStore((state) => state.timeframe);
@@ -176,6 +178,17 @@ export default function RetroGridPage() {
           </nav>
         </header>
 
+        {intuitionChoice && (
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-xs" style={{ borderColor: intuitionChoice.page === 'A' ? '#fb718566' : '#34d39966', background: intuitionChoice.page === 'A' ? 'rgba(251,113,133,.06)' : 'rgba(52,211,153,.06)' }}>
+            <p>
+              <span className="text-slate-400">{intuitionChoice.pattern} {PATTERN_ANALYSIS[intuitionChoice.pattern].name} → </span>
+              <span className="text-white">『{intuitionChoice.text}』</span>
+              <span className="text-slate-400"> · #{intuitionChoice.kitId} {kitItem(intuitionChoice.kitId).name} · page {intuitionChoice.page} ({intuitionChoice.page === 'A' ? '能動・衝突' : '受容・包摂'})</span>
+            </p>
+            <Link href="/cure-api" className="text-rose-300 hover:text-white">choose again ↺</Link>
+          </section>
+        )}
+
         <section className="flex flex-wrap items-center gap-4 rounded border border-fuchsia-500/30 bg-black/40 p-3 text-sm">
           <label className="flex items-center gap-2">seed
             <input type="number" value={seed} onChange={(event) => setSeed(Number(event.target.value) || 0)} className="w-24 rounded bg-slate-900 px-2 py-1" />
@@ -265,7 +278,8 @@ export default function RetroGridPage() {
                 <button
                   type="button"
                   aria-pressed={selectedCells.includes(block.id)}
-                  aria-label={`Select noise cell ${block.id}, ${block.label}, ${block.cellNoise.toFixed(2)} noise`}
+                  aria-label={`Select noise cell ${block.id}, ${block.label}, ${kitItem(block.id).name}, ${block.cellNoise.toFixed(2)} noise`}
+                  title={`#${block.id} ${kitItem(block.id).name} · ${kitItem(block.id).role}`}
                   onClick={() => toggleCell(block.id)}
                   className="absolute inset-2 z-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200"
                 />
@@ -315,7 +329,7 @@ export default function RetroGridPage() {
                   )}
                 </div>
                 <div className="pointer-events-none mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-[0.12em] text-slate-300">
-                  <span style={{ color: block.baseColor }}>{block.label} · #{block.id}</span>
+                  <span style={{ color: block.baseColor }}>{block.label} · #{block.id} · <span className="normal-case text-slate-200">{kitItem(block.id).name}</span>{intuitionChoice?.kitId === block.id && <span className="ml-1 rounded border border-white/40 px-1 text-white">直感</span>}</span>
                   <span className="text-right text-slate-400">N {block.cellNoise.toFixed(2)} / V {block.cellVelocity.toFixed(2)}</span>
                 </div>
                 {block.id === sourceCell && cureCell && (

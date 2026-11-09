@@ -11,6 +11,14 @@ export type PlaceholderState = 'idle' | '⚪︎' | '◻︎' | '(expand)' | '(ext
 export type CureHypothesis = 'A' | 'B';
 export type SimulationMode = 'hypothesisA' | 'hypothesisB';
 export type ProjectionVector = [number, number, number];
+/** The customer's answer to the two-choice intuition popup (kept locally in this browser). */
+export type IntuitionChoice = {
+  pattern: Exclude<PlaceholderState, 'idle'>;
+  page: 'A' | 'B';
+  kitId: number;
+  text: string;
+  at: number;
+};
 export type ProjectionBlock = {
   id: string;
   createdAt: number;
@@ -103,6 +111,7 @@ export type CureAPIState = {
   unlockedPredictionCell: number;
   /** Odd-return field measured on the retro grid; drives the Cure mover's free orbit. */
   oddField: OddField | null;
+  intuitionChoice: IntuitionChoice | null;
   setTimeframe: (timeframe: CureTimeframe) => void;
   setVolatilityIndex: (value: number) => void;
   setNewsFeedText: (text: string) => void;
@@ -121,6 +130,7 @@ export type CureAPIState = {
   appendProjectionBlock: (block: ProjectionBlock) => void;
   observeSingularity: (vector: ProjectionVector) => void;
   setOddField: (field: OddField | null) => void;
+  setIntuitionChoice: (choice: IntuitionChoice | null) => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -148,6 +158,7 @@ export const useCureAPIStore = create<CureAPIState>()(
       decoherenceNonce: 0,
       unlockedPredictionCell: -1,
       oddField: null,
+      intuitionChoice: null,
       setTimeframe: (timeframe) => set({ timeframe }),
       setVolatilityIndex: (value) => set({ volatilityIndex: clamp(value, 0, 1) }),
       setNewsFeedText: (newsFeedText) => set({ newsFeedText }),
@@ -190,6 +201,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         unlockedPredictionCell: (state.unlockedPredictionCell + 1) % 48,
       })),
       setOddField: (oddField) => set({ oddField }),
+      setIntuitionChoice: (intuitionChoice) => set({ intuitionChoice }),
     }),
     {
       name: 'chartui-cure-api-state',
@@ -213,6 +225,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         decoherenceNonce: state.decoherenceNonce,
         unlockedPredictionCell: state.unlockedPredictionCell,
         oddField: state.oddField,
+        intuitionChoice: state.intuitionChoice,
       }),
     },
   ),

@@ -14,6 +14,8 @@ import {
 import CureProjectionEngine from '@/components/cure/CureProjectionEngine';
 import ArcanaLoopBinder from '@/components/cure/ArcanaLoopBinder';
 import { orbitPath, orbitPoint } from '@/lib/cureOrbit';
+import IntuitionChoicePopup from '@/components/cure/IntuitionChoicePopup';
+import { IDLE_PROMPT, PATTERN_ANALYSIS, type Pattern } from '@/lib/cureKit';
 
 const PLACEHOLDER_OPTIONS: Exclude<PlaceholderState, 'idle'>[] = ['⚪︎', '◻︎', '(expand)', '(extend)'];
 
@@ -149,6 +151,7 @@ export default function CureApiInitialMenu() {
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const resetArcanaParameters = useCureAPIStore((state) => state.resetArcanaParameters);
   const [placeholderText, setPlaceholderText] = useState('');
+  const [choiceFor, setChoiceFor] = useState<Pattern | null>(null);
 
   useEffect(() => {
     if (exParameter === 0) useCureAPIStore.getState().activatePlaceholder();
@@ -244,7 +247,7 @@ export default function CureApiInitialMenu() {
                   value={placeholderText}
                   onChange={(event) => setPlaceholderText(event.target.value)}
                   onFocus={() => useCureAPIStore.getState().activatePlaceholder()}
-                  placeholder={placeholderState === 'idle' ? 'Catch the moving cell or focus to define a placeholder…' : `${placeholderState} · add a note or select another type`}
+                  placeholder={placeholderState === 'idle' ? IDLE_PROMPT : PATTERN_ANALYSIS[placeholderState].prompt}
                   className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600"
                 />
                 <button type="button" aria-expanded={placeholderActive} onClick={() => placeholderActive ? closePlaceholder() : useCureAPIStore.getState().activatePlaceholder()} className="text-slate-400 hover:text-white">
@@ -259,8 +262,8 @@ export default function CureApiInitialMenu() {
                   </div>
                   <div className="grid grid-cols-2 gap-1">
                     {PLACEHOLDER_OPTIONS.map((option) => (
-                      <button key={option} type="button" onClick={() => useCureAPIStore.getState().setPlaceholderState(option)} className={`border px-2 py-2 text-xs hover:border-rose-200/60 ${placeholderState === option ? 'border-rose-200/60 bg-rose-200/10 text-rose-100' : 'border-white/10 text-slate-300'}`}>
-                        {option}
+                      <button key={option} type="button" onClick={() => { useCureAPIStore.getState().setPlaceholderState(option); setChoiceFor(option); }} title={PATTERN_ANALYSIS[option].prompt} className={`border px-2 py-2 text-xs hover:border-rose-200/60 ${placeholderState === option ? 'border-rose-200/60 bg-rose-200/10 text-rose-100' : 'border-white/10 text-slate-300'}`}>
+                        {option} <span className="text-[9px] text-slate-500">{PATTERN_ANALYSIS[option].name}</span>
                       </button>
                     ))}
                   </div>
@@ -295,6 +298,7 @@ export default function CureApiInitialMenu() {
           </aside>
         </div>
       </CureLayer>
+      {choiceFor && <IntuitionChoicePopup pattern={choiceFor} onClose={() => setChoiceFor(null)} />}
       <style jsx>{`
         .cure-news-ticker { width: max-content; animation: cureTicker 24s linear infinite; }
         :global(.cure-heartbeat) { animation: cureHeart 0.83s ease-in-out infinite; transform-origin: center; }

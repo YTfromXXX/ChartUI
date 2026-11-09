@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useSpiral22 } from '@/hooks/useSpiral22';
 import { useCureAPIStore } from '@/lib/cureApiStore';
 import { galaxyParams, measureOdd, type OddCell, type OddMeasurement } from '@/lib/oddMeter';
+import { LOOP_CELL_COUNT, kitItem } from '@/lib/cureKit';
 
 type Props = {
   /** Retro-grid instrument: 22 values, cell id = index + 1. */
@@ -17,6 +18,7 @@ type Props = {
 const HEX_R = 44;
 const CX = 160;
 const CY = 150;
+const LOOP_R = 138;
 const RING_COLORS = ['#fb7185', '#e879f9', '#fbbf24', '#34d399', '#fda4af', '#a78bfa'];
 
 function hexPoints(cx: number, cy: number, r: number) {
@@ -97,6 +99,12 @@ export default function HoneycombSingularity({ retroValues, selectedCells, cureC
 
   const ring = selectedCells.filter((id) => id !== cureCell).slice(0, 6);
   const galaxies = ring.length;
+  // The cells outside the hive: a divided polyhedron looping around it to sustain the 6.
+  const loopIds = Array.from({ length: 22 }, (_, i) => i + 1).filter((id) => id !== cureCell && !ring.includes(id));
+  const loopVertices = loopIds.map((id, i) => {
+    const a = (i / loopIds.length) * Math.PI * 2 - Math.PI / 2;
+    return { id, x: CX + LOOP_R * Math.cos(a), y: CY + LOOP_R * Math.sin(a) };
+  });
 
   // Publish the combined field; ring cells lead the harmonics so the selection steers the mover.
   const field = useMemo(() => {
@@ -128,7 +136,7 @@ export default function HoneycombSingularity({ retroValues, selectedCells, cureC
           <p className="mt-1 text-[10px] text-slate-400">Each instrument contains its deviation from center in honeycomb steps; even steps return to the nearest odd step, leaving a blank singularity (dashed).</p>
         </div>
         <span className={`font-mono text-[10px] ${galaxies === 6 && cureCell ? 'text-emerald-300' : 'text-slate-500'}`}>
-          {galaxies} galaxies + {cureCell ? 1 : 0} singularity = {galaxies + (cureCell ? 1 : 0)}{(galaxies + (cureCell ? 1 : 0)) % 2 ? ' (odd)' : ' (even)'}
+          {galaxies} galaxies + {cureCell ? 1 : 0} singularity = {galaxies + (cureCell ? 1 : 0)}{(galaxies + (cureCell ? 1 : 0)) % 2 ? ' (odd)' : ' (even)'} · loop {loopIds.length}{loopIds.length === LOOP_CELL_COUNT ? ' ✓' : `/${LOOP_CELL_COUNT}`}
         </span>
       </div>
 
@@ -140,10 +148,21 @@ export default function HoneycombSingularity({ retroValues, selectedCells, cureC
 
         <svg viewBox="0 0 320 300" className="w-full" role="img" aria-label="Seven-cell honeycomb with six spiral galaxies around a central singularity">
           <style>{`
+            .hc-loop { transform-box: view-box; transform-origin: ${CX}px ${CY}px; animation: hcLoop 90s linear infinite; }
+            @keyframes hcLoop { to { transform: rotate(360deg); } }
             .hc-spin { transform-box: fill-box; transform-origin: center; animation: hcSpin var(--hc-dur) linear infinite; }
             @keyframes hcSpin { to { transform: rotate(var(--hc-turn)); } }
-            @media (prefers-reduced-motion: reduce) { .hc-spin { animation: none; } }
+            @media (prefers-reduced-motion: reduce) { .hc-spin, .hc-loop { animation: none; } }
           `}</style>
+          <g className="hc-loop">
+            <polygon points={loopVertices.map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' ')} fill="none" stroke="#e879f9" strokeOpacity={0.3} strokeDasharray="2 5" />
+            {loopVertices.map((v) => (
+              <g key={v.id}>
+                <circle cx={v.x} cy={v.y} r={7} fill="#140812" stroke="#e879f9" strokeOpacity={0.6} />
+                <text x={v.x} y={v.y + 2.5} textAnchor="middle" fontSize={6.5} fill="#f5d0fe"><title>{`#${v.id} ${kitItem(v.id).name} · ${kitItem(v.id).role}`}</title>{v.id}</text>
+              </g>
+            ))}
+          </g>
           {Array.from({ length: 6 }, (_, k) => {
             const { x, y } = ringCenter(k);
             const id = ring[k];
@@ -168,14 +187,14 @@ export default function HoneycombSingularity({ retroValues, selectedCells, cureC
                     <circle r={3} fill="#fff" opacity={0.85} />
                   </g>
                 </g>
-                <text x={x} y={y + HEX_R * 0.62} textAnchor="middle" fontSize={7} fill="#e2e8f0" stroke="#05020a" strokeWidth={2.5} paintOrder="stroke">#{id} · {g.arms} arm</text>
+                <text x={x} y={y + HEX_R * 0.62} textAnchor="middle" fontSize={7} fill="#e2e8f0" stroke="#05020a" strokeWidth={2.5} paintOrder="stroke" {...(kitItem(id).name.length > 5 ? { textLength: HEX_R * 1.3, lengthAdjust: 'spacingAndGlyphs' } : {})}>#{id} {kitItem(id).name}<title>{`${kitItem(id).name} · ${kitItem(id).role} · ${g.arms} arm`}</title></text>
               </g>
             );
           })}
           <polygon points={hexPoints(CX, CY, HEX_R - 2)} fill="#05020a" stroke={cureCell ? '#fff' : 'rgba(255,255,255,.2)'} strokeDasharray={cureCell ? undefined : '3 4'} />
           <circle cx={CX} cy={CY} r={14} fill="none" stroke="#fb7185" strokeOpacity={0.6} strokeDasharray="2 3" />
           <text x={CX} y={CY + 4} textAnchor="middle" fontSize={12} fill="#fda4af">∅</text>
-          <text x={CX} y={CY + HEX_R - 10} textAnchor="middle" fontSize={8} fill="#cbd5e1">{cureCell ? `CURE #${cureCell}` : 'cure center'}</text>
+          <text x={CX} y={CY + HEX_R - 10} textAnchor="middle" fontSize={7} fill="#cbd5e1">{cureCell ? `CURE #${cureCell} ${kitItem(cureCell).name}` : 'cure center'}</text>
         </svg>
       </div>
       <p className="mt-2 text-[9px] text-slate-600">Original heuristic measurement for exploration; not a statistical test or trading signal. The combined pull field steers the Cure mover on /cure-api.</p>
