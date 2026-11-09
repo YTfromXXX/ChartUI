@@ -12,6 +12,7 @@ import type { TrueGravityTensor } from '@/components/2d/GravityHoneycomb';
 import MatrixLiveFeedback from '@/components/MatrixLiveFeedback';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import { useMarketStream } from '@/hooks/useMarketStream';
+import { useBtcUsdTicker } from '@/hooks/useBtcUsdTicker';
 import { useMetalFeed, type MetalQuote } from '@/hooks/useMetalFeed';
 import { ANIMAL_INITIAL_UNIVERSE, adaptMetalJumpIntensity, analyzeMatrixPair, accelerateJumpIntensity, atrJumpSize, calculateAtr, calculateRsi, calculateVortexSearch, calculateVolumeWells, observeQuantumCloud, calculateCryptoPositionMetrics, type CryptoPositionState, type ObserverDirection, calculateTensionOmegaLissajous, evaluateHackingSingularity, calculateBollingerHalfVariance, calculateIchimoku, calculateIndicatorVelocity, calculateMacdPendulum, calculateOrderParameterMacd, detectEcosystemCollapse, applyMatrixInvasionToGeometry, checkMetalResonance, createFieldSimulator, samplePoissonCount, type FieldConfig, type FieldDiagnostics, type FieldStep } from '@/lib/fieldModels';
 import SigilHologram from '@/components/SigilHologram';
@@ -40,8 +41,6 @@ type KnotTimelineLayerState = {
   target: boolean;
   best: boolean;
 };
-
-type BtcUsdTicker = { price: number; timestamp: number };
 
 type GuideInputProps = {
   label: string;
@@ -74,54 +73,6 @@ function GuideInput({ label, value, min, max, step, suffix, onChange }: GuideInp
       </div>
     </label>
   );
-}
-
-function useBtcUsdTicker() {
-  const [ticker, setTicker] = useState<BtcUsdTicker>();
-  const [isConnected, setIsConnected] = useState(false);
-
-  useEffect(() => {
-    let socket: WebSocket | undefined;
-    let reconnectTimer: number | undefined;
-    let stopped = false;
-
-    const connect = () => {
-      socket = new WebSocket('wss://ws-feed.exchange.coinbase.com');
-      socket.onopen = () => {
-        setIsConnected(true);
-        socket?.send(JSON.stringify({
-          type: 'subscribe',
-          product_ids: ['BTC-USD'],
-          channels: ['ticker'],
-        }));
-      };
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data) as { type?: string; price?: string; time?: string };
-          const price = Number(payload.price);
-          if (payload.type === 'ticker' && Number.isFinite(price)) {
-            setTicker({ price, timestamp: Date.parse(payload.time ?? '') || Date.now() });
-          }
-        } catch {
-          // Ignore malformed third-party exchange messages and await the next tick.
-        }
-      };
-      socket.onerror = () => socket?.close();
-      socket.onclose = () => {
-        setIsConnected(false);
-        if (!stopped) reconnectTimer = window.setTimeout(connect, 2_000);
-      };
-    };
-
-    connect();
-    return () => {
-      stopped = true;
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      socket?.close();
-    };
-  }, []);
-
-  return { ticker, isConnected };
 }
 
 function createTimeline(tick: KnotTick, visible: KnotTimelineLayerState): Record<keyof KnotTimelineLayerState, KnotTimelineLayer | undefined> {

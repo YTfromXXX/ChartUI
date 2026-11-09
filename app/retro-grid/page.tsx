@@ -3,7 +3,8 @@
 import { ArrowLeft, Dices, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useMarketStream } from '@/hooks/useMarketStream';
+import { useBtcUsdTicker } from '@/hooks/useBtcUsdTicker';
+import { useMetalFeed } from '@/hooks/useMetalFeed';
 import { TIMEFRAME_STROBE_INTERVAL_MS, useCureAPIStore } from '@/lib/cureApiStore';
 import { GRID, REGIONS, cellColors, regionAt, regionCounts, type RegionId } from '@/lib/retroGrid';
 
@@ -39,25 +40,30 @@ export default function RetroGridPage() {
   const timeframe = useCureAPIStore((state) => state.timeframe);
   const simulationMode = useCureAPIStore((state) => state.simulationMode);
   const activeSymbol = simulationMode === 'hypothesisA' ? 'BTCUSD' : 'XAUUSD';
-  const { marketDataMap, isConnected } = useMarketStream(
-    process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/signals',
-    activeSymbol,
-  );
-  const marketData = marketDataMap[activeSymbol];
-  const chartData = marketData?.chart_data;
-  const hasMarketChart = Boolean(chartData && chartData.close > 0);
+  const { ticker: btcTicker, isConnected: btcConnected, activity: btcActivity } = useBtcUsdTicker();
+  const metalFeed = useMetalFeed(activeSymbol === 'XAUUSD');
+  const activePrice = activeSymbol === 'BTCUSD' ? btcTicker?.price : metalFeed.quote?.price;
+  const hasLivePrice = activeSymbol === 'BTCUSD'
+    ? Boolean(btcTicker)
+    : metalFeed.quote?.source === 'LIVE';
+  const feedConnected = activeSymbol === 'BTCUSD' ? btcConnected : Boolean(metalFeed.quote);
 
   const colors = useMemo(() => cellColors(seed, chaos), [seed, chaos]);
   const counts = useMemo(() => regionCounts(), []);
   const strobeIntervalMs = TIMEFRAME_STROBE_INTERVAL_MS[timeframe] || 220;
-  const relativeRange = hasMarketChart && chartData
-    ? Math.max(0, chartData.high - chartData.low) / chartData.close
-    : volatilityIndex * 0.001;
-  const relativeBody = hasMarketChart && chartData
-    ? Math.abs(chartData.close - chartData.open) / chartData.close
-    : volatilityIndex * 0.0005;
-  const chartNoise = Math.min(1, Math.max(0.04, relativeRange * 420 + relativeBody * 280));
-  const chartVelocity = Math.min(2.5, Math.max(0.1, relativeBody * 900 + relativeRange * 120));
+  const relativeRange = activeSymbol === 'BTCUSD'
+    ? btcActivity.range / 100
+    : metalFeed.volatility / 80;
+  const relativeVelocity = activeSymbol === 'BTCUSD'
+    ? btcActivity.priceVelocity
+    : activePrice && activePrice > 0 ? Math.abs(metalFeed.priceVelocity / activePrice) * 1600 : 0;
+  const chartNoise = Math.min(1, Math.max(
+    0.025,
+    activeSymbol === 'BTCUSD'
+      ? btcActivity.volatility * 0.65 + btcActivity.range * 0.35
+      : metalFeed.volatility * 0.7 + Math.min(1, relativeVelocity) * 0.3,
+  ));
+  const chartVelocity = Math.min(2.5, Math.max(0.1, relativeVelocity));
   const strobeSeconds = Math.max(
     0.08,
     strobeIntervalMs / 1000 / Math.max(0.25, simulationSpeed) / (0.65 + chartVelocity * 0.7),
@@ -88,8 +94,7 @@ export default function RetroGridPage() {
       const label = RETRO_BLOCK_LABELS[index % RETRO_BLOCK_LABELS.length];
       const symbolSeed = activeSymbol.split('').reduce((value, char) => value + char.charCodeAt(0), 0);
       const pixels = generatePixelPattern(seed + symbolSeed + index * 3, intensity, index * 0.81, noiseFrame);
-      const duration = Math.max(0.45, strobeSeconds * (1.55 - Math.min(1, cellVelocity * 0.25)));
-      return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity, pixels, duration };
+      return { id: index + 1, label, baseColor, accent, intensity, cellNoise, cellVelocity, pixels };
     }),
     [activeSymbol, chartNoise, chartVelocity, noiseFrame, seed, strobeSeconds, volatilityIndex],
   );
@@ -125,20 +130,6 @@ export default function RetroGridPage() {
   return (
     <main className="min-h-screen bg-[#07030f] p-6 font-mono text-fuchsia-100">
       <style jsx>{`
-        @keyframes retroPulse {
-          0% {
-            transform: translateY(0px) scale(0.985);
-            filter: brightness(0.82) saturate(0.8);
-          }
-          35% {
-            transform: translateY(-2px) scale(1.01);
-            filter: brightness(1.08) saturate(1.2);
-          }
-          100% {
-            transform: translateY(1px) scale(1);
-            filter: brightness(1.24) saturate(1.45);
-          }
-        }
         @keyframes retroSand {
           0% {
             transform: translate3d(-2px, 0, 0);
@@ -212,8 +203,8 @@ export default function RetroGridPage() {
               <h2 className="mt-1 text-sm tracking-[0.18em] text-white">22-square drifter lattice / {activeSymbol}</h2>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <span className={`rounded border px-2 py-1 ${hasMarketChart ? 'border-emerald-300/30 text-emerald-200' : 'border-amber-300/30 text-amber-200'}`}>
-                {hasMarketChart ? 'CHART FEED' : 'SIMULATED NOISE'}
+              <span className={`rounded border px-2 py-1 ${hasLivePrice ? 'border-emerald-300/30 text-emerald-200' : 'border-amber-300/30 text-amber-200'}`}>
+                {hasLivePrice ? 'LIVE FEED' : activeSymbol === 'XAUUSD' && metalFeed.quote ? 'SYNTHETIC FEED' : 'WAITING FOR FEED'}
               </span>
               <span className="rounded border border-cyan-400/30 bg-cyan-400/5 px-2 py-1 text-cyan-100">
                 {timeframe} / {simulationSpeed.toFixed(1)}x · {strobeSeconds.toFixed(2)}s
@@ -222,11 +213,14 @@ export default function RetroGridPage() {
           </div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400">
             <span>
-              {hasMarketChart && chartData
-                ? `${activeSymbol} ${chartData.close.toLocaleString(undefined, { maximumFractionDigits: 4 })} · range ${(relativeRange * 100).toFixed(3)}% · flow ${chartVelocity.toFixed(2)}`
-                : `${activeSymbol} chart waiting${isConnected ? ' · feed connected, awaiting candle' : ' · backend disconnected'}`}
+              {activePrice
+                ? `${activeSymbol} ${activePrice.toLocaleString(undefined, { maximumFractionDigits: 4 })} · noise ${chartNoise.toFixed(2)} · flow ${chartVelocity.toFixed(2)}`
+                : `${activeSymbol} price waiting${feedConnected ? ' · feed connected, awaiting quote' : ' · feed disconnected'}`}
             </span>
-            <span>{selectedCells.length}/{MAX_SELECTED_CELLS} cells selected · 22/22 noise fields</span>
+            <span>
+              {hasLivePrice ? 'LIVE PRICE' : activeSymbol === 'XAUUSD' && metalFeed.quote ? 'SYNTHETIC PRICE' : 'NO LIVE PRICE'}
+              {' · '}{selectedCells.length}/{MAX_SELECTED_CELLS} selected · 22/22 noise fields
+            </span>
           </div>
 
           <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/5">
@@ -244,7 +238,6 @@ export default function RetroGridPage() {
                   selectedCells.includes(block.id) ? 'border-cyan-200/70' : 'border-white/10'
                 }`}
                 style={{
-                  animation: `retroPulse ${block.duration}s ease-in-out infinite alternate`,
                   boxShadow: selectedCells.includes(block.id) ? `0 0 24px ${block.accent}66` : `0 0 18px ${block.baseColor}55`,
                 }}
               >
@@ -270,7 +263,6 @@ export default function RetroGridPage() {
                           opacity: active ? Math.min(1, 0.38 + block.intensity) : 0.12 + block.cellNoise * 0.12,
                           boxShadow: active ? `0 0 8px ${block.accent}` : 'none',
                           transform: active ? `translateY(${Math.sin((index + block.id) * 0.8 + noiseFrame) * 1.2}px)` : 'translateY(0)',
-                          animation: active ? `retroSand ${block.duration}s steps(2, end) infinite alternate` : 'none',
                         }}
                       />
                     ))}
