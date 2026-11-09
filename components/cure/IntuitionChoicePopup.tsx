@@ -2,7 +2,8 @@
 
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { runMonsterEngine } from '@/app/cure-api/TSMonsterEngine';
 import { PATTERN_ANALYSIS, kitItem, type ChoiceOption, type Pattern } from '@/lib/cureKit';
 import { useCureAPIStore } from '@/lib/cureApiStore';
 
@@ -18,12 +19,20 @@ const PAGE_META = {
 export default function IntuitionChoicePopup({ pattern, onClose }: { pattern: Pattern; onClose: () => void }) {
   const router = useRouter();
   const analysis = PATTERN_ANALYSIS[pattern];
-  const firstButton = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const oddField = useCureAPIStore((state) => state.oddField);
+  const engine = useMemo(() => runMonsterEngine({
+    pattern,
+    oddField,
+    locale: typeof navigator === 'undefined' ? undefined : navigator.language,
+    prefersReducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  }), [pattern, oddField]);
   const setIntuitionChoice = useCureAPIStore((state) => state.setIntuitionChoice);
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
 
   useEffect(() => {
-    firstButton.current?.focus();
+    // Fair play: focus the dialog, not either option, so neither side is preselected.
+    dialogRef.current?.focus();
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -35,11 +44,13 @@ export default function IntuitionChoicePopup({ pattern, onClose }: { pattern: Pa
     router.push(`/retro-grid?page=${option.page}`);
   };
 
-  const [a, b] = analysis.choice;
+  const { a, b } = engine.choice;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#05020a]/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="intuition-title"
@@ -58,6 +69,9 @@ export default function IntuitionChoicePopup({ pattern, onClose }: { pattern: Pa
         </div>
 
         <p className="relative mt-4 text-[11px] leading-5 text-slate-300">{analysis.phenomenon}</p>
+        <p className="relative mt-2 font-mono text-[9px] text-fuchsia-200/80">
+          SensorySpiceKit · {engine.sensory.texture} · {engine.sensory.spice} · intensity {engine.sensory.intensity.toFixed(2)} · pulse {engine.sensory.pulseHz.toFixed(2)} Hz — {engine.sensory.cue}
+        </p>
 
         <h2 id="intuition-title" className="relative mt-5 text-center text-base leading-7 text-white sm:text-lg">
           『<span style={{ color: PAGE_META.A.color }}>{`{${a.text}}`}</span> <span className="text-slate-500">or</span> <span style={{ color: PAGE_META.B.color }}>{`{${b.text}}`}</span>』
@@ -65,13 +79,12 @@ export default function IntuitionChoicePopup({ pattern, onClose }: { pattern: Pa
         <p className="relative mt-1 text-center text-[10px] text-slate-500">{analysis.prompt}</p>
 
         <div className="relative mt-4 grid gap-3 sm:grid-cols-2">
-          {[a, b].map((option, index) => {
+          {[a, b].map((option) => {
             const meta = PAGE_META[option.page];
             const kit = kitItem(option.kitId);
             return (
               <button
                 key={option.page}
-                ref={index === 0 ? firstButton : undefined}
                 type="button"
                 onClick={() => choose(option)}
                 className="group rounded-lg border bg-black/40 p-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2"
@@ -92,7 +105,11 @@ export default function IntuitionChoicePopup({ pattern, onClose }: { pattern: Pa
           <span className="mr-1">engaged kit:</span>
           {analysis.kit.map((id) => <span key={id} title={kitItem(id).role} className="rounded border border-white/10 px-1.5 py-0.5">#{id} {kitItem(id).name}</span>)}
         </div>
-        <p className="relative mt-3 text-[8px] text-slate-600">Your answer is kept only in this browser to steer the exploration loop; it is not a profile or identity record.</p>
+        <div className="relative mt-3 space-y-0.5 text-[8px] text-slate-600">
+          <p>GreenCardKit · {engine.region} · {engine.notice}</p>
+          <p>fair play {engine.fairPlay.ok ? '✓' : '✕'} · {engine.fairPlay.checks.filter((c) => !c.pass).map((c) => c.rule).join(' / ') || 'no preselection · balanced wording · dismissible · reversible'}</p>
+          <p>Your answer is kept only in this browser to steer the exploration loop; it is not a profile or identity record.</p>
+        </div>
       </div>
     </div>
   );

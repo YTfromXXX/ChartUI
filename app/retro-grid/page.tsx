@@ -11,6 +11,8 @@ import { splitSpiralPaths, type SplitKey } from '@/lib/cureSplit';
 import CureSplitIndex from '@/components/cure/CureSplitIndex';
 import HoneycombSingularity from '@/components/cure/HoneycombSingularity';
 import { PATTERN_ANALYSIS, kitItem } from '@/lib/cureKit';
+import EmergenceSugoroku from '@/components/cure/EmergenceSugoroku';
+import { GreenCardKit } from '@/app/cure-api/TSMonsterEngine';
 
 const CELL = 40;
 const SIZE = GRID * CELL;
@@ -77,8 +79,15 @@ export default function RetroGridPage() {
   );
   const localSand = chartNoise * (0.8 + chartVelocity * 0.2);
 
+  // GreenCardKit: the 22-field pixel noise is a large flicker area, so keep it at or under 3 Hz
+  // (and slow it further for reduced-motion users).
   useEffect(() => {
-    const timer = window.setInterval(() => setNoiseFrame((frame) => frame + 1), strobeSeconds * 1000);
+    const regulation = GreenCardKit.regulateAnimation({
+      region: GreenCardKit.regionFromLocale(navigator.language),
+      strobeIntervalMs: strobeSeconds * 1000,
+      prefersReducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    });
+    const timer = window.setInterval(() => setNoiseFrame((frame) => frame + 1), regulation.strobeIntervalMs);
     return () => window.clearInterval(timer);
   }, [strobeSeconds]);
 
@@ -367,6 +376,8 @@ export default function RetroGridPage() {
             </form>
           )}
         </section>
+
+        <EmergenceSugoroku page={activeSymbol === 'BTCUSD' ? 'A' : 'B'} />
 
         <HoneycombSingularity retroValues={retroValues} selectedCells={selectedCells} cureCell={cureCell} />
 
