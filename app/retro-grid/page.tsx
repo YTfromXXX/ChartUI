@@ -15,6 +15,7 @@ import EmergenceSugoroku from '@/components/cure/EmergenceSugoroku';
 import SandstormBlock from '@/components/cure/SandstormBlock';
 import IdleCrash from '@/components/cure/IdleCrash';
 import QuizQuantum from '@/components/cure/QuizQuantum';
+import FamiSideMenu from '@/components/cure/FamiSideMenu';
 import { glitterAmount } from '@/lib/retroBlocks';
 import { GreenCardKit } from '@/app/cure-api/TSMonsterEngine';
 
@@ -190,6 +191,7 @@ export default function RetroGridPage() {
         }
       `}</style>
 
+      <FamiSideMenu />
       <div className="mx-auto max-w-6xl space-y-5">
         <header className="flex items-center justify-between">
           <h1 className="text-xl tracking-[0.3em] text-cyan-300">RETRO GRID // CHROMA DRIFT</h1>

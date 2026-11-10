@@ -1,14 +1,15 @@
 'use client';
 
 // Mente notification inbox, shared by every page and tab of the app.
-// Senders: クオンタムクイズ (No.19) and King&Queen. The delivery mode — parallel
+// Senders: クオンタムクイズ (No.19), King&Queen, ヒューマンリソース, アニマルリソース and
+// Mente's own colour requests. The delivery mode — parallel
 // (split screen) or serial (one enlarged notice at a time, opening = screen transition) —
 // is set on the Cure-API side.
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type MenteSource = 'quiz' | 'kingqueen';
+export type MenteSource = 'quiz' | 'kingqueen' | 'human' | 'animal' | 'mente';
 export type MenteDelivery = 'parallel' | 'serial';
 
 export type MenteNotice = {
@@ -25,6 +26,9 @@ export type MenteNotice = {
 export const SOURCE_LABEL: Record<MenteSource, string> = {
   quiz: 'クオンタムクイズからの通知',
   kingqueen: 'King&Queen からのイベント通知',
+  human: 'ヒューマンリソース',
+  animal: 'アニマルリソース',
+  mente: 'Mente からの色彩の要求',
 };
 
 type InboxState = {
@@ -47,7 +51,7 @@ export const useMenteInbox = create<InboxState>()(
     (set) => ({
       notices: [],
       delivery: 'parallel',
-      enabled: { quiz: true, kingqueen: true },
+      enabled: { quiz: true, kingqueen: true, human: true, animal: true, mente: true },
       notify: (notice) => set((state) => (state.enabled[notice.source]
         ? { notices: [{ ...notice, id: `${notice.source}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: Date.now(), read: false }, ...state.notices].slice(0, MAX_NOTICES) }
         : state)),
@@ -57,7 +61,15 @@ export const useMenteInbox = create<InboxState>()(
       setDelivery: (delivery) => set({ delivery }),
       setEnabled: (source, on) => set((state) => ({ enabled: { ...state.enabled, [source]: on } })),
     }),
-    { name: STORE_KEY, storage: createJSONStorage(() => localStorage) },
+    {
+      name: STORE_KEY,
+      storage: createJSONStorage(() => localStorage),
+      // Older saved state only knew two senders: keep their switches, default the rest to on.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<InboxState>;
+        return { ...current, ...saved, enabled: { ...current.enabled, ...(saved.enabled ?? {}) } };
+      },
+    },
   ),
 );
 

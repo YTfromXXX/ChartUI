@@ -5,6 +5,11 @@ import { useEffect, useState } from 'react';
 import KrugerBubble from '@/components/mente/KrugerBubble';
 import MentePhone, { type PhoneScreen } from '@/components/mente/MentePhone';
 import MenteNotificationArea from '@/components/mente/MenteNotificationArea';
+import MenteResourceFeed from '@/components/mente/MenteResourceFeed';
+import EyeNoseTransplant from '@/components/mente/EyeNoseTransplant';
+import MoonSneakerPanel from '@/components/mente/MoonSneakerPanel';
+import { SensorySpiceKit } from '@/app/cure-api/TSMonsterEngine';
+import { useCureAPIStore } from '@/lib/cureApiStore';
 import { MENTE_LOG, MENTE_MEMBERS, memberById } from '@/lib/menteChat';
 
 type RemoteKey = { key: string; label: string; action: (set: Actions) => void };
@@ -25,6 +30,10 @@ export default function MentePage() {
   const [scroll, setScroll] = useState(0);
   const [pressed, setPressed] = useState<string | null>(null);
   const [fromQuiz, setFromQuiz] = useState<string | null>(null);
+  // The nose's input to the sneakers: the sensory intensity of the current placeholder pattern.
+  const pattern = useCureAPIStore((s) => s.placeholderState);
+  const oddField = useCureAPIStore((s) => s.oddField);
+  const scent = SensorySpiceKit.senseSpice({ pattern: pattern === 'idle' ? '⚪︎' : pattern, tension: oddField?.tension, oddRatio: oddField?.oddRatio }).intensity;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -52,7 +61,10 @@ export default function MentePage() {
           <p className="inline-block bg-black px-2 py-1 text-xs font-bold italic text-white">クイズクオンタム Q{fromQuiz} からのテレフォンを受信しました</p>
         )}
 
+        <MenteResourceFeed />
         <MenteNotificationArea />
+        <EyeNoseTransplant />
+        <MoonSneakerPanel scent={scent} />
 
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* Remote sensing: each button drives the phone. */}

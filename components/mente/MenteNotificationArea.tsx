@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import KrugerBubble, { KRUGER_FAMILY, KRUGER_FONT } from '@/components/mente/KrugerBubble';
 import { SOURCE_LABEL, unreadOf, useMenteInbox, type MenteNotice, type MenteSource } from '@/lib/menteInbox';
 
-const SOURCES: MenteSource[] = ['quiz', 'kingqueen'];
+const SOURCES = Object.keys(SOURCE_LABEL) as MenteSource[];
+const PRESETS: [MenteSource, MenteSource][] = [['human', 'animal'], ['quiz', 'kingqueen'], ['mente', 'animal']];
 const time = (at: number) => new Date(at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 /**
@@ -19,6 +20,8 @@ export default function MenteNotificationArea() {
   const markRead = useMenteInbox((s) => s.markRead);
   const markAllRead = useMenteInbox((s) => s.markAllRead);
   const [dismissedAt, setDismissedAt] = useState(0);
+  // Parallel view: which two senders sit left and right.
+  const [pair, setPair] = useState<[MenteSource, MenteSource]>(['human', 'animal']);
 
   const open = (n: MenteNotice) => { markRead(n.id); router.push(n.href); };
 
@@ -42,12 +45,27 @@ export default function MenteNotificationArea() {
         <span className="ml-2 font-normal not-italic text-white/60">設定は Cure-API 側</span>
       </p>
 
+      {delivery === 'parallel' && (
+        <div className="flex flex-wrap items-center gap-1 text-[11px]" aria-label="Split pair">
+          {PRESETS.map(([l, r]) => (
+            <button key={`${l}-${r}`} type="button" onClick={() => setPair([l, r])} aria-pressed={pair[0] === l && pair[1] === r} className={`border-2 border-black px-2 py-0.5 font-bold ${pair[0] === l && pair[1] === r ? 'bg-black text-white' : 'bg-white/60'}`}>
+              {SOURCE_LABEL[l]} | {SOURCE_LABEL[r]}
+            </button>
+          ))}
+          {([0, 1] as const).map((side) => (
+            <select key={side} aria-label={side === 0 ? 'Left pane' : 'Right pane'} value={pair[side]} onChange={(e) => setPair((p) => (side === 0 ? [e.target.value as MenteSource, p[1]] : [p[0], e.target.value as MenteSource]))} className="border-2 border-black bg-white px-1 py-0.5">
+              {SOURCES.map((s) => <option key={s} value={s}>{side === 0 ? '左：' : '右：'}{SOURCE_LABEL[s]}（{unreadOf(notices, s).length}）</option>)}
+            </select>
+          ))}
+        </div>
+      )}
+
       {delivery === 'parallel' ? (
         <div className="grid gap-3 md:grid-cols-2">
-          {SOURCES.map((source) => {
+          {pair.map((source, side) => {
             const list = notices.filter((n) => n.source === source);
             return (
-              <div key={source} className="min-h-[10rem] border-2 border-black bg-white/60 p-2" aria-label={SOURCE_LABEL[source]}>
+              <div key={`${side}-${source}`} className="min-h-[10rem] border-2 border-black bg-white/60 p-2" aria-label={SOURCE_LABEL[source]}>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="bg-black px-1.5 py-0.5 text-[11px] font-bold italic text-white" style={{ fontFamily: KRUGER_FAMILY }}>{SOURCE_LABEL[source]}</span>
                   <button type="button" onClick={() => markAllRead(source)} className="text-[10px] underline">すべて既読（{unreadOf(notices, source).length}）</button>
