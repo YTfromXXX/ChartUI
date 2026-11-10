@@ -56,6 +56,7 @@ export default function MentePage() {
             <Link href="/cure-api" className="hover:underline">Cure-API</Link>
             <Link href="/mente/research" className="font-bold text-[#7a0f22] hover:underline">研究 A / B</Link>
             <Link href="/mente/needle" className="font-bold text-[#7a0f22] hover:underline">針の共有</Link>
+            <Link href="/mente/match" className="font-bold text-[#7a0f22] hover:underline">Mente Match</Link>
           </nav>
         </header>
         <p className="font-serif text-6xl font-bold italic text-[#7a0f22]/80">Mente</p>
