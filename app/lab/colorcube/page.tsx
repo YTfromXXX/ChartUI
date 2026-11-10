@@ -2,6 +2,7 @@
 
 import { Pause, Play } from 'lucide-react';
 import Link from 'next/link';
+import PassToParen from '@/components/cure/PassToParen';
 import { useEffect, useMemo, useState } from 'react';
 import EmergenceCanvas from '@/LAB/colorcube/EmergenceCanvas';
 import SerraPlate from '@/LAB/colorcube/SerraPlate';
@@ -42,6 +43,8 @@ export default function ColorcubeLabPage() {
             <Link href="/retro-grid?page=B" className="hover:underline">Retro Grid B</Link>
           </nav>
         </header>
+
+        <PassToParen what="museum" />
 
         <section aria-label="Color emergence" className="space-y-3">
           <div className="flex flex-wrap items-center gap-3 text-xs">

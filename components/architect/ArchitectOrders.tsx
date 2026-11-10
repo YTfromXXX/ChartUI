@@ -62,14 +62,18 @@ export default function ArchitectOrders() {
           <svg viewBox="0 0 300 200" className="w-full border border-white/10 bg-[#0d0f14]" role="img" aria-label={`${order.name} floor plan`}>
             <path d={plan.outline} fill="#f4f1ec" fillOpacity={0.06} stroke="#f4f1ec" strokeWidth={1.4} />
             {arms.map((pts, i) => <polyline key={`g${i}`} points={pts} fill="none" stroke="#fbbf24" strokeOpacity={0.35} strokeWidth={0.8} />)}
-            {plan.features.map((f, i) => (
-              <g key={i}>
-                <path d={f.d} fill="none" stroke={f.label ? '#fde68a' : 'rgba(244,241,236,.18)'} strokeWidth={f.label ? 1.2 : 0.6} strokeDasharray={f.label ? undefined : '3 3'} />
-              </g>
-            ))}
+            {plan.features.map((f, i) => {
+              const path = <path d={f.d} fill="none" stroke={f.href ? '#7dd3fc' : f.label ? '#fde68a' : 'rgba(244,241,236,.18)'} strokeWidth={f.label ? 1.2 : 0.6} strokeDasharray={f.label ? undefined : '3 3'} />;
+              // Staircases are links: climb them to the library or the museum.
+              return f.href
+                ? <a key={i} href={f.href} aria-label={f.label} className="cursor-pointer"><path d={f.d} fill="transparent" stroke="transparent" strokeWidth={10} />{path}</a>
+                : <g key={i}>{path}</g>;
+            })}
             {plan.features.filter((f) => f.label).map((f, i) => {
               const m = f.d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [150, 100];
-              return <text key={`t${i}`} x={m[0] + 4} y={m[1] - 4} fontSize={7} fill="#fde68a">{f.label}</text>;
+              // Labels on the right half hang to the left so they stay inside the frame.
+              const right = m[0] > 200;
+              return <text key={`t${i}`} x={right ? m[0] - 24 : m[0] + 4} y={m[1] - 4} fontSize={7} textAnchor={right ? 'end' : 'start'} fill={f.href ? '#7dd3fc' : '#fde68a'}>{f.label}</text>;
             })}
             <line x1={150} y1={100} x2={150 + Math.cos(ray) * 120} y2={100 + Math.sin(ray) * 80} stroke="#fff" strokeOpacity={0.55} strokeWidth={0.8} />
             <text x={6} y={194} fontSize={7} fill="rgba(244,241,236,.6)">比 {params.ratio.toFixed(3)} · 対称 {params.symmetry || '—'} · 天窓 {params.skylight}° · 音響 {params.acoustic.toFixed(1)} m · 曲率 {params.curvature.toFixed(2)}</text>

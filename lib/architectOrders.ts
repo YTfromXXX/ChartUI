@@ -158,7 +158,7 @@ export function todayEvent(date = new Date()) {
 type Pt = [number, number];
 
 /** Floor plan (in a 300 × 200 frame) for an order under the given manual points. */
-export function floorPlan(key: OrderKey, p: ArchitectParams): { outline: string; features: { d: string; label?: string }[] } {
+export function floorPlan(key: OrderKey, p: ArchitectParams): { outline: string; features: { d: string; label?: string; href?: string }[] } {
   const W = 300; const H = 200; const cx = W / 2; const cy = H / 2;
   const h = Math.min(170, 280 / p.ratio); const w = Math.min(280, h * p.ratio);
   // A rectangle whose corners round off with the curvature.
@@ -167,7 +167,12 @@ export function floorPlan(key: OrderKey, p: ArchitectParams): { outline: string;
   const outline = rect(cx - w / 2, cy - h / 2, w, h, r);
   const circle = (x: number, y: number, rr: number) => `M${x - rr},${y} a${rr},${rr} 0 1,0 ${rr * 2},0 a${rr},${rr} 0 1,0 ${-rr * 2},0`;
   const ar = Math.min(h / 2 - 6, p.acoustic * 7);
-  const features: { d: string; label?: string }[] = [];
+  const features: { d: string; label?: string; href?: string }[] = [];
+  const spiralStair = (x: number, y: number, rr: number, turns = 2.5) => {
+    const pts: string[] = [];
+    for (let i = 0; i <= 60; i += 1) { const t = i / 60; const a = t * Math.PI * 2 * turns; const r2 = rr * (0.25 + 0.75 * t); pts.push(`${(x + Math.cos(a) * r2).toFixed(1)},${(y + Math.sin(a) * r2).toFixed(1)}`); }
+    return `M${pts.join(' L')}`;
+  };
   if (key === 'A') {
     features.push({ d: circle(cx + w / 2 - ar - 8, cy, ar), label: '講義室' });
     features.push({ d: rect(cx - w / 2 + 14, cy - 14, 28 * p.ratio, 28, 0), label: 'トラペザ' });
@@ -177,8 +182,11 @@ export function floorPlan(key: OrderKey, p: ArchitectParams): { outline: string;
     features.push({ d: circle(cx + w * 0.2, cy - h * 0.15, ar * 0.8), label: '巻き込む講義室' });
   } else if (key === 'C') {
     features.push({ d: rect(cx - w / 2 + 10, cy - 8, w - 20, 16, 4 * p.curvature), label: 'ランウェイ' });
-    features.push({ d: circle(cx - w * 0.3, cy - h * 0.28, 12), label: 'ポップ彫刻' });
+    features.push({ d: circle(cx - w * 0.05, cy - h * 0.28, 12), label: 'ポップ彫刻' });
     features.push({ d: rect(cx + w * 0.1, cy + h * 0.18, w * 0.3, 18, 2), label: '裁断台' });
+    // Spiral staircases on both sides of the runway: up to the library and the museum.
+    features.push({ d: spiralStair(cx - w / 2 + 26, cy - 30, 15), label: '螺旋階段 → 図書館', href: '/lab/library' });
+    features.push({ d: spiralStair(cx + w / 2 - 26, cy + 30, 15), label: '螺旋階段 → 博物館（GALAXY）', href: '/lab/colorcube?event=GALAXY' });
   } else {
     features.push({ d: circle(cx, cy, ar), label: '中央図書室' });
     const n = Math.max(4, p.symmetry || 6);

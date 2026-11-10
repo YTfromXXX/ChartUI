@@ -7,6 +7,7 @@ import { mulberry32 } from '@/lib/retroGrid';
 import CureApiInitialMenu from '@/components/CureApiInitialMenu';
 import { useCureAPIStore, type PlaceholderState } from '@/lib/cureApiStore';
 import MenteNotifySettings from '@/components/mente/MenteNotifySettings';
+import ParenDevice from '@/components/cure/ParenDevice';
 import { GLOBAL, ROLES, type CourtRole } from './params';
 
 type Cell = { role: CourtRole; x: number; y: number; z: number; a: number; b: number };
@@ -234,6 +235,7 @@ export default function CureApiPage() {
         </div>
       </header>
       <CureApiInitialMenu />
+      <ParenDevice />
     </>
   );
 }

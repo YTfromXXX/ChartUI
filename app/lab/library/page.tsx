@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import PassToParen from '@/components/cure/PassToParen';
 import { BOOKS, PLATEAUS } from '@/LAB/library/books';
 
 export default function LibraryPage() {
@@ -17,6 +18,8 @@ export default function LibraryPage() {
             <Link href="/menu" className="hover:underline">ホワイトアウト版</Link>
           </nav>
         </header>
+
+        <PassToParen what="library" />
 
         <section className="grid gap-4 sm:grid-cols-2" aria-label="Books">
           {BOOKS.map((book) => (

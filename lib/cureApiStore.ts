@@ -114,6 +114,8 @@ export type CureAPIState = {
   intuitionChoice: IntuitionChoice | null;
   /** TODAY event fired from Cure's strobe point (the SPIRAL EYE origin). */
   architectFire: { at: number; date: string } | null;
+  /** What has been handed to the [():()] device. */
+  parenInputs: { library: boolean; museum: boolean; galaxy: { arms: number; twist: number } | null };
   setTimeframe: (timeframe: CureTimeframe) => void;
   setVolatilityIndex: (value: number) => void;
   setNewsFeedText: (text: string) => void;
@@ -134,6 +136,8 @@ export type CureAPIState = {
   setOddField: (field: OddField | null) => void;
   setIntuitionChoice: (choice: IntuitionChoice | null) => void;
   fireArchitect: () => void;
+  passToParen: (what: 'library' | 'museum', galaxy?: { arms: number; twist: number } | null) => void;
+  resetParen: () => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -163,6 +167,7 @@ export const useCureAPIStore = create<CureAPIState>()(
       oddField: null,
       intuitionChoice: null,
       architectFire: null,
+      parenInputs: { library: false, museum: false, galaxy: null },
       setTimeframe: (timeframe) => set({ timeframe }),
       setVolatilityIndex: (value) => set({ volatilityIndex: clamp(value, 0, 1) }),
       setNewsFeedText: (newsFeedText) => set({ newsFeedText }),
@@ -206,6 +211,10 @@ export const useCureAPIStore = create<CureAPIState>()(
       })),
       setOddField: (oddField) => set({ oddField }),
       setIntuitionChoice: (intuitionChoice) => set({ intuitionChoice }),
+      passToParen: (what, galaxy) => set((state) => ({
+        parenInputs: { ...state.parenInputs, [what]: true, ...(galaxy !== undefined ? { galaxy } : {}) },
+      })),
+      resetParen: () => set({ parenInputs: { library: false, museum: false, galaxy: null } }),
       fireArchitect: () => set({ architectFire: { at: Date.now(), date: new Date().toISOString().slice(0, 10) } }),
     }),
     {
@@ -232,6 +241,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         oddField: state.oddField,
         intuitionChoice: state.intuitionChoice,
         architectFire: state.architectFire,
+        parenInputs: state.parenInputs,
       }),
     },
   ),
