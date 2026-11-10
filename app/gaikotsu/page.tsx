@@ -2,15 +2,18 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import GaikotsuBoard from '@/components/gaikotsu/GaikotsuBoard';
+import GaikotsuBoard, { type StationStyle } from '@/components/gaikotsu/GaikotsuBoard';
+import DokuroIntro from '@/components/gaikotsu/DokuroIntro';
+import DokuroStory from '@/components/gaikotsu/DokuroStory';
 import { STATIONS, YEARS, assets, cpuStep, decide, judge, newGame, philosophy, priceOf, roll, settleDevil, type GameState, type PlayerId } from '@/lib/gaikotsu';
 import { useMenteInbox } from '@/lib/menteInbox';
 
 const DIE = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 const CPU_DELAY = 1300;
 
-/** 骸骨電鉄 (Fami port 12): monochrome super mini game — philosophy against money. */
+/** 髑髏電鉄 (Fami port 12): monochrome super mini game — philosophy against money. */
 export default function GaikotsuPage() {
+  const [style, setStyle] = useState<StationStyle | null>(null);
   const [seed, setSeed] = useState(1);
   const [game, setGame] = useState<GameState>(() => newGame(1));
   const notify = useMenteInbox((s) => s.notify);
@@ -19,16 +22,16 @@ export default function GaikotsuPage() {
 
   // 老婆 (CPU, money faction) plays her turn after a beat.
   useEffect(() => {
-    if (game.current !== 'obaa' || game.phase === 'over') return undefined;
+    if (!style || game.current !== 'obaa' || game.phase === 'over') return undefined;
     const timer = window.setTimeout(() => setGame((g) => cpuStep(g, now())), CPU_DELAY);
     return () => window.clearTimeout(timer);
-  }, [game]);
+  }, [game, style]);
 
   // Game over: Mente receives the verdict.
   useEffect(() => {
     if (game.phase !== 'over' || reported.current) return;
     reported.current = true;
-    notify({ source: 'mente', title: '骸骨電鉄 · 終着', body: judge(game), href: '/gaikotsu' });
+    notify({ source: 'mente', title: '髑髏電鉄 · 終着', body: judge(game), href: '/gaikotsu' });
   }, [game, notify]);
 
   const restart = () => { const next = seed + 1; setSeed(next); reported.current = false; setGame(newGame(next)); };
@@ -44,8 +47,11 @@ export default function GaikotsuPage() {
           <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">FamiDance · TEXT</p>
           <p className="text-[12px] italic">“ピクセル形状が急激にリアリズムな描写にテンポよく挿入する、スーパードーリーズームを描画する解析に備えよ”</p>
           <div className="flex flex-wrap items-end justify-between gap-2 pt-2">
-            <h1 className="text-4xl font-black tracking-[0.25em] [text-shadow:4px_4px_0_#555]">骸骨電鉄</h1>
-            <nav className="flex gap-3 text-xs text-white/70">
+            <h1 className="text-4xl font-black tracking-[0.25em] [text-shadow:4px_4px_0_#555]">髑髏電鉄</h1>
+            <nav className="flex items-center gap-3 text-xs text-white/70">
+              {style && (
+                <button type="button" onClick={() => setStyle(style === 'metal' ? 'flat' : 'metal')} className="border border-white/50 px-2 py-0.5 hover:text-white">駅：{style === 'metal' ? '金属の漢字' : '平面の多角形'} ⇄</button>
+              )}
               <Link href="/mente" className="hover:text-white">Mente</Link>
               <Link href="/retro-grid?page=A" className="hover:text-white">Retro Grid</Link>
             </nav>
@@ -53,8 +59,12 @@ export default function GaikotsuPage() {
           <p className="text-[11px] text-white/60">Famiポート 12 · #Mente からの要求 · 双六のマス目と物件取引の寓話 · 架空通貨「骨貨」のシミュレーション（実際のお金は扱わない）</p>
         </header>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <GaikotsuBoard state={game} />
+        {!style && <DokuroIntro onChoose={setStyle} />}
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <GaikotsuBoard state={game} style={style ?? 'flat'} />
 
           <aside className="space-y-3 text-[11px]">
             {(['you', 'obaa'] as const).map((p) => {
@@ -98,6 +108,10 @@ export default function GaikotsuPage() {
             <button type="button" onClick={() => setGame((g) => roll(g, now()))} className="border-2 border-white bg-white px-4 py-1 font-bold text-black">サイコロを振る</button>
           )}
         </section>
+
+        </div>
+        <DokuroStory game={game} />
+        </div>
 
         {/* Manga panels */}
         <section aria-label="Panels" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

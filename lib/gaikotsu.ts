@@ -1,4 +1,4 @@
-// 骸骨電鉄 — a monochrome skull-world super mini game (Fami port 12).
+// 髑髏電鉄 — a monochrome skull-world super mini game (Fami port 12).
 //
 // A fable about philosophy against money, played on a 22-station loop (one station per
 // Cure kit item). Properties are bought with 骨貨 (bone coins, fictional; no real money).
@@ -30,6 +30,9 @@ export const STATIONS: readonly Station[] = Array.from({ length: STATIONS_N }, (
   return { id, kitId: kit.id, name, kind, basePrice: kind === 'property' ? 10 * fib((id % 7) + 4) : 0 };
 });
 
+/** One kanji per station for the metallic plates. */
+export const STATION_KANJI: readonly string[] = ['始', '心', '肝', '消', '性', '本', '目', '計', '鼻', '皮', '輪', '灯', '風', '死', '星', '魔', '檻', '令', '描', '粧', '髪', '砂'];
+
 export type PlayerId = 'you' | 'obaa';
 export type Player = { id: PlayerId; name: string; pos: number; money: number; hr: number; philo: number; laps: number };
 
@@ -49,6 +52,10 @@ export type GameState = {
   dice: number[];
   log: Panel[];
   effect: Effect;
+  /** One line (爻) per roll: 1 = yang (odd die), 0 = yin (even die). */
+  yao: (0 | 1)[];
+  /** Assets after each turn, for the single Fibonacci chart line. */
+  history: { you: number; obaa: number }[];
 };
 
 export function newGame(seed = 1): GameState {
@@ -61,7 +68,8 @@ export function newGame(seed = 1): GameState {
     owner: Array(STATIONS_N).fill(null),
     priceMul: 1,
     devil: { rider: null, turns: 0 },
-    phase: 'roll', dice: [], log: [{ title: '発車', text: '骸骨電鉄、始発の背骨駅を出る。哲学と貨幣、どちらが 5 年を制するか', sfx: 'ガタン' }], effect: null,
+    phase: 'roll', dice: [], log: [{ title: '発車', text: '髑髏電鉄、始発の背骨駅を出る。哲学と貨幣、どちらが 5 年を制するか', sfx: 'ガタン' }], effect: null,
+    yao: [], history: [{ you: 500, obaa: 500 }],
   };
 }
 
@@ -78,7 +86,7 @@ export const other = (p: PlayerId): PlayerId => (p === 'you' ? 'obaa' : 'you');
 export const assets = (s: GameState, p: PlayerId) => s.players[p].money + s.owner.reduce((sum, o, id) => sum + (o === p ? priceOf(s, id) : 0), 0);
 export const philosophy = (s: GameState, p: PlayerId) => s.players[p].philo * 50 + s.players[p].hr * 30;
 
-const clone = (s: GameState): GameState => ({ ...s, players: { you: { ...s.players.you }, obaa: { ...s.players.obaa } }, owner: [...s.owner], devil: { ...s.devil }, log: [...s.log], dice: [...s.dice] });
+const clone = (s: GameState): GameState => ({ ...s, players: { you: { ...s.players.you }, obaa: { ...s.players.obaa } }, owner: [...s.owner], devil: { ...s.devil }, log: [...s.log], dice: [...s.dice], yao: [...s.yao], history: [...s.history] });
 const say = (s: GameState, panel: Panel) => { s.log = [panel, ...s.log].slice(0, 30); };
 
 /** Sell the cheapest properties back at half price until the player is solvent. */
@@ -95,6 +103,7 @@ function liquidate(s: GameState, p: PlayerId) {
 
 function endTurn(s: GameState) {
   s.turn += 1;
+  s.history = [...s.history, { you: assets(s, 'you'), obaa: assets(s, 'obaa') }].slice(-120);
   if (s.players.you.laps >= YEARS) { s.phase = 'over'; say(s, { title: '終着', text: judge(s), sfx: 'キィィ' }); return; }
   s.current = other(s.current);
   s.phase = s.devil.rider === s.current ? 'devil' : 'roll';
@@ -149,6 +158,7 @@ export function roll(prev: GameState, now = 0): GameState {
   if (prev.phase !== 'roll') return prev;
   const s = clone(prev);
   const die = d6(s); s.dice = [die];
+  s.yao = [...s.yao, (die % 2) as 0 | 1];
   const p = s.players[s.current];
   const next = p.pos + die;
   if (next >= STATIONS_N) {

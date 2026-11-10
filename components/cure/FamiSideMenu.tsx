@@ -116,7 +116,7 @@ export default function FamiSideMenu() {
                         </span>
                       );
                     }
-                    if (port.no === 12) return <Link key={c} href="/gaikotsu" className={`${base} block bg-black p-0.5`} title={`${port.no}. ${port.title} → 骸骨電鉄`}><PixelSprite sprite={SPRITES.skull} className="h-full w-full" /></Link>;
+                    if (port.no === 12) return <Link key={c} href="/gaikotsu" className={`${base} block bg-black p-0.5`} title={`${port.no}. ${port.title}`}><PixelSprite sprite={SPRITES.skull} className="h-full w-full" /></Link>;
                     return <span key={c} className={`${base} bg-[#120a14] p-0.5`} title={`${port.no}. ${port.title}`}><PixelSprite sprite={SPRITES[PORT_SPRITE[port.no] ?? 'dancer']} className="h-full w-full" /></span>;
                   })}
                 </div>

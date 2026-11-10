@@ -3,7 +3,10 @@
 import { useEffect, useRef } from 'react';
 import { dollyAmount, dollyCamera, project, type DollyCamera } from '@/lib/dollyZoom';
 import { FAMI_PALETTE, SPRITES, type Sprite } from '@/lib/famiSprites';
-import { STATIONS, STATIONS_N, type GameState } from '@/lib/gaikotsu';
+import { STATIONS, STATIONS_N, STATION_KANJI, type GameState } from '@/lib/gaikotsu';
+
+export type StationStyle = 'flat' | 'metal';
+export type BoardStats = { frameMs: number; frames: number };
 
 const W = 760; const H = 420;
 const D0 = 16; const F0 = W * 1.6;
@@ -50,23 +53,65 @@ function drawRealSkull(ctx: CanvasRenderingContext2D, cx: number, cy: number, si
   ctx.restore();
 }
 
+/**
+ * Metallic kanji plate: brushed-steel gradient, bevel light/shadow, an engraved kanji
+ * (dark cut with a light lower lip) and a slow specular sweep. Monochrome only.
+ */
+function metalPlate(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, kanji: string, owner: 'you' | 'obaa' | null, now: number) {
+  const w = r * 1.9; const h = r * 1.35; const left = x - w / 2; const top = y - h / 2;
+  const brushed = ctx.createLinearGradient(left, top, left + w, top + h);
+  const base = owner === 'you' ? [235, 200] : owner === 'obaa' ? [120, 80] : [190, 140];
+  for (let i = 0; i <= 8; i += 1) {
+    const v = base[1] + (base[0] - base[1]) * (0.5 + 0.5 * Math.sin(i * 1.9));
+    brushed.addColorStop(i / 8, `rgb(${v},${v},${v})`);
+  }
+  ctx.fillStyle = brushed; ctx.fillRect(left, top, w, h);
+  // Brushed grain.
+  ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+  for (let k = 1; k < 7; k += 1) { ctx.beginPath(); ctx.moveTo(left, top + (h * k) / 7); ctx.lineTo(left + w, top + (h * k) / 7); ctx.stroke(); }
+  // Bevel.
+  const bw = Math.max(1, r * 0.08);
+  ctx.lineWidth = bw;
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.moveTo(left, top + h); ctx.lineTo(left, top); ctx.lineTo(left + w, top); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.beginPath(); ctx.moveTo(left + w, top); ctx.lineTo(left + w, top + h); ctx.lineTo(left, top + h); ctx.stroke();
+  // Specular sweep.
+  const sweep = ((now / 2600) % 1.6) - 0.3;
+  const sp = ctx.createLinearGradient(left + w * (sweep - 0.15), top, left + w * (sweep + 0.15), top + h);
+  sp.addColorStop(0, 'rgba(255,255,255,0)'); sp.addColorStop(0.5, 'rgba(255,255,255,.35)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sp; ctx.fillRect(left, top, w, h);
+  // Engraved kanji.
+  const size = Math.round(h * 0.78);
+  ctx.font = `700 ${size}px "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(kanji, x + bw * 0.6, y + bw * 0.8);
+  ctx.fillStyle = owner === 'obaa' ? '#f2f2f2' : '#141414'; ctx.fillText(kanji, x, y);
+  ctx.textBaseline = 'alphabetic';
+}
+
 function polygon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, sides: number, rot = -Math.PI / 2) {
   ctx.beginPath();
   for (let i = 0; i <= sides; i += 1) { const a = rot + (i / sides) * Math.PI * 2; ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a) * 0.6); }
 }
 
-export default function GaikotsuBoard({ state }: { state: GameState }) {
+type Props = { state: GameState; style?: StationStyle; onStats?: (stats: BoardStats) => void; className?: string };
+
+export default function GaikotsuBoard({ state, style = 'flat', onStats, className = '' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const live = useRef(state);
-  live.current = state;
+  const live = useRef({ state, style, onStats });
+  live.current = { state, style, onStats };
 
   useEffect(() => {
     const canvas = canvasRef.current; const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    let raf = 0;
+    // High-resolution monochrome: draw at the device pixel ratio.
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    let raf = 0; let spent = 0; let frames = 0; let lastReport = performance.now();
     const frame = (now: number) => {
-      const s = live.current;
+      const started = performance.now();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const { state: s, style: look } = live.current;
       const eff = s.effect;
       const t = eff && !reduced ? Math.min(1, (performance.now() - eff.at) / EFFECT_MS) : 1;
       const subject = eff ? eff.station : s.players[s.current].pos;
@@ -117,6 +162,8 @@ export default function GaikotsuBoard({ state }: { state: GameState }) {
         } else if (st.kind === 'devil') {
           ctx.fillStyle = '#000'; polygon(ctx, p.x, p.y, r, 3, Math.PI / 2); ctx.fill(); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(p.x - r * 0.6, p.y - r * 0.3); ctx.lineTo(p.x - r * 0.9, p.y - r); ctx.lineTo(p.x - r * 0.3, p.y - r * 0.45); ctx.moveTo(p.x + r * 0.6, p.y - r * 0.3); ctx.lineTo(p.x + r * 0.9, p.y - r); ctx.lineTo(p.x + r * 0.3, p.y - r * 0.45); ctx.stroke();
+        } else if (look === 'metal') {
+          metalPlate(ctx, p.x, p.y, r, STATION_KANJI[id], owner, now);
         } else {
           const sides = st.kind === 'start' ? 12 : 3 + (id % 5);
           ctx.fillStyle = owner === 'you' ? '#fff' : owner === 'obaa' ? '#777' : '#000';
@@ -163,11 +210,16 @@ export default function GaikotsuBoard({ state }: { state: GameState }) {
 
       ctx.fillStyle = '#fff'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
       ctx.fillText(`${STATIONS[subject].name}${zooming ? ' · SUPER DOLLY ZOOM' : ''}`, 12, H - 12);
+      spent += performance.now() - started; frames += 1;
+      if (performance.now() - lastReport > 1000) {
+        live.current.onStats?.({ frameMs: spent / frames, frames });
+        spent = 0; frames = 0; lastReport = performance.now();
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  return <canvas ref={canvasRef} width={W} height={H} className="w-full border-4 border-white bg-black" role="img" aria-label="骸骨電鉄 board" />;
+  return <canvas ref={canvasRef} width={W} height={H} className={`w-full border-4 border-white bg-black ${className}`} role="img" aria-label={`髑髏電鉄 board (${style})`} />;
 }
