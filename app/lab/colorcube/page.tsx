@@ -37,6 +37,7 @@ export default function ColorcubeLabPage() {
           </div>
           <nav className="flex gap-3 text-xs">
             <Link href="/cure-api" className="text-rose-700 hover:underline">Cure-API</Link>
+            <Link href="/lab/library" className="hover:underline">図書館 →</Link>
             <Link href="/retro-grid?page=A" className="hover:underline">Retro Grid A</Link>
             <Link href="/retro-grid?page=B" className="hover:underline">Retro Grid B</Link>
           </nav>
