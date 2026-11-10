@@ -112,6 +112,8 @@ export type CureAPIState = {
   /** Odd-return field measured on the retro grid; drives the Cure mover's free orbit. */
   oddField: OddField | null;
   intuitionChoice: IntuitionChoice | null;
+  /** TODAY event fired from Cure's strobe point (the SPIRAL EYE origin). */
+  architectFire: { at: number; date: string } | null;
   setTimeframe: (timeframe: CureTimeframe) => void;
   setVolatilityIndex: (value: number) => void;
   setNewsFeedText: (text: string) => void;
@@ -131,6 +133,7 @@ export type CureAPIState = {
   observeSingularity: (vector: ProjectionVector) => void;
   setOddField: (field: OddField | null) => void;
   setIntuitionChoice: (choice: IntuitionChoice | null) => void;
+  fireArchitect: () => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -159,6 +162,7 @@ export const useCureAPIStore = create<CureAPIState>()(
       unlockedPredictionCell: -1,
       oddField: null,
       intuitionChoice: null,
+      architectFire: null,
       setTimeframe: (timeframe) => set({ timeframe }),
       setVolatilityIndex: (value) => set({ volatilityIndex: clamp(value, 0, 1) }),
       setNewsFeedText: (newsFeedText) => set({ newsFeedText }),
@@ -202,6 +206,7 @@ export const useCureAPIStore = create<CureAPIState>()(
       })),
       setOddField: (oddField) => set({ oddField }),
       setIntuitionChoice: (intuitionChoice) => set({ intuitionChoice }),
+      fireArchitect: () => set({ architectFire: { at: Date.now(), date: new Date().toISOString().slice(0, 10) } }),
     }),
     {
       name: 'chartui-cure-api-state',
@@ -226,6 +231,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         unlockedPredictionCell: state.unlockedPredictionCell,
         oddField: state.oddField,
         intuitionChoice: state.intuitionChoice,
+        architectFire: state.architectFire,
       }),
     },
   ),

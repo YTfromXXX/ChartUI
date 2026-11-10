@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePortfolioMock } from "@/hooks/useMarketStream";
 import SingularityOverload from "@/components/SingularityOverload";
 import { useCureAPIStore, type SimulationMode } from "@/lib/cureApiStore";
+import ArchitectOrders from "@/components/architect/ArchitectOrders";
 
 type Phase = "WATER" | "WOOD" | "FIRE" | "EARTH" | "METAL";
 type Status = { macro: string; meso: string; micro: string };
@@ -327,6 +328,7 @@ export default function TarotCommandCenter() {
           {archetype === "TOWER" && <motion.p className="mt-2 font-mono text-xs text-red-200/70" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 0.8, repeat: Infinity }}>BREAKOUT EVENT / RECALIBRATE VECTOR</motion.p>}
         </motion.div></AnimatePresence>
           <PortfolioHex portfolio={portfolio} pendingSymbol={pendingSymbol} birthSymbol={birthSymbol} onAdd={handleAdd} />
+          <ArchitectOrders />
           <section className="border-t border-white/10 px-5 py-6 sm:px-8" aria-label="Active position physics field">
             <div className="mb-4 flex items-end justify-between gap-4">
               <div><p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-200/55">Position physics / {activePositions.length} knots</p><h2 className="mt-1 text-xl text-stone-100">{activePositions.length <= 3 ? "KNOT SELECTION" : activePositions.length <= 7 ? "ARCANA FORMATION" : "FIELD SATURATION"}</h2></div>

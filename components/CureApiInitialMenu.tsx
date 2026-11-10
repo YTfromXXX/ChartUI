@@ -2,6 +2,9 @@
 
 import { Activity, ChevronDown, Expand, HeartPulse, MoveHorizontal, RotateCcw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMenteInbox } from '@/lib/menteInbox';
+import { orderOf, todayEvent } from '@/lib/architectOrders';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CURE_TIMEFRAMES,
@@ -152,6 +155,16 @@ export default function CureApiInitialMenu() {
   const resetArcanaParameters = useCureAPIStore((state) => state.resetArcanaParameters);
   const [placeholderText, setPlaceholderText] = useState('');
   const [choiceFor, setChoiceFor] = useState<Pattern | null>(null);
+  const router = useRouter();
+  const fireArchitect = useCureAPIStore((state) => state.fireArchitect);
+  const notifyMente = useMenteInbox((state) => state.notify);
+  // The Cure strobe point (SPIRAL EYE origin) fires the TODAY event into the order interior.
+  const fireToday = () => {
+    fireArchitect();
+    const t = todayEvent();
+    notifyMente({ source: 'mente', title: 'TODAY イベント発火', body: `${t.date} · GALAXY ${t.galaxy.arms} 腕 → 教団 ${t.order}（${orderOf(t.order).name}）`, href: '/architect' });
+    router.push('/architect');
+  };
 
   useEffect(() => {
     if (exParameter === 0) useCureAPIStore.getState().activatePlaceholder();
@@ -214,7 +227,10 @@ export default function CureApiInitialMenu() {
                 })}
                 <circle cx="320" cy="155" r={70 + volatility * 55} fill="url(#eyeGlow)" opacity=".55" />
                 <circle cx="320" cy="155" r="16" fill="none" stroke="#f8fafc" strokeOpacity=".45" />
-                <circle cx="320" cy="155" r="4" fill="#fff" filter="url(#petGlow)" />
+                <g role="button" tabIndex={0} aria-label="Fire the TODAY event from the strobe point" className="cursor-pointer outline-none" onClick={fireToday} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') fireToday(); }}>
+                  <circle cx="320" cy="155" r="12" fill="transparent" />
+                  <circle cx="320" cy="155" r="4" fill="#fff" filter="url(#petGlow)" />
+                </g>
                 <text x="320" y="188" textAnchor="middle" fill="#94a3b8" fontSize="8" letterSpacing="2">SPIRAL EYE / ORIGIN</text>
                 <g transform="translate(320 155)">
                   <path d={orbitPath(placeholderState, oddField)} fill="none" stroke="#e879f9" strokeOpacity=".35" strokeWidth="1" strokeDasharray="1 4" />
