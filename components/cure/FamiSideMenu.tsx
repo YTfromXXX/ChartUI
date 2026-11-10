@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import PixelSprite from '@/components/fami/PixelSprite';
 import { SPRITES, type SpriteName } from '@/lib/famiSprites';
@@ -24,7 +25,7 @@ const ROWS: ('e' | 'i' | 'L' | 'n')[][] = [
 
 const PORT_SPRITE: Record<number, SpriteName> = {
   1: 'dancer', 2: 'dancer', 3: 'eye', 4: 'vet', 5: 'yoga', 6: 'cat', 7: 'sneaker', 8: 'flower', 9: 'vet',
-  10: 'yoga', 11: 'dancer', 12: 'eye', 13: 'nose', 14: 'sneaker', 15: 'dancer', 16: 'cat', 17: 'nose',
+  10: 'yoga', 11: 'dancer', 12: 'skull', 13: 'nose', 14: 'sneaker', 15: 'dancer', 16: 'cat', 17: 'nose',
 };
 
 function buildLayout(): Cell[][][] {
@@ -115,6 +116,7 @@ export default function FamiSideMenu() {
                         </span>
                       );
                     }
+                    if (port.no === 12) return <Link key={c} href="/gaikotsu" className={`${base} block bg-black p-0.5`} title={`${port.no}. ${port.title} → 骸骨電鉄`}><PixelSprite sprite={SPRITES.skull} className="h-full w-full" /></Link>;
                     return <span key={c} className={`${base} bg-[#120a14] p-0.5`} title={`${port.no}. ${port.title}`}><PixelSprite sprite={SPRITES[PORT_SPRITE[port.no] ?? 'dancer']} className="h-full w-full" /></span>;
                   })}
                 </div>

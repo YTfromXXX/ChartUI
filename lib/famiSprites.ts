@@ -46,6 +46,12 @@ export const SPRITES = {
   nose: sprite('nose', '鼻', [
     '.....uu.....', '.....nn.....', '....unnn....', '....nnnn....', '...unnnnq...', '..unnnnnnq..', '..nqknnkqn..', '...nnnnnn...',
   ]),
+  skull: sprite('skull', '骸骨', [
+    '...wwwwww...', '..wwwwwwww..', '.wwwwwwwwww.', '.wwkkwwkkww.', '.wwkkwwkkww.', '.wwwwkkwwww.', '..wwwwwwww..', '...wkwkwk...', '...wwwwww...',
+  ]),
+  obaa: sprite('obaa', '老婆', [
+    '....llll....', '...llllll...', '...lsssslk..', '...skssks...', '...ssssss...', '....ssss....', '..kkkkkkkk..', '.s.kkkkkk.s.', '...kkkkkk...', '...kkkkkk...', '...ll..ll...',
+  ]),
   heart: sprite('heart', 'LIFE', ['.rr.rr.', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...']),
 } satisfies Record<string, Sprite>;
 
