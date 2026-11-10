@@ -54,6 +54,7 @@ export default function MentePage() {
           <nav className="flex gap-3 text-xs">
             <Link href="/retro-grid?page=B" className="text-[#7a0f22] hover:underline">← クイズクオンタム（No.19）</Link>
             <Link href="/cure-api" className="hover:underline">Cure-API</Link>
+            <Link href="/mente/research" className="font-bold text-[#7a0f22] hover:underline">研究 A / B</Link>
           </nav>
         </header>
         <p className="font-serif text-6xl font-bold italic text-[#7a0f22]/80">Mente</p>
