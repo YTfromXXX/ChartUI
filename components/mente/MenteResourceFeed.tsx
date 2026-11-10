@@ -46,6 +46,7 @@ export default function MenteResourceFeed() {
       <button type="button" onClick={sendAnimal} className="flex items-center gap-1 border-2 border-black px-2 py-0.5"><PixelSprite sprite={SPRITES.flower} className="h-5 w-5" />アニマル（花・猫の安全）</button>
       <button type="button" onClick={sendColour} className="flex items-center gap-1 bg-[#d6001c] px-2 py-0.5 font-bold italic text-white"><PixelSprite sprite={SPRITES.eye} className="h-5 w-5" />色彩の要求 → レトログリッド</button>
       <button type="button" onClick={() => notify({ source: 'mente', title: '髑髏電鉄の要求', body: '双六のマス目と物件取引を寓話的にゲーミングする、モノクロの最大幾何学', href: '/gaikotsu' })} className="flex items-center gap-1 bg-black px-2 py-0.5 font-bold italic text-white"><PixelSprite sprite={SPRITES.skull} className="h-5 w-5" />髑髏電鉄の要求</button>
+      <button type="button" onClick={() => notify({ source: 'human', title: 'カスタマー D · MESO STICK', body: '予測雲で上空へ突入して、跳び箱の上でダンスを踊っているようなハラハラ感を', href: '/meso-stick' })} className="flex items-center gap-1 border-2 border-black px-2 py-0.5"><PixelSprite sprite={SPRITES.dancer} className="h-5 w-5" />カスタマー D</button>
       <label className="ml-auto flex items-center gap-1"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> 自動受信（4 秒ごと交互）</label>
     </section>
   );
