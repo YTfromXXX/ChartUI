@@ -76,6 +76,7 @@ export default function WhiteoutMenuPage() {
             <Link href="/lab/library" className="hover:text-black">図書館</Link>
             <Link href="/mente" className="hover:text-black">Mente</Link>
             <Link href="/relay-flight" className="hover:text-black">リレーすごろく</Link>
+            <Link href="/lab/silicon" className="hover:text-black">シリコン LAB</Link>
           </nav>
         </header>
 
