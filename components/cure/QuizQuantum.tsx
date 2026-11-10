@@ -5,6 +5,7 @@ import GlassKnot from '@/components/cure/GlassKnot';
 import MentePhone, { type PhoneScreen } from '@/components/mente/MentePhone';
 import { useCureAPIStore } from '@/lib/cureApiStore';
 import { MENTE_MEMBERS } from '@/lib/menteChat';
+import { useMenteInbox } from '@/lib/menteInbox';
 import { CHECKPOINTS, LETTERS, QUIZ, arrange, fallbackStep, fiftyFifty, live22, telephone } from '@/lib/quizQuantum';
 import { REGIONS } from '@/lib/retroGrid';
 
@@ -44,6 +45,12 @@ export default function QuizQuantum() {
   const [phone, setPhone] = useState<{ screen: PhoneScreen; result: ReturnType<typeof telephone> } | null>(null);
   const [collision, setCollision] = useState<'wrong' | 'clear' | null>(null);
   const setSimulationMode = useCureAPIStore((s) => s.setSimulationMode);
+  const notify = useMenteInbox((s) => s.notify);
+
+  // Arriving from a Mente notification: bring the quiz into view.
+  useEffect(() => {
+    if (window.location.hash === '#quiz-quantum') window.setTimeout(() => document.getElementById('quiz-quantum')?.scrollIntoView({ block: 'start' }), 200);
+  }, []);
 
   // While the quiz is open, idlecrash holds its loop so the page does not switch mid-question.
   useEffect(() => {
@@ -89,6 +96,12 @@ export default function QuizQuantum() {
     const timer = window.setTimeout(() => {
       if (right && step < QUIZ.length - 1) { nextQuestion(step + 1, lap); return; }
       setCollision(right ? 'clear' : 'wrong');
+      notify({
+        source: 'quiz',
+        title: right ? '22 段を登りきった' : `Q${q.id} で衝突`,
+        body: right ? 'ガラス管の結び目が閉じた。次の周回へ' : `正解は ${LETTERS[correct]}『${q.options[order[correct]]}』。チェックポイント ${fallbackStep(step)} からページ A を経て再開`,
+        href: '/retro-grid?page=B#quiz-quantum',
+      });
       setPhase('collision');
     }, 1800);
     return () => window.clearTimeout(timer);
@@ -194,7 +207,12 @@ export default function QuizQuantum() {
             <div className="flex flex-wrap gap-1">
               <button type="button" disabled={used.fifty || busy} onClick={() => { const r = fiftyFifty(q, lap); setRemoved(r.removed.map((oi) => oi)); setFiftyRule(r.rule); setUsed((u) => ({ ...u, fifty: true })); }} className="border border-white/15 px-2 py-1 disabled:opacity-40">50:50</button>
               <button type="button" disabled={used.live || busy} onClick={() => { setLiveResult(live22(q, lap, step)); setUsed((u) => ({ ...u, live: true })); }} className="border border-white/15 px-2 py-1 disabled:opacity-40">LIVE 22</button>
-              <button type="button" disabled={used.phone || busy} onClick={() => { setPhone({ screen: 'ringing', result: telephone(q, lap, step, MENTE_MEMBERS.length) }); setUsed((u) => ({ ...u, phone: true })); }} className="border border-white/15 px-2 py-1 disabled:opacity-40">テレフォン（Mente）</button>
+              <button type="button" disabled={used.phone || busy} onClick={() => {
+                const result = telephone(q, lap, step, MENTE_MEMBERS.length);
+                setPhone({ screen: 'ringing', result });
+                setUsed((u) => ({ ...u, phone: true }));
+                notify({ source: 'quiz', title: `Q${q.id} のテレフォン`, body: `${MENTE_MEMBERS[result.member].name}：……${LETTERS[result.answer]}、『${q.options[order[result.answer]]}』だと思う。確信度 ${result.confidence}%`, href: '/retro-grid?page=B#quiz-quantum' });
+              }} className="border border-white/15 px-2 py-1 disabled:opacity-40">テレフォン（Mente）</button>
             </div>
             {fiftyRule && <p className="mt-1 text-[9px] text-slate-500">50:50 — {fiftyRule}</p>}
             {liveResult && (

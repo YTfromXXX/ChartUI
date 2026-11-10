@@ -15,6 +15,7 @@ export * as SensorySpiceKit from './SensorySpiceKit';
 export * as GreenCardKit from './GreenCardKit';
 export * as ChoiceForgeKit from './ChoiceForgeKit';
 export * as SugorokuKit from './SugorokuKit';
+export * as KingQueenKit from './KingQueenKit';
 
 export type MonsterInput = {
   pattern: Pattern;

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { mulberry32 } from '@/lib/retroGrid';
 import CureApiInitialMenu from '@/components/CureApiInitialMenu';
 import { useCureAPIStore, type PlaceholderState } from '@/lib/cureApiStore';
+import MenteNotifySettings from '@/components/mente/MenteNotifySettings';
 import { GLOBAL, ROLES, type CourtRole } from './params';
 
 type Cell = { role: CourtRole; x: number; y: number; z: number; a: number; b: number };
@@ -226,6 +227,7 @@ export default function CureApiPage() {
                   tail {tail === null ? '—' : `${tail.toFixed(1)} s`} · expected ≈ {Number.isFinite(expectedTail) ? `${expectedTail.toFixed(0)} s` : '∞ (cure 0)'} · inside {stats.inside}/{total}
                 </p>
               </div>
+              <MenteNotifySettings />
               <button type="button" onClick={reseed} className="flex w-full items-center justify-center gap-1 rounded border border-rose-300/30 py-1 text-[10px] text-rose-200 hover:bg-rose-300/10"><RotateCcw size={11} /> reseed cells (EX → 1)</button>
             </aside>
           </div>

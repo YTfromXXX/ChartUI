@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import KrugerBubble from '@/components/mente/KrugerBubble';
 import MentePhone, { type PhoneScreen } from '@/components/mente/MentePhone';
+import MenteNotificationArea from '@/components/mente/MenteNotificationArea';
 import { MENTE_LOG, MENTE_MEMBERS, memberById } from '@/lib/menteChat';
 
 type RemoteKey = { key: string; label: string; action: (set: Actions) => void };
@@ -50,6 +51,8 @@ export default function MentePage() {
         {fromQuiz && (
           <p className="inline-block bg-black px-2 py-1 text-xs font-bold italic text-white">クイズクオンタム Q{fromQuiz} からのテレフォンを受信しました</p>
         )}
+
+        <MenteNotificationArea />
 
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* Remote sensing: each button drives the phone. */}
