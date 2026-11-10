@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import GaikotsuBoard, { type StationStyle } from '@/components/gaikotsu/GaikotsuBoard';
 import DokuroIntro from '@/components/gaikotsu/DokuroIntro';
 import DokuroStory from '@/components/gaikotsu/DokuroStory';
+import MashDevice, { type MashReading } from '@/components/gaikotsu/MashDevice';
 import { STATIONS, YEARS, assets, cpuStep, decide, judge, newGame, philosophy, priceOf, roll, settleDevil, type GameState, type PlayerId } from '@/lib/gaikotsu';
 import { useMenteInbox } from '@/lib/menteInbox';
 
@@ -14,6 +15,7 @@ const CPU_DELAY = 1300;
 /** 髑髏電鉄 (Fami port 12): monochrome super mini game — philosophy against money. */
 export default function GaikotsuPage() {
   const [style, setStyle] = useState<StationStyle | null>(null);
+  const mash = useRef<MashReading | null>(null);
   const [seed, setSeed] = useState(1);
   const [game, setGame] = useState<GameState>(() => newGame(1));
   const notify = useMenteInbox((s) => s.notify);
@@ -64,7 +66,7 @@ export default function GaikotsuPage() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <GaikotsuBoard state={game} style={style ?? 'flat'} />
+          <GaikotsuBoard state={game} style={style ?? 'flat'} mash={mash} />
 
           <aside className="space-y-3 text-[11px]">
             {(['you', 'obaa'] as const).map((p) => {
@@ -109,6 +111,7 @@ export default function GaikotsuPage() {
           )}
         </section>
 
+        {style && <MashDevice onReading={(r) => { mash.current = r; }} />}
         </div>
         <DokuroStory game={game} />
         </div>

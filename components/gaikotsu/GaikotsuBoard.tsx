@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
+import type { MashReading } from '@/components/gaikotsu/MashDevice';
 import { dollyAmount, dollyCamera, project, type DollyCamera } from '@/lib/dollyZoom';
 import { FAMI_PALETTE, SPRITES, type Sprite } from '@/lib/famiSprites';
 import { STATIONS, STATIONS_N, STATION_KANJI, type GameState } from '@/lib/gaikotsu';
@@ -57,7 +58,7 @@ function drawRealSkull(ctx: CanvasRenderingContext2D, cx: number, cy: number, si
  * Metallic kanji plate: brushed-steel gradient, bevel light/shadow, an engraved kanji
  * (dark cut with a light lower lip) and a slow specular sweep. Monochrome only.
  */
-function metalPlate(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, kanji: string, owner: 'you' | 'obaa' | null, now: number) {
+function metalPlate(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, kanji: string, owner: 'you' | 'obaa' | null, now: number, shine = 0.5) {
   const w = r * 1.9; const h = r * 1.35; const left = x - w / 2; const top = y - h / 2;
   const brushed = ctx.createLinearGradient(left, top, left + w, top + h);
   const base = owner === 'you' ? [235, 200] : owner === 'obaa' ? [120, 80] : [190, 140];
@@ -77,7 +78,7 @@ function metalPlate(ctx: CanvasRenderingContext2D, x: number, y: number, r: numb
   // Specular sweep.
   const sweep = ((now / 2600) % 1.6) - 0.3;
   const sp = ctx.createLinearGradient(left + w * (sweep - 0.15), top, left + w * (sweep + 0.15), top + h);
-  sp.addColorStop(0, 'rgba(255,255,255,0)'); sp.addColorStop(0.5, 'rgba(255,255,255,.35)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+  sp.addColorStop(0, 'rgba(255,255,255,0)'); sp.addColorStop(0.5, `rgba(255,255,255,${(0.12 + 0.7 * shine).toFixed(2)})`); sp.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = sp; ctx.fillRect(left, top, w, h);
   // Engraved kanji.
   const size = Math.round(h * 0.78);
@@ -93,9 +94,9 @@ function polygon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   for (let i = 0; i <= sides; i += 1) { const a = rot + (i / sides) * Math.PI * 2; ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a) * 0.6); }
 }
 
-type Props = { state: GameState; style?: StationStyle; onStats?: (stats: BoardStats) => void; className?: string };
+type Props = { state: GameState; style?: StationStyle; onStats?: (stats: BoardStats) => void; className?: string; /** Read every frame: the mash device's metal and impulse. */ mash?: MutableRefObject<MashReading | null> };
 
-export default function GaikotsuBoard({ state, style = 'flat', onStats, className = '' }: Props) {
+export default function GaikotsuBoard({ state, style = 'flat', onStats, className = '', mash }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const live = useRef({ state, style, onStats });
   live.current = { state, style, onStats };
@@ -110,8 +111,12 @@ export default function GaikotsuBoard({ state, style = 'flat', onStats, classNam
     let raf = 0; let spent = 0; let frames = 0; let lastReport = performance.now();
     const frame = (now: number) => {
       const started = performance.now();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const { state: s, style: look } = live.current;
+      const m = mash?.current;
+      const shine = m ? m.metal : 0.5;
+      // Each tap jolts the board: a brief skew, as if the keyboard bent the frame.
+      const skew = reduced || !m ? 0 : -m.impulse * 0.12;
+      ctx.setTransform(dpr, 0, skew * dpr, dpr, -skew * dpr * (H / 2), 0);
       const eff = s.effect;
       const t = eff && !reduced ? Math.min(1, (performance.now() - eff.at) / EFFECT_MS) : 1;
       const subject = eff ? eff.station : s.players[s.current].pos;
@@ -123,7 +128,7 @@ export default function GaikotsuBoard({ state, style = 'flat', onStats, classNam
       const cam: DollyCamera = dollyCamera(sx * e, sz * e, d, D0, F0);
       const zooming = e > 0.02;
 
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#000'; ctx.fillRect(-W * 0.2, 0, W * 1.4, H);
       // Floor grid (stretches during the dolly zoom).
       ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
       for (let gx = -10; gx <= 10; gx += 1) {
@@ -163,12 +168,14 @@ export default function GaikotsuBoard({ state, style = 'flat', onStats, classNam
           ctx.fillStyle = '#000'; polygon(ctx, p.x, p.y, r, 3, Math.PI / 2); ctx.fill(); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(p.x - r * 0.6, p.y - r * 0.3); ctx.lineTo(p.x - r * 0.9, p.y - r); ctx.lineTo(p.x - r * 0.3, p.y - r * 0.45); ctx.moveTo(p.x + r * 0.6, p.y - r * 0.3); ctx.lineTo(p.x + r * 0.9, p.y - r); ctx.lineTo(p.x + r * 0.3, p.y - r * 0.45); ctx.stroke();
         } else if (look === 'metal') {
-          metalPlate(ctx, p.x, p.y, r, STATION_KANJI[id], owner, now);
+          metalPlate(ctx, p.x, p.y, r, STATION_KANJI[id], owner, now, shine);
         } else {
           const sides = st.kind === 'start' ? 12 : 3 + (id % 5);
           ctx.fillStyle = owner === 'you' ? '#fff' : owner === 'obaa' ? '#777' : '#000';
           polygon(ctx, p.x, p.y, r, sides); ctx.fill(); ctx.stroke();
           if (st.kind === 'start') { polygon(ctx, p.x, p.y, r * 0.6, sides); ctx.stroke(); }
+          // On the flat style, mashing brings the metal plate up through the polygon.
+          if (shine > 0.03 && m) { ctx.save(); ctx.globalAlpha = shine; metalPlate(ctx, p.x, p.y, r, STATION_KANJI[id], owner, now, shine); ctx.restore(); }
         }
       }
 
