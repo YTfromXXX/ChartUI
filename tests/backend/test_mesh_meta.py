@@ -85,3 +85,24 @@ def test_ascii_stl_is_read():
     text = b"solid x\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid x\n"
     v, t = mm.read_stl(text)
     assert v == [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)] and t == [(0, 1, 2)]
+
+
+def test_signature_round_trip_and_tamper_detection():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    v, t = tetra()
+    stl, meta = mm.build_meshmeta(v, t)
+    key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    signed = mm.sign_meshmeta(stl, meta, key)
+    pub = signed["Signature"]["PublicKey"]
+    assert mm.verify_meshmeta(stl, signed, pub)
+    # Survives a save/load through the JSON text.
+    assert mm.verify_meshmeta(stl, json.loads(mm.dumps_meshmeta(signed)), pub)
+    # A changed STL byte, a changed pointer, or another signer all fail.
+    assert not mm.verify_meshmeta(stl[:-1] + bytes([stl[-1] ^ 1]), signed)
+    moved = json.loads(json.dumps(signed))
+    first = next(k for k in moved if k.startswith("MeshPart_"))
+    moved[first]["Top_Triangles"][0]["Data"] = mm.format_data(mm.vertex_offset(1))
+    assert not mm.verify_meshmeta(stl, moved)
+    assert not mm.verify_meshmeta(stl, signed, "00" * 32)
+    assert not mm.verify_meshmeta(stl, meta)

@@ -19,11 +19,19 @@ each chosen triangle's vertex block::
 
 ⏸️ is the start offset in that STL (hex), ▶️ the length in bytes (36 = 3 vertices × 3 axes × float32).
 Another program can seek straight to those bytes and read the triangle without parsing the mesh.
-Pure Python, no third-party dependencies.
+Pure Python, no third-party dependencies — except the optional signature below.
+
+Signature
+---------
+``sign_meshmeta`` adds a ``"Signature"`` entry: an Ed25519 signature over
+``SHA-256(stl) || canonical JSON of the meta without "Signature"`` (keys sorted, no spaces,
+UTF-8). Anyone holding the public key can check that neither the STL bytes nor the pointers were
+changed. It needs the ``cryptography`` package (already installed for python-jose).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -192,6 +200,40 @@ def build_meshmeta(vertices: Sequence[Vec], triangles: Sequence[Tri], sharp_deg:
             ]
         }
     return stl, meta
+
+
+def canonical_bytes(stl: bytes, meta: dict) -> bytes:
+    """The bytes that are signed: SHA-256 of the STL, then the meta (without Signature) as canonical JSON."""
+    body = {k: v for k, v in meta.items() if k != "Signature"}
+    return hashlib.sha256(stl).digest() + json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def sign_meshmeta(stl: bytes, meta: dict, private_key) -> dict:
+    """Return a copy of meta with an Ed25519 "Signature" (private_key: cryptography Ed25519PrivateKey)."""
+    from cryptography.hazmat.primitives import serialization
+
+    pub = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    sig = private_key.sign(canonical_bytes(stl, meta))
+    out = {k: v for k, v in meta.items() if k != "Signature"}
+    out["Signature"] = {"Alg": "Ed25519", "STL_SHA256": hashlib.sha256(stl).hexdigest(), "PublicKey": pub.hex(), "Sig": sig.hex()}
+    return out
+
+
+def verify_meshmeta(stl: bytes, meta: dict, public_key_hex: str | None = None) -> bool:
+    """True when the signature matches the STL and meta. Pass the expected public key to pin the signer."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    sig = meta.get("Signature")
+    if not isinstance(sig, dict) or sig.get("Alg") != "Ed25519":
+        return False
+    if public_key_hex is not None and sig.get("PublicKey") != public_key_hex:
+        return False
+    try:
+        Ed25519PublicKey.from_public_bytes(bytes.fromhex(sig["PublicKey"])).verify(bytes.fromhex(sig["Sig"]), canonical_bytes(stl, meta))
+    except (InvalidSignature, ValueError, KeyError):
+        return False
+    return True
 
 
 def dumps_meshmeta(meta: dict) -> str:

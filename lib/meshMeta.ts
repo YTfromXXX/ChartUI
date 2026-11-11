@@ -151,3 +151,28 @@ export function sampleScene(): { vs: V3[]; ts: Tri[] } {
   for (const p of parts) { const o = vs.length; vs.push(...p.vs); ts.push(...p.ts.map(([a, b, c]) => [a + o, b + o, c + o] as Tri)); }
   return { vs, ts };
 }
+
+// ---------- signature (mirror of mesh_meta.verify_meshmeta) ----------
+export type MeshSignature = { Alg: 'Ed25519'; STL_SHA256: string; PublicKey: string; Sig: string };
+const hex = (s: string) => new Uint8Array((s.match(/../g) ?? []).map((b) => parseInt(b, 16)));
+/** JSON with sorted keys and no spaces — the same bytes Python's json.dumps(sort_keys, separators) makes. */
+export function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+/**
+ * Check a signed .meshmeta against its STL with Web Crypto Ed25519. Resolves false (never throws)
+ * on any mismatch; resolves null when this browser has no Ed25519 in Web Crypto.
+ */
+export async function verifyMeshmeta(stl: ArrayBuffer, meta: Record<string, unknown>, pinnedKeyHex?: string): Promise<boolean | null> {
+  const sig = meta.Signature as MeshSignature | undefined; const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return null;
+  if (!sig || sig.Alg !== 'Ed25519' || (pinnedKeyHex && sig.PublicKey !== pinnedKeyHex)) return false;
+  const body = Object.fromEntries(Object.entries(meta).filter(([k]) => k !== 'Signature'));
+  const digest = new Uint8Array(await subtle.digest('SHA-256', stl)); const json = new TextEncoder().encode(canonicalJson(body));
+  const msg = new Uint8Array(digest.length + json.length); msg.set(digest); msg.set(json, digest.length);
+  let key: CryptoKey;
+  try { key = await subtle.importKey('raw', hex(sig.PublicKey), { name: 'Ed25519' }, false, ['verify']); } catch { return null; }
+  try { return await subtle.verify({ name: 'Ed25519' }, key, hex(sig.Sig), msg); } catch { return false; }
+}
