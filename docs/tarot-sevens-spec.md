@@ -528,3 +528,36 @@ Mente のデザイン規則（灰色の縞、赤い長方形に白い太字斜�
     - エンジンメニューへのリンク
   - Esc で閉じる。フォーカスはポップアップの中を回る。
   - 表示と項目は Cure-API のストア（`headerVisible`・`headerItems`）に保存し、再読み込みしても残る。TEST TO ZERO ヘッダーもこのストアを読むように変えた。
+
+## 34. 初期カスタマー解析（A/B/C/D）の受け渡し — 契約 `cure-initial/1`
+
+総合メニューの前のイニシャルページで使う。Python（Cure-API 側）と TypeScript（ChartUI 側）が同じ形・同じ計算で、A/B/C/D を受け渡す。
+
+- **4×4 の表をデータにする**（`cure_initial.py`・`lib/cureInitial.ts`）：
+
+| 部品 | 【1】入力 | 【2】Cure-API の処理 | 【3】判定 | 【4】カオス維持・骨格同期（出力の値） |
+|---|---|---|---|---|
+| ヘッダー（A） | `first_click_ms`・`click_rate` | 歪みパルスの初期バッファリング | 高・マクロ追従型 | 長期予測のフレーム固定：20 + 180 × A（本数） |
+| ボトム（B） | `handle_torque`（0〜1） | グラフ縦回転の初期同期ズレ感知 | 中・スキャルピング型 | 短期パルスの振幅：0.2 + 0.8 × B |
+| サイドメニュー（C） | `panel_depth`（0〜10） | 並列チャートの負荷テスト | 低・ガイダンス型 | インターフェースの減衰：1 − C |
+| ポップアップ（D） | `eyes_closed_ms` | 皮膚感覚（API-B）閾値の自動計測 | 極・直感／完全同調型 | 心臓拍動パルス：60 + 40 × D（bpm） |
+
+- **点数**（すべて 0〜1）：
+  - A ＝ 最初のクリックの速さ（0.4 秒で 1、6 秒で 0）× 0.7 ＋ クリック回数（3 回／秒で 1）× 0.3
+  - B ＝ ボタンを押したまま指先がわずかに動いた量（`handle_torque`）
+  - C ＝ パネルの深さ ÷ 4
+  - D ＝ log(1 ＋ 目を閉じた秒数) ÷ log 9（8 秒で 1）
+- **判定**：いちばん高い部品の文字が判定、2 位との差が確信度。同点はアルファベット順で前の文字を取る。何も測れなかったときはガイダンス型 C。
+- **API-B の [2:4:6:7] 分割**：`haptic_budget_ms`（既定 16 ms）を、relax 2・drift 4・counter 6・oracle 7 の 19 分割で配る（例：19 ms なら 2・4・6・7 ms）。
+- **丸め**：Python の `round()` は .5 を偶数へ寄せるので、両側とも同じ切り上げ式（`floor(x × 10ⁿ ＋ 0.5) ÷ 10ⁿ`）にした。
+- **エンドポイント**：`POST /api/v1/cure/initial-analysis`（pydantic で検証）。
+  - 同意がないとき、値が範囲外のとき、`schema_version` が違うときは 422。
+  - 状態を持たない。`wallet_free: true`、`stored: false`。財布・アドレス・アカウントは受け取らず、返さない。
+- **ChartUI 側**：
+  - `requestInitialAnalysis()` が API を呼ぶ（1.5 秒で打ち切り）。届かなければ同じ計算をブラウザで行う（`source: 'api' | 'local'`）。同意や検証のエラーは隠さない。
+  - `hooks/useInitialSignals.ts` が 4 つの入力を集める。最初のクリック、押したままの微小な指の動き、`openPanel`／`closePanel`、`closeEyes`／`openEyes` かタブが隠れた時間。
+  - ストアには結果（`initialAnalysis`）だけを残し、生の信号は残さない。
+- **確認**：
+  - 共有フィクスチャ `tests/fixtures/cure_initial_cases.json`（6 ケース：A・B・C・D・計測なし・同点）。
+  - pytest 10 件。TypeScript の計算がフィクスチャと一致すること。
+  - 実際に FastAPI を立てての往復（全ケースで一致）。API が落ちたときの代替、同意なしのエラー。

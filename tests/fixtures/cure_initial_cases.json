@@ -1,0 +1,197 @@
+{
+  "note": "Shared fixtures for cure_initial.py and lib/cureInitial.ts. Both must return the same grade, scores, sync values and split.",
+  "cases": [
+    {
+      "name": "fast clicker",
+      "signals": {
+        "consent": true,
+        "first_click_ms": 500,
+        "click_rate": 2.5,
+        "handle_torque": 0.2,
+        "panel_depth": 1,
+        "eyes_closed_ms": 0
+      },
+      "expected": {
+        "grade": "A",
+        "scores": {
+          "A": 0.9375,
+          "B": 0.2,
+          "C": 0.25,
+          "D": 0.0
+        },
+        "confidence": 0.6875,
+        "sync": [
+          189.0,
+          0.36,
+          0.75,
+          60.0
+        ],
+        "split": [
+          1.6842,
+          3.3684,
+          5.0526,
+          5.8947
+        ]
+      }
+    },
+    {
+      "name": "scalper hand",
+      "signals": {
+        "consent": true,
+        "first_click_ms": 3000,
+        "click_rate": 0.5,
+        "handle_torque": 0.9,
+        "panel_depth": 1,
+        "eyes_closed_ms": 500
+      },
+      "expected": {
+        "grade": "B",
+        "scores": {
+          "A": 0.425,
+          "B": 0.9,
+          "C": 0.25,
+          "D": 0.184535
+        },
+        "confidence": 0.475,
+        "sync": [
+          97.0,
+          0.92,
+          0.75,
+          67.0
+        ],
+        "split": [
+          1.6842,
+          3.3684,
+          5.0526,
+          5.8947
+        ]
+      }
+    },
+    {
+      "name": "panel diver",
+      "signals": {
+        "consent": true,
+        "first_click_ms": 5000,
+        "click_rate": 0.2,
+        "handle_torque": 0.1,
+        "panel_depth": 4,
+        "eyes_closed_ms": 0
+      },
+      "expected": {
+        "grade": "C",
+        "scores": {
+          "A": 0.145,
+          "B": 0.1,
+          "C": 1.0,
+          "D": 0.0
+        },
+        "confidence": 0.855,
+        "sync": [
+          46.0,
+          0.28,
+          0.0,
+          60.0
+        ],
+        "split": [
+          1.6842,
+          3.3684,
+          5.0526,
+          5.8947
+        ]
+      }
+    },
+    {
+      "name": "eyes closed",
+      "signals": {
+        "consent": true,
+        "first_click_ms": 4000,
+        "click_rate": 0.3,
+        "handle_torque": 0.3,
+        "panel_depth": 2,
+        "eyes_closed_ms": 9000,
+        "haptic_budget_ms": 19
+      },
+      "expected": {
+        "grade": "D",
+        "scores": {
+          "A": 0.28,
+          "B": 0.3,
+          "C": 0.5,
+          "D": 1.0
+        },
+        "confidence": 0.5,
+        "sync": [
+          70.0,
+          0.44,
+          0.5,
+          100.0
+        ],
+        "split": [
+          2.0,
+          4.0,
+          6.0,
+          7.0
+        ]
+      }
+    },
+    {
+      "name": "nothing measured",
+      "signals": {
+        "consent": true
+      },
+      "expected": {
+        "grade": "C",
+        "scores": {
+          "A": 0.0,
+          "B": 0.0,
+          "C": 0.0,
+          "D": 0.0
+        },
+        "confidence": 0.0,
+        "sync": [
+          20.0,
+          0.2,
+          1.0,
+          60.0
+        ],
+        "split": [
+          1.6842,
+          3.3684,
+          5.0526,
+          5.8947
+        ]
+      }
+    },
+    {
+      "name": "tie A and B",
+      "signals": {
+        "consent": true,
+        "handle_torque": 0.5,
+        "first_click_ms": 2000,
+        "click_rate": 0
+      },
+      "expected": {
+        "grade": "A",
+        "scores": {
+          "A": 0.5,
+          "B": 0.5,
+          "C": 0.0,
+          "D": 0.0
+        },
+        "confidence": 0.0,
+        "sync": [
+          110.0,
+          0.6,
+          1.0,
+          60.0
+        ],
+        "split": [
+          1.6842,
+          3.3684,
+          5.0526,
+          5.8947
+        ]
+      }
+    }
+  ]
+}

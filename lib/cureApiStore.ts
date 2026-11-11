@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type { InitialAnalysis } from '@/lib/cureInitial';
 import { ARCANA_ATTRACTORS } from '@/lib/arcanaMatrix';
 import type { MatrixBuildResult } from '@/lib/matrixBuilder';
 import type { OddField } from '@/lib/cureOrbit';
@@ -123,6 +124,9 @@ export type CureAPIState = {
   headerVisible: boolean;
   /** Which parts of the header are shown. */
   headerItems: HeaderItems;
+  /** The initial page's A/B/C/D analysis (cure-initial/1). Only the result is kept, never the raw signals. */
+  initialAnalysis: (InitialAnalysis & { at: number }) | null;
+  setInitialAnalysis: (analysis: InitialAnalysis | null) => void;
   setHeaderVisible: (visible: boolean) => void;
   setHeaderItem: (key: keyof HeaderItems, on: boolean) => void;
   setTimeframe: (timeframe: CureTimeframe) => void;
@@ -177,6 +181,8 @@ export const useCureAPIStore = create<CureAPIState>()(
       intuitionChoice: null,
       architectFire: null,
       parenInputs: { library: false, museum: false, galaxy: null },
+      initialAnalysis: null,
+      setInitialAnalysis: (analysis) => set({ initialAnalysis: analysis ? { ...analysis, at: Date.now() } : null }),
       headerVisible: true,
       headerItems: DEFAULT_HEADER_ITEMS,
       setHeaderVisible: (headerVisible) => set({ headerVisible }),
@@ -255,6 +261,7 @@ export const useCureAPIStore = create<CureAPIState>()(
         intuitionChoice: state.intuitionChoice,
         architectFire: state.architectFire,
         parenInputs: state.parenInputs,
+        initialAnalysis: state.initialAnalysis,
         headerVisible: state.headerVisible,
         headerItems: state.headerItems,
       }),
