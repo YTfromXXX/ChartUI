@@ -89,6 +89,9 @@ export const TIMEFRAME_STROBE_INTERVAL_MS: Record<CureTimeframe, number> = {
   '1D': 1000,
 };
 
+export type HeaderItems = { instrument: boolean; collision: boolean; view: boolean; engine: boolean };
+export const DEFAULT_HEADER_ITEMS: HeaderItems = { instrument: true, collision: true, view: true, engine: true };
+
 export type CureAPIState = {
   timeframe: CureTimeframe;
   volatilityIndex: number;
@@ -116,6 +119,12 @@ export type CureAPIState = {
   architectFire: { at: number; date: string } | null;
   /** What has been handed to the [():()] device. */
   parenInputs: { library: boolean; museum: boolean; galaxy: { arms: number; twist: number } | null };
+  /** The TEST TO ZERO header: shown or hidden (the bike icon in the corner turns it back on). */
+  headerVisible: boolean;
+  /** Which parts of the header are shown. */
+  headerItems: HeaderItems;
+  setHeaderVisible: (visible: boolean) => void;
+  setHeaderItem: (key: keyof HeaderItems, on: boolean) => void;
   setTimeframe: (timeframe: CureTimeframe) => void;
   setVolatilityIndex: (value: number) => void;
   setNewsFeedText: (text: string) => void;
@@ -168,6 +177,10 @@ export const useCureAPIStore = create<CureAPIState>()(
       intuitionChoice: null,
       architectFire: null,
       parenInputs: { library: false, museum: false, galaxy: null },
+      headerVisible: true,
+      headerItems: DEFAULT_HEADER_ITEMS,
+      setHeaderVisible: (headerVisible) => set({ headerVisible }),
+      setHeaderItem: (key, on) => set((state) => ({ headerItems: { ...state.headerItems, [key]: on } })),
       setTimeframe: (timeframe) => set({ timeframe }),
       setVolatilityIndex: (value) => set({ volatilityIndex: clamp(value, 0, 1) }),
       setNewsFeedText: (newsFeedText) => set({ newsFeedText }),
@@ -242,6 +255,8 @@ export const useCureAPIStore = create<CureAPIState>()(
         intuitionChoice: state.intuitionChoice,
         architectFire: state.architectFire,
         parenInputs: state.parenInputs,
+        headerVisible: state.headerVisible,
+        headerItems: state.headerItems,
       }),
     },
   ),

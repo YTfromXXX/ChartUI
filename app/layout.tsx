@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import AuthSessionProvider from "@/components/AuthSessionProvider";
 import CureProjectionEffects from "@/components/CureProjectionEffects";
 import TestToZeroHeader from "@/components/TestToZeroHeader";
+import BikeHeaderToggle from "@/components/BikeHeaderToggle";
 import HydrationGate from "@/app/cure-api/TSMonsterEngine/GreenCardKit/HydrationGate";
 import "./globals.css";
 
@@ -15,5 +16,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${display.variable} ${mono.variable}`}><AuthSessionProvider><HydrationGate fallback={<div className="min-h-screen bg-[#05020a]" />}><CureProjectionEffects /><TestToZeroHeader />{children}</HydrationGate></AuthSessionProvider></body></html>;
+  return <html lang="en"><body className={`${display.variable} ${mono.variable}`}><AuthSessionProvider><HydrationGate fallback={<div className="min-h-screen bg-[#05020a]" />}><CureProjectionEffects /><TestToZeroHeader />{children}<BikeHeaderToggle /></HydrationGate></AuthSessionProvider></body></html>;
 }

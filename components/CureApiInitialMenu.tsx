@@ -193,6 +193,7 @@ export default function CureApiInitialMenu() {
             <Link href="/knot-chart" className="border border-rose-200/20 px-3 py-2 text-rose-100 hover:border-rose-200/60">Knot Chart · 48</Link>
             <Link href="/oracle-api" className="border border-white/10 px-3 py-2 text-slate-300 hover:border-white/30">Oracle</Link>
             <Link href="/cure-api/experiments" className="border border-white/10 px-3 py-2 text-slate-300 hover:border-white/30">Experiment</Link>
+            <Link href="/cure-api/engine" className="border border-fuchsia-300/40 px-3 py-2 text-fuchsia-200 hover:border-fuchsia-200">Engine · A–D</Link>
           </nav>
           </div>
         </header>

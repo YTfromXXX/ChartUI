@@ -7,6 +7,7 @@ import { JP_LABEL, MAX_TABLE_APIS, SURVEY_APIS, tableProfile } from '@/lib/apiSu
 import WaveDie from '@/components/tetra/WaveDie';
 import { BONE_LABEL, CELL_JOINT, CELL_JOINT_LABEL, PORT_BONE, boneAngle, friction, guide, pairKey, waveOffsets } from '@/lib/famiLink';
 import { DEFAULT_POSE, PARAM_INFO, SynthApi, breathe, constrain, dancePose, fan, paramsOf, type Note, type Pose, type Step } from '@/lib/famiDance';
+import { writeEngineFeed } from '@/lib/engineMenu';
 import { FAMI_PORTS } from '@/lib/idlecrash';
 import { rollWave, wave } from '@/lib/waveDie';
 import { useWaveLayout } from '@/lib/waveLayoutStore';
@@ -64,7 +65,7 @@ export default function FamiDancePage() {
   const game = useRef({
     t0: 0, apis: {} as Record<Sym, SynthApi>, notes: {} as Record<Sym, Note[]>, last: {} as Record<Sym, { step: Step; at: number }>,
     score: {} as Record<Sym, Score>, judge: {} as Record<Sym, { text: string; at: number }>, lastBeat: -1, audio: null as AudioContext | null,
-    lead: null as null | { cell: number; face: number; beat: number }, series: { BTC: [], USD: [], XAU: [], CPU: [] } as Record<Sym, number[]>, lastSample: 0,
+    lead: null as null | { cell: number; face: number; beat: number }, series: { BTC: [], USD: [], XAU: [], CPU: [] } as Record<Sym, number[]>, lastSample: 0, lastFeed: 0,
   });
   const live = useRef({ poses, auto, bpm, syms, profile, muted, mode, waveLayout, port, players }); live.current = { poses, auto, bpm, syms, profile, muted, mode, waveLayout, port, players };
 
@@ -143,6 +144,13 @@ export default function FamiDancePage() {
       if (nowMs - g.lastSample > 50) {
         g.lastSample = nowMs; const bone = PORT_BONE[L.port].bone;
         for (const s of ALL) { const arr = g.series[s]; arr.push(boneAngle(poseFor(s, nowMs), bone)); if (arr.length > 400) arr.shift(); }
+      }
+      // Hand the measurements to the Cure-API engine menu every 2 s.
+      if (nowMs - g.lastFeed > 2000) {
+        g.lastFeed = nowMs; const fr: Record<string, number | null> = {};
+        for (let i = 0; i < ALL.length; i += 1) for (let j = i + 1; j < ALL.length; j += 1) fr[pairKey(ALL[i], ALL[j])] = friction(g.series[ALL[i]], g.series[ALL[j]]);
+        const prices: Partial<Record<Sym, number>> = {}; for (const s of ALL) if (g.apis[s]) prices[s] = g.apis[s].price;
+        writeEngineFeed({ at: nowMs, port: L.port, bone: BONE_LABEL[PORT_BONE[L.port].bone], friction: fr, prices, mode: L.mode });
       }
       setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(frame);

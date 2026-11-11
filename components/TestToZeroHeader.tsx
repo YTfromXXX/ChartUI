@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
 import { useCureAPIStore, type SimulationMode } from '@/lib/cureApiStore';
 
 const TEST_OPTIONS: {
@@ -12,8 +12,15 @@ const TEST_OPTIONS: {
   { symbol: 'XAUUSD', mode: 'hypothesisB', collision: 'collision-B' },
 ];
 
+/**
+ * The temporary TEST TO ZERO header. Its visibility and parts live in the Cure-API store: END TEST
+ * hides it, and the bike in the bottom-right corner (BikeHeaderToggle) turns it — or any of its parts
+ * — back on.
+ */
 export default function TestToZeroHeader() {
-  const [visible, setVisible] = useState(true);
+  const visible = useCureAPIStore((state) => state.headerVisible);
+  const setVisible = useCureAPIStore((state) => state.setHeaderVisible);
+  const items = useCureAPIStore((state) => state.headerItems);
   const simulationMode = useCureAPIStore((state) => state.simulationMode);
   const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const active = TEST_OPTIONS.find((option) => option.mode === simulationMode) ?? TEST_OPTIONS[0];
@@ -34,8 +41,8 @@ export default function TestToZeroHeader() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 font-mono text-[10px] uppercase tracking-widest text-slate-500">Instrument</span>
-          {TEST_OPTIONS.map((option) => (
+          {items.instrument && <span className="mr-1 font-mono text-[10px] uppercase tracking-widest text-slate-500">Instrument</span>}
+          {items.instrument && TEST_OPTIONS.map((option) => (
             <button
               key={option.symbol}
               type="button"
@@ -50,8 +57,8 @@ export default function TestToZeroHeader() {
               {option.symbol}
             </button>
           ))}
-          <span aria-hidden="true" className="mx-1 h-6 border-l border-white/10" />
-          {TEST_OPTIONS.map((option) => (
+          {items.instrument && items.collision && <span aria-hidden="true" className="mx-1 h-6 border-l border-white/10" />}
+          {items.collision && TEST_OPTIONS.map((option) => (
             <button
               key={option.collision}
               type="button"
@@ -69,16 +76,18 @@ export default function TestToZeroHeader() {
         </div>
 
         <div className="flex items-center gap-3">
-          <p aria-live="polite" className="rounded border border-white/10 bg-black/30 px-3 py-2 font-mono text-[11px] text-slate-300">
+          {items.engine && <Link href="/cure-api/engine" className="rounded border border-fuchsia-300/40 px-3 py-2 font-mono text-[11px] text-fuchsia-200 hover:border-fuchsia-200">ENGINE</Link>}
+          {items.view && <p aria-live="polite" className="rounded border border-white/10 bg-black/30 px-3 py-2 font-mono text-[11px] text-slate-300">
             VIEW: <span className="font-semibold text-white">{active.symbol}</span>
             <span className="mx-1 text-slate-600">/</span>
             <span className="text-amber-200">{active.collision}</span>
-          </p>
+          </p>}
           <button
             type="button"
             onClick={() => setVisible(false)}
             className="rounded border border-white/10 px-2 py-2 font-mono text-[10px] text-slate-500 hover:border-rose-300/40 hover:text-rose-200"
             aria-label="End temporary test header session"
+            title="ヘッダーを閉じる（右下のバイクからいつでも戻せる）"
           >
             END TEST
           </button>
