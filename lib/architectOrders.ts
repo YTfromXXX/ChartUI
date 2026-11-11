@@ -175,7 +175,7 @@ export function floorPlan(key: OrderKey, p: ArchitectParams): { outline: string;
   };
   if (key === 'A') {
     features.push({ d: circle(cx + w / 2 - ar - 8, cy, ar), label: '講義室' });
-    features.push({ d: rect(cx - w / 2 + 14, cy - 14, 28 * p.ratio, 28, 0), label: 'トラペザ' });
+    features.push({ d: rect(cx - w / 2 + 14, cy - 14, 28 * p.ratio, 28, 0), label: 'トラペザ → テトラ・アルカナ', href: '/architect/tetra' });
   } else if (key === 'B') {
     const pts: Pt[] = Array.from({ length: 7 }, (_, i) => [cx - w / 2 + 20 + (i * (w - 40)) / 6, cy + Math.sin(i * 1.3) * h * 0.25 * p.curvature]);
     features.push({ d: `M${pts.map((q) => q.join(',')).join(' T')}`, label: '連続曲面のベンチ' });
