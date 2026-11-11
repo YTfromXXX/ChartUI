@@ -41,13 +41,13 @@ export default function SevenSpheres({ throws, icon }: { throws: number[]; icon:
         ))}
       </defs>
       {/* Line 1: the floor, ー・ー */}
-      <line x1={10} x2={W - 10} y1={BASE + 1} y2={BASE + 1} stroke="#1f1f1f" strokeWidth={1.5} strokeDasharray="14 5 2 5" />
+      <line x1={10} x2={W - 10} y1={BASE + 1} y2={BASE + 1} stroke="currentColor" strokeWidth={1.5} strokeDasharray="14 5 2 5" />
       {/* Line 3: board order 1 → 7, — — */}
-      <polyline points={Array.from({ length: 7 }, (_, i) => `${cx(i + 1)},${cy(i + 1)}`).join(' ')} fill="none" stroke="#7a0f22" strokeWidth={1} strokeDasharray="18 6" opacity={0.6} style={{ transition: 'all 500ms ease' }} />
+      <polyline points={Array.from({ length: 7 }, (_, i) => `${cx(i + 1)},${cy(i + 1)}`).join(' ')} fill="none" stroke="#ff2bd6" strokeWidth={1} strokeDasharray="18 6" opacity={0.7} style={{ transition: 'all 500ms ease' }} />
       {/* Line 2: the last throw, - - */}
-      {last && <line x1={origin.x} y1={origin.y} x2={tx} y2={ty} stroke="#1f1f1f" strokeWidth={1} strokeDasharray="4 4" />}
+      {last && <line x1={origin.x} y1={origin.y} x2={tx} y2={ty} stroke="currentColor" strokeWidth={1} strokeDasharray="4 4" />}
       {/* The nominal point: the thrower. */}
-      <text x={origin.x} y={origin.y + 5} textAnchor="middle" fontSize={13} fill="#1f1f1f">({icon})</text>
+      <text x={origin.x} y={origin.y + 5} textAnchor="middle" fontSize={13} fill="currentColor">({icon})</text>
       {Array.from({ length: 7 }, (_, i) => {
         const sq = i + 1; const rad = r(sq); const n = counts[i];
         return (
@@ -56,7 +56,7 @@ export default function SevenSpheres({ throws, icon }: { throws: number[]; icon:
             <circle r={rad} fill={`url(#sph-${sq})`} style={{ transition: 'r 500ms ease' }} />
             {Array.from({ length: Math.min(n, 60) }, (_, k) => { const rr = rad * 0.82 * Math.sqrt((k + 0.5) / Math.min(n, 60)); const a = k * GOLDEN; return <circle key={k} cx={Math.cos(a) * rr} cy={Math.sin(a) * rr} r={1.1} fill="#fff" opacity={0.75} />; })}
             <text y={rad * 0.32} textAnchor="middle" fontSize={rad * 0.95} fontWeight="bold" fill={`hsl(${hue(sq)} 85% ${n ? 22 : 60}%)`} opacity={0.9}>{icon}</text>
-            <text y={-rad - 5} textAnchor="middle" fontSize={10} fill="#1f1f1f">{sq} マス · {n}</text>
+            <text y={-rad - 5} textAnchor="middle" fontSize={10} fill="currentColor">{sq} マス · {n}</text>
           </g>
         );
       })}

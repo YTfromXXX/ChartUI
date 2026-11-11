@@ -52,8 +52,8 @@ export default function CubeClock() {
   return (
     <svg viewBox={`0 0 ${S} ${S}`} className="w-full max-w-[260px]" role="img" aria-label={`Cube clock ${label}`} data-time={label}>
       <title>{label}</title>
-      <rect x={6} y={6} width={S - 12} height={S - 12} rx={18} fill="none" stroke="#1f1f1f" strokeWidth={6} />
-      <rect x={14} y={14} width={S - 28} height={S - 28} rx={12} fill="none" stroke="#1f1f1f" strokeWidth={1} opacity={0.4} />
+      <rect x={6} y={6} width={S - 12} height={S - 12} rx={18} fill="none" stroke="currentColor" strokeWidth={6} />
+      <rect x={14} y={14} width={S - 28} height={S - 28} rx={12} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.4} />
       {now && cubes.map((c, i) => { const p = onLoop(((c.f % 1) + 1) % 1); return <Cube key={i} x={p.x} y={p.y} size={c.size} turn={c.turn} color={c.color} opacity={c.opacity} />; })}
     </svg>
   );
