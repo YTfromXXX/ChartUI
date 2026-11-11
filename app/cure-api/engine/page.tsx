@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import PitInPopup from '@/components/engine/PitInPopup';
 import Speedometer from '@/components/engine/Speedometer';
 import { CARS, DESIGN_RULES, ENGINE_KEY, POSES_KEY, checkRules, readCar, readEngineInputs, type Car, type CarReading, type EngineFeed } from '@/lib/engineMenu';
 import { PARAM_INFO } from '@/lib/famiDance';
@@ -34,6 +35,7 @@ function ForecastChart({ car, r }: { car: Car; r: CarReading }) {
 export default function EngineMenuPage() {
   const [inputs, setInputs] = useState<{ poses: Partial<Record<string, Pose>>; feed: EngineFeed | null }>({ poses: {}, feed: null });
   const [now, setNow] = useState(0);
+  const [pitIn, setPitIn] = useState(false);
   useEffect(() => {
     const load = () => { setInputs(readEngineInputs()); setNow(Date.now()); };
     load(); const id = window.setInterval(load, 2000);
@@ -67,6 +69,13 @@ export default function EngineMenuPage() {
           </div>
           <nav className="flex gap-2 font-mono text-xs"><Link href="/cure-api" className="border border-[#ff2bd6]/60 px-3 py-1 text-[#ff8ae8]">Cure-API</Link><Link href="/famidance" className="border border-[#00e5ff]/60 px-3 py-1 text-[#7ff3ff]">FamiDance</Link></nav>
         </header>
+
+        <button type="button" onClick={() => setPitIn(true)} data-testid="emergency"
+          className="flex w-full items-center justify-between gap-2 rounded-xl border-2 border-[#ff4d4d] bg-[#ff4d4d]/10 px-3 py-2 text-left font-mono text-xs shadow-[0_0_20px_#ff4d4d55]">
+          <span><span className="mr-2 rounded bg-[#ff4d4d] px-1.5 font-bold text-black">緊急イベント</span>KING &amp; QUEEN の鍵穴：スロットリールを双六ライン上で正常に稼働せよ</span>
+          <span className="text-[#7ff3ff]">B 車とドライブ · new-cpu-pit-in を開く →</span>
+        </button>
+        {pitIn && <PitInPopup onClose={() => setPitIn(false)} />}
 
         <div className="relative">
           <div className="grid gap-4 md:grid-cols-2 md:gap-y-[170px]">
