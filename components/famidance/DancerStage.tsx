@@ -50,6 +50,8 @@ function Body({ pose, look, ghost = false }: { pose: Pose; look: DancerLook; gho
 type Props = {
   look: DancerLook; base: Pose; shown: Pose; onPose: (p: Pose) => void;
   notes: Note[]; nowBeat: number; judge: { text: string; age: number } | null; dancing: boolean; laneLabel: string;
+  /** The joint leading this beat (from the wave die), drawn with a glow. */
+  lead?: Joint;
 };
 
 /**
@@ -58,7 +60,7 @@ type Props = {
  * plane (pointer coordinates go through the group's inverse transform), so every drag lands on a
  * danceable pose.
  */
-export default function DancerStage({ look, base, shown, onPose, notes, nowBeat, judge, dancing, laneLabel }: Props) {
+export default function DancerStage({ look, base, shown, onPose, notes, nowBeat, judge, dancing, laneLabel, lead }: Props) {
   const plane = useRef<SVGGElement>(null);
   const [drag, setDrag] = useState<Joint | null>(null);
   const [focus, setFocus] = useState<Joint | null>(null);
@@ -86,6 +88,7 @@ export default function DancerStage({ look, base, shown, onPose, notes, nowBeat,
       <g ref={plane} transform="matrix(0.94,-0.05,0,1,20,24)">
         {dancing && <Body pose={base} look={look} ghost />}
         <Body pose={shown} look={look} />
+        {lead && <circle cx={shown[lead].x} cy={shown[lead].y} r={10} fill="none" stroke={look.accent} strokeWidth={2} opacity={0.85} data-lead={lead}><animate attributeName="r" values="7;12;7" dur="0.6s" repeatCount="indefinite" /></circle>}
         <line x1={-4} x2={124} y1={FLOOR} y2={FLOOR} stroke="#ffffff22" />
         {JOINTS.map((j) => (
           <circle

@@ -12,6 +12,7 @@ import {
   type Card, type Preset, type Score,
 } from '@/lib/tetraArcana';
 import { DEFAULT_LAYOUT, rollWave } from '@/lib/waveDie';
+import { useWaveLayout } from '@/lib/waveLayoutStore';
 
 type SeatState = { hand: Card[]; river: { card: Card; down: boolean }[]; silent: boolean; favaDiscards: number; spoke: boolean; passed: Card[] };
 type Winner = { seat: number; score: Score; by: 'tsumo' | 'ron'; from?: number };
@@ -68,7 +69,7 @@ export default function TetraArcanaRoom() {
   const [silentMode, setSilentMode] = useState(false);
   const [chat, setChat] = useState('');
   const [fast, setFast] = useState(false);
-  const [layout, setLayout] = useState<number[]>(DEFAULT_LAYOUT);
+  const [layout, setLayout] = useWaveLayout(); // shared with FamiDance
   const [faceCounts, setFaceCounts] = useState<Record<number, number>>({});
   const [flash, setFlash] = useState<number[]>([]);
   const [role, setRole] = useState<Role>('emperor');
