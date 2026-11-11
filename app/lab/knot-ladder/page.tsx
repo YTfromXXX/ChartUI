@@ -241,7 +241,7 @@ export default function KnotLadderLab() {
             <h1 className="font-mono text-2xl font-bold">立方体のはしご：ひとつの箱にひとつの結び目</h1>
             <p className="text-xs text-slate-400">ろうそく足 8 本をひとつのガラスの立方体に入れて積み上げる。下へスクロールで過去の結び目、上へスクロールで予測の結び目。値はすべて合成。</p>
           </div>
-          <nav className="flex gap-2 font-mono text-xs"><Link href="/lab/glass-knot" className="border border-white/20 px-3 py-1">ガラスの紐 LAB</Link></nav>
+          <nav className="flex gap-2 font-mono text-xs"><Link href="/lab/glass-knot" className="border border-white/20 px-3 py-1">ガラスの紐 LAB</Link><Link href="/lab/card-slots" className="border border-[#c084fc]/50 px-3 py-1 text-[#e9d5ff]">カードスロット</Link></nav>
         </header>
 
         <div className="grid gap-3 lg:grid-cols-[1fr_340px]">

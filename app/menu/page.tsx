@@ -80,6 +80,7 @@ export default function WhiteoutMenuPage() {
             <Link href="/lab/mesh" className="hover:text-black">メッシュ LAB</Link>
             <Link href="/lab/glass-knot" className="hover:text-black">ガラスの紐 LAB</Link>
             <Link href="/lab/knot-ladder" className="hover:text-black">結び目のはしご</Link>
+            <Link href="/lab/card-slots" className="hover:text-black">カードスロット</Link>
             <Link href="/famidance" className="hover:text-black">ファミダンス</Link>
           </nav>
         </header>
