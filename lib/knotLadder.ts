@@ -143,3 +143,31 @@ export function predictKnots(lastClose: number, seed: number, paths = 120, ahead
   const dist = KNOT_TYPES.map((k) => ({ type: k, p: counts[k] / paths })).sort((a, b) => b.p - a.p);
   return { dist, top: dist[0].type };
 }
+
+// ------------------------------------------------------------------ effect card No.17: mooring hitch
+/**
+ * The mooring hitch (係留結び) on a horizontal bar along x at height `yb`, centred at x = `xs`, in
+ * cube-local coordinates. The standing part rises behind the bar, goes over it, comes down in front,
+ * makes a ring round the standing part, pushes a quick-release bight out to the left and ends in a
+ * tail to the right — the knot holds under load and falls apart when that bight is pulled.
+ */
+export function mooringHitchCurve(xs: number, yb: number, n = 140): P3[] {
+  const pts: P3[] = []; const r = 0.07; const ringY = yb - 0.27; const ringR = 0.09;
+  const seg = (f: (t: number) => P3, m: number) => { for (let k = 0; k <= m; k += 1) pts.push(f(k / m)); };
+  const m = Math.max(8, Math.round(n / 7));
+  seg((t) => [xs, yb - 0.6 + 0.6 * t - 0.05 * t, -0.07 * t], m); // standing part, up behind the bar
+  seg((t) => [xs + 0.03 * t, yb + r * Math.sin(Math.PI * t), -r * Math.cos(Math.PI * t)], m); // over the bar (half a turn round it)
+  seg((t) => [xs + 0.03 + 0.03 * t, yb - (0.27 - ringR) * t, 0.07 - 0.03 * t], m); // down in front
+  seg((t) => { const a = Math.PI / 2 + Math.PI * 2 * t; return [xs + 0.06 + ringR * Math.cos(a), ringY + ringR * Math.sin(a), 0.04 * Math.cos(Math.PI * 4 * t)]; }, m * 2); // ring round the standing part
+  seg((t) => { const a = Math.PI * 2 * t; return [xs - 0.1 - 0.16 * (1 - Math.cos(a)) * 0.9, ringY + 0.07 * Math.sin(a), 0.03 * Math.sin(a)]; }, m); // quick-release bight to the left
+  seg((t) => [xs - 0.1 + 0.42 * t, ringY - 0.02 * t, 0.02 * (1 - t)], m); // tail to the right
+  return pts;
+}
+
+export const MOORING_CARD = {
+  no: 17, name: 'モーリング・ヒッチ・カード', knot: '係留結び（モーリング・ヒッチ）',
+  flavor: '赤色重力の圧力により左隅に金属の円筒が発生、これから金属の圧力により左隅に金属の柱が描かれる模様。骨格を打破し自由に踊る植物達に注意せよ。',
+  rule: '使うと、まだ FILL していないキャンディーが柱の横棒に係留され、次の立方体へ持ち越される。「端を引く」で即座にほどける。植物は 1 本ごとに伸び、結び目の高さに届くと結び目をほどいてしまう。',
+  /** Candles until the plants reach the hitch. */
+  plantCandles: 14,
+};
