@@ -28,6 +28,11 @@ export const TASKS: Task[] = [
   // Activist sugoroku
   { id: 'activist', title: 'アクティビスト双六（19 マスの骨格・3 つのフィルター・.sh コマンド・git push で同時に動く車の駒）', area: 'アクティビスト', status: 'doing', asked: '2026-11-12', route: '/lab/activist', note: '車の駒とタクシー風のチームロゴまで。チェス駒への拡張は次' },
   { id: 'activist-vr', title: 'VR / MR 前提のスポーツ社会での取引模様（ドラマシーン）', area: 'アクティビスト', status: 'todo', asked: '2026-11-12' },
+  { id: 'oracle-race', title: 'METADOGG ORACLE-API のレース中継画面（配信用・背後からのスポーツカー・ゲーム機の枠をリブート）', area: 'ORACLE', status: 'done', asked: '2026-11-12', route: '/oracle-api/race' },
+  { id: 'permanent-y', title: 'テストプレイヤーをパーマネント Y として記録', area: 'ORACLE', status: 'doing', asked: '2026-11-12', note: 'レースの予想と的中を記録。双六とカードゲームへも' },
+  { id: 'mahjong-cards', title: '架空の 4 社が銘柄を競う麻雀のようなカードゲーム', area: 'ORACLE', status: 'todo', asked: '2026-11-12' },
+  { id: 'news-quiz', title: 'ニュースの四択クイズ（NEWS 現象）＋ポートフォリオ区分の予測市場', area: 'ORACLE', status: 'todo', asked: '2026-11-12', note: 'レースの「次のラップのトップは？」が最初の形' },
+  { id: 'money-romance', title: '予測市場で車がコミカルに動く・金銭的なラブ模様', area: 'ORACLE', status: 'decide', asked: '2026-11-12', note: 'データが足りないので次回以降（オーナー判断）' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
@@ -45,7 +50,7 @@ export const TASKS: Task[] = [
 export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '入口', routes: [['/', 'ログイン'], ['/menu', '総合メニュー'], ['/cure-api', 'Cure-API'], ['/cure-api/engine', 'エンジン']] },
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
-  { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
+  { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
   { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente']] },
 ];
