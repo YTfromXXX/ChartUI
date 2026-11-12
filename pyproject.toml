@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 name = "cure-oracle"
 version = "0.1.0"
 description = "ChartUI / METADOGG ORACLE core: knot crossings, .meshmeta byte pointers and signatures, cure-initial/1 contract"
-readme = "docs/packaging.md"
+readme = "cure_oracle/README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = []
