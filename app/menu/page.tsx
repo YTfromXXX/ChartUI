@@ -88,6 +88,7 @@ export default function WhiteoutMenuPage() {
             <Link href="/lab/library/entrance" className="hover:text-black">図書館の入口</Link>
             <Link href="/lab/library/reading-order" className="hover:text-black">どちらを先に読む？</Link>
             <Link href="/lab/fourier" className="hover:text-black">フーリエ</Link>
+            <Link href="/lab/activist" className="hover:text-black">アクティビスト双六</Link>
             <Link href="/lab/backlog" className="hover:text-black">やることボード</Link>
             <Link href="/famidance" className="hover:text-black">ファミダンス</Link>
           </nav>

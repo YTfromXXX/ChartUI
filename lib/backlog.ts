@@ -25,10 +25,13 @@ export const TASKS: Task[] = [
   { id: 'soundcloud', title: 'Mente 式の SoundCloud 接続（まず偽データで差し替え可能に）', area: 'Cure-API', status: 'decide', asked: '2026-11-12', note: 'npm / pip の前に、本物の API とカスタマイズ案を改めて提案いただく' },
   { id: 'stable-diffusion', title: '画像生成（Stable Diffusion）との連携', area: 'Cure-API', status: 'decide', asked: '2026-11-12', note: 'どのサービス・どの鍵を使うか' },
   { id: 'carnav-switch', title: 'カーナビのアニメーション切替スイッチ（通る車はアニマル形式）', area: 'カーナビ', status: 'decide', asked: '2026-11-12', note: 'npm / pip の前に画面遷移（メタ視点）を把握して UI を整える — 下の画面の地図から' },
+  // Activist sugoroku
+  { id: 'activist', title: 'アクティビスト双六（19 マスの骨格・3 つのフィルター・.sh コマンド・git push で同時に動く車の駒）', area: 'アクティビスト', status: 'doing', asked: '2026-11-12', route: '/lab/activist', note: '車の駒とタクシー風のチームロゴまで。チェス駒への拡張は次' },
+  { id: 'activist-vr', title: 'VR / MR 前提のスポーツ社会での取引模様（ドラマシーン）', area: 'アクティビスト', status: 'todo', asked: '2026-11-12' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
-  { id: 'taxonomy', title: '動植物の分類（何科・何目）のテキストを図書館に。骨格 (19) と (3) のフィルター、写真かアニメかの研究', area: '図書館', status: 'decide', asked: '2026-11-12', note: '(19) と (3) が何を指すか確認したい' },
+  { id: 'taxonomy', title: '動植物の分類（何科・何目）のテキストを図書館に。骨格 (19) と (3) のフィルター、写真かアニメかの研究', area: '図書館', status: 'doing', asked: '2026-11-12', note: '骨格 (19) = 19 マス、(3) = 事実・噂・感情のフィルターとして、まずアクティビスト双六に入れた' },
   { id: 'fish-plants', title: '紐のまわりの魚と植物、キャンディーによる計測と描画', area: 'ガラスの紐', status: 'todo', asked: '2026-11-12', route: '/lab/glass-knot' },
   // Packages
   { id: 'reserve-names', title: 'PyPI（cure-oracle）と npm（chartui）の名前を確保', area: 'パッケージ', status: 'decide', asked: '2026-11-12', note: 'アカウントを作ってアップロードするのはオーナーの作業' },
@@ -42,7 +45,7 @@ export const TASKS: Task[] = [
 export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '入口', routes: [['/', 'ログイン'], ['/menu', '総合メニュー'], ['/cure-api', 'Cure-API'], ['/cure-api/engine', 'エンジン']] },
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
-  { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
+  { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
   { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente']] },
 ];
