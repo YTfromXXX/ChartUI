@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BREAK_EVERY, SPIN_MS, SQUARES, STOPS, STRIPS, TRANSFORMS, distribution, portAt, spin, transformStats, type Spin } from '@/lib/dualSlot';
+import AviatorPopup from '@/components/dualSlot/AviatorPopup';
+import { BREAK_EVERY, SPIN_MS, SQUARES, STOPS, STRIPS, distribution, portAt, spin, transformStats, transformsFor, type Spin, type Wingspan } from '@/lib/dualSlot';
 
 const RULES = [
   'お金・メダル・オッズ・換金はありません。結果は双六の駒が何マス進むかだけです。',
@@ -37,7 +38,8 @@ export default function DualSlot() {
   const [square, setSquare] = useState(0);
   const [picks, setPicks] = useState<Record<number, 0 | 1>>({ 3: 0, 8: 0, 15: 0, 20: 0, 22: 0 });
   const [log, setLog] = useState<Spin[]>([]);
-  const [shown, setShown] = useState<[number, number, number]>([0, 1, 2]);
+  // Idle position shows no 7 on the pay line (♚ ♛ 🎲): nothing should look like an "almost 777" before a draw.
+  const [shown, setShown] = useState<[number, number, number]>([1, 0, 0]);
   const [spinning, setSpinning] = useState(false);
   const [t, setT] = useState(1);
   const [count, setCount] = useState(0);
@@ -45,15 +47,17 @@ export default function DualSlot() {
   const [started] = useState(() => Date.now());
   const [onBreak, setOnBreak] = useState(false);
   const [reveal, setReveal] = useState(6);
+  const [span, setSpan] = useState<Wingspan>(2.5);
+  const [aviator, setAviator] = useState(false);
   const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
   const [reduce, setReduce] = useState(false);
   const raf = useRef(0);
   useEffect(() => { setReduce(window.matchMedia('(prefers-reduced-motion: reduce)').matches); return () => cancelAnimationFrame(raf.current); }, []);
 
   const press = () => {
-    if (spinning || onBreak) return;
+    if (spinning || onBreak || aviator) return;
     const u = new Uint32Array(4); crypto.getRandomValues(u);
-    const s = spin(square, picks, [u[0] / 2 ** 32, u[1] / 2 ** 32, u[2] / 2 ** 32, u[3] / 2 ** 32], count);
+    const s = spin(square, picks, [u[0] / 2 ** 32, u[1] / 2 ** 32, u[2] / 2 ** 32, u[3] / 2 ** 32], count, span);
     setShown(s.stops); setSpinning(true); setT(0);
     const t0 = performance.now(); const dur = reduce ? 400 : SPIN_MS;
     const tick = (now: number) => {
@@ -62,6 +66,7 @@ export default function DualSlot() {
       setSpinning(false); setSquare(((s.to % SQUARES) + SQUARES) % SQUARES);
       setVisited((v) => { const n = new Set(v); for (let q = s.from; q <= s.to; q += 1) n.add(((q % SQUARES) + SQUARES) % SQUARES); return n; }); setMoved((m) => m + (s.to - s.from)); setLog((l) => [s, ...l].slice(0, 8));
       if (portAt(s.to).no === 21) setReveal(12);
+      if (portAt(s.to).no === 8) setAviator(true);
       const n = count + 1; setCount(n); if (n % BREAK_EVERY === 0) setOnBreak(true);
     };
     raf.current = requestAnimationFrame(tick);
@@ -90,7 +95,7 @@ export default function DualSlot() {
         <div className="grid gap-4 lg:grid-cols-[auto_1fr]">
           <section className="space-y-3 rounded-xl border-4 border-[#7c2d12] bg-gradient-to-b from-[#3b1d0a] to-[#1f1206] p-4" aria-label="スロット">
             <div className="flex gap-2" data-testid="reels">{STRIPS.map((strip, i) => <Reel key={i} strip={strip} stop={shown[i]} spinning={spinning} t={t} reduce={reduce} />)}</div>
-            <button type="button" data-testid="spin" onClick={press} disabled={spinning || onBreak} className="w-full rounded-full bg-amber-300 py-2 font-semibold text-[#1b1206] disabled:opacity-40">{spinning ? '回転中…' : '回す（Space）'}</button>
+            <button type="button" data-testid="spin" onClick={press} disabled={spinning || onBreak || aviator} className="w-full rounded-full bg-amber-300 py-2 font-semibold text-[#1b1206] disabled:opacity-40">{spinning ? '回転中…' : '回す（Space）'}</button>
             <p className="text-center font-mono text-sm" data-testid="result">
               {last ? `${last.line.join(' ')} → 出目 ${last.rolled}${last.dual ? `（${last.dual}：${last.moved} マス）` : ''} · マス ${last.from + 1} → ${(((last.to % SQUARES) + SQUARES) % SQUARES) + 1}` : '押すと 1 回だけ回ります'}
             </p>
@@ -109,7 +114,7 @@ export default function DualSlot() {
               ); })}
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="duals">
-              {Object.entries(TRANSFORMS).map(([port, pair]) => (
+              {Object.entries(transformsFor(span)).map(([port, pair]) => (
                 <div key={port} className="rounded border border-amber-200/20 p-2 text-xs">
                   <p className="mb-1 text-amber-200">{port}. {portAt(Number(port) - 1).title}</p>
                   <div className="flex gap-1">{pair.map((tr, k) => { const st = transformStats(tr, dist.steps); return (
@@ -117,6 +122,7 @@ export default function DualSlot() {
                       <span className="font-semibold">{tr.label}</span><br /><span className="text-[10px] text-amber-100/70">{tr.note} · 平均 {st.mean.toFixed(2)} · ばらつき {st.variance.toFixed(2)}</span>
                     </button>
                   ); })}</div>
+                  {port === '8' && <button type="button" data-testid="aviator-open" onClick={() => setAviator(true)} className="mt-1 w-full rounded border border-sky-300/40 py-0.5 text-[10px] text-sky-200">✈ ポップアップで初期化（いまの翼 {3.5 - span}–{3.5 + span}）</button>}
                   {port === '3' && <p className="mt-1 text-[10px] text-amber-100/60">奇数を選ぶと「奇数回帰」が有効：偶数マスに止まると次の奇数マスへ滑る（位置が変わるだけ）。</p>}
                 </div>
               ))}
@@ -136,6 +142,8 @@ export default function DualSlot() {
           </section>
         </div>
       </div>
+
+      {aviator && <AviatorPopup square={square} pick={picks[8] ?? 0} span={span} onDone={(pk, sp) => { setPicks((x) => ({ ...x, 8: pk })); setSpan(sp); setAviator(false); }} />}
 
       {onBreak && (
         <div role="dialog" aria-label="休憩" data-testid="break" className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 p-4">

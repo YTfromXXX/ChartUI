@@ -56,6 +56,23 @@ export const TRANSFORMS: Record<number, [Transform, Transform]> = {
   20: [{ label: 'King', apply: (s) => s, note: 'そのまま' }, { label: 'Queen', apply: (s) => 7 - s, note: '鏡写し' }],
   22: [{ label: 'バイク魂', apply: (s) => s, note: '陸路：そのまま' }, { label: '海賊戦線', apply: (s) => 7 - s, note: '海路：鏡写し' }],
 };
+// ---------- 8. aviator: the pop-up initialises the Dual ----------
+// Little flies low and lands 3 or 4 squares ahead (alternating). Nephilim, the giant, flies high
+// and lands 3.5 − span or 3.5 + span ahead, half the time each. Whatever the wingspan, the mean is
+// 3.5: the setting only chooses how wide the landings spread. There is no multiplier, no cashing
+// out and no crash — the plane always lands; all that is decided is the square.
+export const WINGSPANS = [1.5, 2.5] as const;
+export type Wingspan = (typeof WINGSPANS)[number];
+export function aviatorPair(span: Wingspan): [Transform, Transform] {
+  return [
+    { label: 'リトル', apply: (_s, u) => (u < 0.5 ? 3 : 4), note: '低く飛んで 3 か 4（交互）' },
+    { label: 'ネフェリム', apply: (_s, u) => (u < 0.5 ? 3.5 - span : 3.5 + span), note: `高く飛んで ${3.5 - span} か ${3.5 + span}` },
+  ];
+}
+export const transformsFor = (span: Wingspan): Record<number, [Transform, Transform]> => ({ ...TRANSFORMS, 8: aviatorPair(span) });
+/** Where each flier can land (squares ahead → probability). */
+export const landings = (span: Wingspan) => ({ little: { 3: 0.5, 4: 0.5 } as Record<number, number>, nephilim: { [3.5 - span]: 0.5, [3.5 + span]: 0.5 } as Record<number, number> });
+
 /** Exact mean and variance of a transform under the real step distribution (Little alternates 3/4 → mean 3.5). */
 export function transformStats(t: Transform, steps: number[]) {
   let m = 0; let m2 = 0;
@@ -70,9 +87,11 @@ export const portAt = (square: number) => FAMI_PORTS[((square % SQUARES) + SQUAR
  * to see). 奇数回帰 (port 3): while the 奇数＆偶数 Dual is set to 奇数, landing on an even-numbered
  * square slides the piece on to the next odd one.
  */
+/** Even squares that hold the piece despite 奇数回帰: the Dual squares 8 (aviator), 20 (King＆Queen), 22 (バイク魂 or 海賊戦線). */
+export const HOLDS = new Set([8, 20, 22]);
 export function landEffect(square: number, oddReturn = true): { to: number; text: string; reveal: number } {
   const p = portAt(square); const n = p.no;
-  if (oddReturn && n % 2 === 0 && n !== 22) return { to: square + 1, text: `奇数回帰：偶数マス ${n} から奇数マス ${n + 1} へ滑る`, reveal: 0 };
+  if (oddReturn && n % 2 === 0 && !HOLDS.has(n)) return { to: square + 1, text: `奇数回帰：偶数マス ${n} から奇数マス ${n + 1} へ滑る`, reveal: 0 };
   if (n === 15) return { to: square + 7, text: 'ファミつく：音に合わせて 7 マス', reveal: 0 };
   if (n === 21) return { to: square, text: 'MAP ex：地図が開き、さらに 6 マス先まで見える', reveal: 6 };
   return { to: square, text: '', reveal: 0 };
@@ -80,10 +99,10 @@ export function landEffect(square: number, oddReturn = true): { to: number; text
 
 export type Spin = { stops: [number, number, number]; line: Line; rolled: number; moved: number; dual: string | null; from: number; to: number; effect: string; prophecy: boolean };
 /** One spin: draw the stops first, then read everything off them. `u` are uniforms in [0, 1). */
-export function spin(square: number, picks: Record<number, 0 | 1>, u: [number, number, number, number], spinIndex: number): Spin {
+export function spin(square: number, picks: Record<number, 0 | 1>, u: [number, number, number, number], spinIndex: number, span: Wingspan = 2.5): Spin {
   const stops = u.slice(0, 3).map((x) => Math.floor(x * STOPS)) as [number, number, number];
   const line = lineAt(stops); const rolled = stepsOf(line); const port = portAt(square).no;
-  const t = TRANSFORMS[port]?.[picks[port] ?? 0];
+  const t = transformsFor(span)[port]?.[picks[port] ?? 0];
   // Little alternates 3 and 4 by spin number, so its mean is exactly 3.5 with no randomness.
   const moved = t ? (t.label === 'リトル' ? (spinIndex % 2 ? 4 : 3) : Math.round(t.apply(rolled, u[3]))) : rolled;
   let to = square + moved; const eff = landEffect(to, (picks[3] ?? 0) === 0); to = eff.to;

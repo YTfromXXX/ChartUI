@@ -40,6 +40,7 @@ export const TASKS: Task[] = [
   { id: 'designer-gene', title: '肖像アイコンのデザイナーズベイビー用の遺伝子の型（7 座・A〜D）と、EX = 0 の誕生', area: 'Cure-API', status: 'done', asked: '2026-11-12', route: '/cure-api' },
   { id: 'promotion-qubits', title: '昇格を 2 量子ビットの測定に（00 Q・01 R・10 B・11 N）、答えが届くまで「昇格中」', area: 'プロンプトチェス', status: 'todo', asked: '2026-11-12' },
   { id: 'dual-slot', title: 'Dual・パチスロ（慎重に）：払い出しのないスロットを双六のサイコロに（ポート 3・8・15・20・21・22）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '慎重に作る約束は docs/design-rules.md の 8 章' },
+  { id: 'aviator', title: '8. aviator：ポップアップで Dual を初期化（リトル／ネフェリムと翼の幅、平均はいつも 3.5）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '倍率・途中下車・墜落は入れない（クラッシュ型の賭けにしない）' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
