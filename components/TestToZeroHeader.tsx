@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import DnaBubble from '@/components/DnaBubble';
 import { useCureAPIStore, type SimulationMode } from '@/lib/cureApiStore';
 
 const TEST_OPTIONS: {
@@ -82,6 +83,7 @@ export default function TestToZeroHeader() {
             <span className="mx-1 text-slate-600">/</span>
             <span className="text-amber-200">{active.collision}</span>
           </p>}
+          <DnaBubble />
           <button
             type="button"
             onClick={() => setVisible(false)}
