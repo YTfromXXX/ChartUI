@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import QuantumWish from '@/components/spin/QuantumWish';
 import flowerFake from '@/quantum/results/flower-fake-fake_torino.json';
 import flowerLocal from '@/quantum/results/flower-local-statevector.json';
 import hairFake from '@/quantum/results/hair-fake-fake_torino.json';
 import hairLocal from '@/quantum/results/hair-local-statevector.json';
 
-type Result = { problem: string; mode: string; backend: string; when: string; qpu_seconds: number | null; shots: number; expect: number; p_opt: number; uniform_p_opt: number; exact_energy: number; browser_expect: number; tvd_vs_browser: number; top: { bits: number[]; p: number; energy: number }[] };
+type Result = { probabilities?: number[]; problem: string; mode: string; backend: string; when: string; qpu_seconds: number | null; shots: number; expect: number; p_opt: number; uniform_p_opt: number; exact_energy: number; browser_expect: number; tvd_vs_browser: number; top: { bits: number[]; p: number; energy: number }[] };
 const BUNDLED = [hairLocal, hairFake, flowerLocal, flowerFake] as Result[];
 const MODE: Record<string, string> = { local: '理想（雑音なし）', fake: 'リハーサル（実機に似せた雑音）', ibm: 'IBM の実機' };
 
@@ -18,6 +19,8 @@ const MODE: Record<string, string> = { local: '理想（雑音なし）', fake: 
 export default function IbmChallenge({ problem }: { problem: 'flower' | 'hair' | 'factor' }) {
   const [mine, setMine] = useState<Result[]>([]);
   const [err, setErr] = useState('');
+  const [hidden, setHidden] = useState(false);
+  const sources = [...BUNDLED, ...mine].filter((r) => r.probabilities).map((r) => ({ id: `${r.problem}-${r.mode}-${r.backend}`, label: `${r.problem === 'hair' ? '髪' : '花'} · ${MODE[r.mode] ?? r.mode} · ${r.backend}`, probabilities: r.probabilities as number[] }));
   const rows = [...BUNDLED, ...mine].filter((r) => problem === 'factor' || r.problem === problem);
   const load = async (files: FileList | null) => {
     if (!files) return; const add: Result[] = [];
@@ -26,7 +29,12 @@ export default function IbmChallenge({ problem }: { problem: 'flower' | 'hair' |
   };
   return (
     <section className="space-y-2 rounded-xl border border-violet-300/30 bg-violet-300/[0.04] p-3 text-xs" data-testid="ibm">
-      <h2 className="text-sm font-semibold">IBM Quantum チャレンジ（無料枠）</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">IBM Quantum チャレンジ（無料枠）</h2>
+        {/* The hidden game: a meta view on the challenge itself — wish on the result you just measured. */}
+        <button type="button" data-testid="hidden-door" onClick={() => setHidden((h) => !h)} title="?" className="font-mono text-[11px] text-violet-300/40 hover:text-violet-200">{'{:}'}</button>
+      </div>
+      {hidden && <QuantumWish sources={sources} />}
       {problem === 'factor' ? <p className="text-slate-400">因数分解のエネルギーは 4 次なので、このチャレンジでは扱いません（髪か花を選んでください）。</p> : (
         <>
           <p className="text-slate-300">見本のメッシュから作った、ブラウザと同じ問い（QAOA 1 層、γ・β も同じ）を Qiskit の回路にして、理想・雑音つきリハーサル・実機で比べます。回路の理想の確率は、ブラウザの計算と 10⁻¹⁰ の桁まで一致することを確かめてあります。{problem === 'hair' ? '髪は隣どうしの結合だけなので、IBM のチップの配線に素直に乗ります（2 量子ビットゲート 18 個）。本命です。' : '花は全部の組（45 組）の結合があり、配線の都合で 2 量子ビットゲートが約 180 個に増えます。雑音で崩れやすい、上級の挑戦です。'}</p>

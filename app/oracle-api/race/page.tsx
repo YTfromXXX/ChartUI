@@ -43,7 +43,11 @@ export default function OracleRace() {
   const sim = useRef<Race>(race); const focusRef = useRef(focus); focusRef.current = focus;
   const seedRef = useRef(1);
 
-  useEffect(() => { setY(loadY()); }, []);
+  useEffect(() => {
+    setY(loadY());
+    // ?focus=0..3 picks the camera car (the quantum-wish roulette hands you over this way).
+    const f = Number(new URLSearchParams(window.location.search).get('focus')); if (Number.isInteger(f) && f >= 0 && f < 4) setFocus(f);
+  }, []);
 
   useEffect(() => {
     const el = mount.current; if (!el) return undefined;

@@ -35,6 +35,7 @@ export const TASKS: Task[] = [
   { id: 'money-romance', title: '予測市場で車がコミカルに動く・金銭的なラブ模様', area: 'ORACLE', status: 'decide', asked: '2026-11-12', note: 'データが足りないので次回以降（オーナー判断）' },
   { id: 'spin-lab', title: 'スピン LAB：.meshmeta から花・髪・因数分解の問いを作り、アニーリングと QAOA（1 層）で解く（古典シミュレーション）', area: '量子', status: 'done', asked: '2026-11-12', route: '/lab/spin' },
   { id: 'qpu-cloud', title: 'IBM Quantum 無料枠のチャレンジ（髪：10 量子ビット QAOA）', area: '量子', status: 'doing', asked: '2026-11-12', note: '回路・理想・雑音つきリハーサルまで済。実機の実行はオーナーの手元で（quantum/README.md）', route: '/lab/spin' },
+  { id: 'q-file', title: '隠しゲーム：量子に願いをかける .q（22 区画ルーレット・2 球モード・リズム署名・emoji 20 進数・願いの鎖）', area: '量子', status: 'done', asked: '2026-11-12', route: '/lab/spin', note: 'IBM チャレンジ欄の {:} から。docs/q-file.md' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
