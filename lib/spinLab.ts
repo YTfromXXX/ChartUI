@@ -108,6 +108,49 @@ export function anneal(p: Problem, opts: { steps?: number; T0?: number; T1?: num
   return { trace, best };
 }
 
+/** Anneal several times from different random starts and keep the best — the simplest way out of a local minimum. */
+export function annealBest(p: Problem, runs = 10, opts: { steps?: number; seed?: number } = {}) {
+  let best: ReturnType<typeof anneal> | null = null; let hits = 0; const target = p.n <= 16 ? exact(p).energy : -Infinity;
+  for (let k = 0; k < runs; k += 1) { const r = anneal(p, { steps: opts.steps ?? 800, seed: (opts.seed ?? 1) * 1000 + k }); if (Math.abs(r.best.energy - target) < 1e-9) hits += 1; if (!best || r.best.energy < best.best.energy) best = r; }
+  return { ...(best as ReturnType<typeof anneal>), runs, hits };
+}
+
+/** QAOA with p layers (γ₁β₁ … γₚβₚ), state-vector simulated. Returns outcome probabilities and ⟨E⟩. */
+export function qaoa(p: Problem, gammas: number[], betas: number[]) {
+  if (p.n > 12) throw new Error('state vector limited to 12 qubits here');
+  const N = 1 << p.n; const E = Array.from({ length: N }, (_, k) => p.energy(bitsOf(k, p.n)));
+  const scale = Math.max(1e-9, Math.max(...E.map(Math.abs)));
+  const re = new Float64Array(N).fill(1 / Math.sqrt(N)); const im = new Float64Array(N);
+  gammas.forEach((gamma, layer) => {
+    for (let k = 0; k < N; k += 1) { const ph = -gamma * (E[k] / scale); const c = Math.cos(ph); const s = Math.sin(ph); const r0 = re[k]; re[k] = r0 * c - im[k] * s; im[k] = r0 * s + im[k] * c; }
+    const c = Math.cos(betas[layer]); const sn = Math.sin(betas[layer]);
+    for (let q = 0; q < p.n; q += 1) { const bit = 1 << q; for (let k = 0; k < N; k += 1) if (!(k & bit)) { const j = k | bit;
+      const ar = re[k]; const ai = im[k]; const br = re[j]; const bi = im[j];
+      re[k] = c * ar + sn * bi; im[k] = c * ai - sn * br; re[j] = c * br + sn * ai; im[j] = c * bi - sn * ar; } }
+  });
+  const prob = Array.from({ length: N }, (_, k) => re[k] ** 2 + im[k] ** 2);
+  return { prob, expect: prob.reduce((a, pk, k) => a + pk * E[k], 0), E };
+}
+
+/**
+ * Tune p layers: start every layer from the best one-layer angles, then coordinate descent with a
+ * shrinking step (what the classical optimiser beside a QPU does). `evals` counts circuit runs —
+ * on real hardware each one is a job with many shots, which is what the cost estimate multiplies.
+ */
+export function tuneLayers(p: Problem, layers: number) {
+  const one = tuneQaoa(p, 12); let g = Array(layers).fill(0).map((_, i) => one.gamma * (i + 1) / layers); let b = Array(layers).fill(0).map((_, i) => one.beta * (1 - i / (layers + 1)));
+  let best = qaoa(p, g, b).expect; let evals = 600; let step = 0.4;
+  while (step > 0.01 && evals < 3000) { // capped: each evaluation would be a paid job on hardware
+    let improved = false;
+    for (let i = 0; i < 2 * layers; i += 1) for (const d of [step, -step]) {
+      const g2 = [...g]; const b2 = [...b]; if (i < layers) g2[i] += d; else b2[i - layers] += d;
+      const e = qaoa(p, g2, b2).expect; evals += 1; if (e < best - 1e-12) { best = e; g = g2; b = b2; improved = true; }
+    }
+    if (!improved) step /= 2;
+  }
+  return { gammas: g, betas: b, expect: best, evals };
+}
+
 /** One QAOA layer, state-vector simulated. Returns probabilities of all 2ⁿ outcomes and ⟨E⟩. */
 export function qaoa1(p: Problem, gamma: number, beta: number) {
   if (p.n > 12) throw new Error('state vector limited to 12 qubits here');
