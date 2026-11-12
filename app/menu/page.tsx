@@ -91,6 +91,7 @@ export default function WhiteoutMenuPage() {
             <Link href="/lab/activist" className="hover:text-black">アクティビスト双六</Link>
             <Link href="/oracle-api/race" className="hover:text-black">ORACLE レース中継</Link>
             <Link href="/lab/spin" className="hover:text-black">スピン（花と髪）</Link>
+            <Link href="/lab/dual-slot" className="hover:text-black">Dual・パチスロ</Link>
             <Link href="/lab/backlog" className="hover:text-black">やることボード</Link>
             <Link href="/famidance" className="hover:text-black">ファミダンス</Link>
           </nav>

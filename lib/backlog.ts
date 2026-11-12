@@ -39,6 +39,7 @@ export const TASKS: Task[] = [
   { id: 'diag-popup', title: 'CELL CONVERGENCE // DIAGNOSTIC をヘッダーの一番上にポップアップ（♥ DIAG）・retest で答えの遅れを計測', area: 'Cure-API', status: 'done', asked: '2026-11-12', route: '/cure-api' },
   { id: 'designer-gene', title: '肖像アイコンのデザイナーズベイビー用の遺伝子の型（7 座・A〜D）と、EX = 0 の誕生', area: 'Cure-API', status: 'done', asked: '2026-11-12', route: '/cure-api' },
   { id: 'promotion-qubits', title: '昇格を 2 量子ビットの測定に（00 Q・01 R・10 B・11 N）、答えが届くまで「昇格中」', area: 'プロンプトチェス', status: 'todo', asked: '2026-11-12' },
+  { id: 'dual-slot', title: 'Dual・パチスロ（慎重に）：払い出しのないスロットを双六のサイコロに（ポート 3・8・15・20・21・22）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '慎重に作る約束は docs/design-rules.md の 8 章' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
@@ -61,7 +62,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };
