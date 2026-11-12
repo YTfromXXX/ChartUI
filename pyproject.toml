@@ -1,0 +1,25 @@
+# Packaging draft for the Python core. Distribution name: cure-oracle ("cure" on PyPI belongs to
+# another project). Install from a checkout with:  pip install ".[sign]"
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cure-oracle"
+version = "0.1.0"
+description = "ChartUI / METADOGG ORACLE core: knot crossings, .meshmeta byte pointers and signatures, cure-initial/1 contract"
+readme = "docs/packaging.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+sign = ["cryptography>=42"]
+api = ["fastapi>=0.110", "pydantic>=2"]
+
+[project.scripts]
+cure = "cure_oracle.cli:main"
+
+[tool.setuptools]
+packages = ["cure_oracle"]
+py-modules = ["knot_crossings", "mesh_meta", "cure_initial"]
