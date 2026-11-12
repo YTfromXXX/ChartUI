@@ -51,7 +51,7 @@ export type Transform = { label: string; apply: (s: number, u: number) => number
  */
 export const TRANSFORMS: Record<number, [Transform, Transform]> = {
   3: [{ label: '奇数', apply: (s) => s, note: 'そのまま' }, { label: '偶数', apply: (s) => 7 - s, note: '鏡写し（7 − 出目）' }],
-  8: [{ label: 'リトル', apply: (_s, u) => (u < 0.5 ? 3 : 4), note: 'いつも 3 か 4（交互）' }, { label: 'ネフェリム', apply: (_s, u) => (u < 0.5 ? 1 : 6), note: '1 か 6 の大ジャンプ' }],
+  8: [{ label: 'リトル', apply: (_s, u) => (u < 0.5 ? 3 : 4), note: 'いつも 3 か 4（交互）' }, { label: 'ネフェリム', apply: (_s, u) => (u < 0.5 ? 2 : 5), note: '2 か 5 の大ジャンプ（標準の翼）' }],
   15: [{ label: '軍服パターン', apply: (s) => s, note: 'そのまま' }, { label: 'セーラー服', apply: (s) => 7 - s, note: '鏡写し' }],
   20: [{ label: 'King', apply: (s) => s, note: 'そのまま' }, { label: 'Queen', apply: (s) => 7 - s, note: '鏡写し' }],
   22: [{ label: 'バイク魂', apply: (s) => s, note: '陸路：そのまま' }, { label: '海賊戦線', apply: (s) => 7 - s, note: '海路：鏡写し' }],
@@ -62,6 +62,8 @@ export const TRANSFORMS: Record<number, [Transform, Transform]> = {
 // 3.5: the setting only chooses how wide the landings spread. There is no multiplier, no cashing
 // out and no crash — the plane always lands; all that is decided is the square.
 export const WINGSPANS = [1.5, 2.5] as const;
+/** The standard wing: Nephilim lands 2 or 5 squares ahead. */
+export const DEFAULT_SPAN = 1.5;
 export type Wingspan = (typeof WINGSPANS)[number];
 export function aviatorPair(span: Wingspan): [Transform, Transform] {
   return [
@@ -99,7 +101,7 @@ export function landEffect(square: number, oddReturn = true): { to: number; text
 
 export type Spin = { stops: [number, number, number]; line: Line; rolled: number; moved: number; dual: string | null; from: number; to: number; effect: string; prophecy: boolean };
 /** One spin: draw the stops first, then read everything off them. `u` are uniforms in [0, 1). */
-export function spin(square: number, picks: Record<number, 0 | 1>, u: [number, number, number, number], spinIndex: number, span: Wingspan = 2.5): Spin {
+export function spin(square: number, picks: Record<number, 0 | 1>, u: [number, number, number, number], spinIndex: number, span: Wingspan = DEFAULT_SPAN): Spin {
   const stops = u.slice(0, 3).map((x) => Math.floor(x * STOPS)) as [number, number, number];
   const line = lineAt(stops); const rolled = stepsOf(line); const port = portAt(square).no;
   const t = transformsFor(span)[port]?.[picks[port] ?? 0];

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AviatorPopup from '@/components/dualSlot/AviatorPopup';
-import { BREAK_EVERY, SPIN_MS, SQUARES, STOPS, STRIPS, distribution, portAt, spin, transformStats, transformsFor, type Spin, type Wingspan } from '@/lib/dualSlot';
+import { BREAK_EVERY, DEFAULT_SPAN, SPIN_MS, SQUARES, STOPS, STRIPS, distribution, portAt, spin, transformStats, transformsFor, type Spin, type Wingspan } from '@/lib/dualSlot';
 
 const RULES = [
   'お金・メダル・オッズ・換金はありません。結果は双六の駒が何マス進むかだけです。',
@@ -47,7 +47,7 @@ export default function DualSlot() {
   const [started] = useState(() => Date.now());
   const [onBreak, setOnBreak] = useState(false);
   const [reveal, setReveal] = useState(6);
-  const [span, setSpan] = useState<Wingspan>(2.5);
+  const [span, setSpan] = useState<Wingspan>(DEFAULT_SPAN);
   const [aviator, setAviator] = useState(false);
   const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
   const [reduce, setReduce] = useState(false);
