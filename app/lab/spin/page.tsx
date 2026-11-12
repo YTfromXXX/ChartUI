@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import IbmChallenge from '@/components/spin/IbmChallenge';
 import { readStl } from '@/lib/meshMeta';
 import { anneal, annealBest, candidatesFrom, exact, factorProblem, flowerProblem, hairProblem, qaoa, qaoa1, sampleCandidates, toBits, tuneLayers, tuneQaoa, type Candidate, type Problem } from '@/lib/spinLab';
 import { AS_OF, PRICES, estimate, planFor, yen } from '@/lib/quantumCost';
@@ -162,6 +163,8 @@ export default function SpinLab() {
         <ShorPanel />
 
         <CostPanel plan={plan} setPlan={setPlan} />
+
+        <IbmChallenge problem={kind} />
 
         <section className="grid gap-3 text-xs md:grid-cols-2">
           <div className="rounded-xl border border-white/10 p-3">

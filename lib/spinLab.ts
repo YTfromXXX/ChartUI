@@ -175,3 +175,17 @@ export function tuneQaoa(p: Problem, grid = 16) {
   return best;
 }
 export const toBits = bitsOf;
+
+/**
+ * Read a quadratic energy back as QUBO coefficients: E(x) = offset + Σ aᵢxᵢ + Σ bᵢⱼxᵢxⱼ.
+ * Works for flower and hair (both quadratic); `exact` reports whether every one of the 2ⁿ states
+ * matches, so a higher-order problem (factoring) is caught instead of silently mis-encoded.
+ */
+export function quboOf(p: Problem) {
+  const n = p.n; const e0 = p.energy(Array(n).fill(0)); const one = (i: number) => { const s = Array(n).fill(0); s[i] = 1; return p.energy(s); };
+  const lin = Array.from({ length: n }, (_, i) => one(i) - e0); const quad: [number, number, number][] = [];
+  for (let i = 0; i < n; i += 1) for (let j = i + 1; j < n; j += 1) { const s = Array(n).fill(0); s[i] = 1; s[j] = 1; const b = p.energy(s) - one(i) - one(j) + e0; if (Math.abs(b) > 1e-12) quad.push([i, j, b]); }
+  let exactOk = n <= 16;
+  if (exactOk) for (let k = 0; k < 1 << n; k += 1) { const s = bitsOf(k, n); let e = e0; for (let i = 0; i < n; i += 1) if (s[i]) e += lin[i]; for (const [i, j, b] of quad) if (s[i] && s[j]) e += b; if (Math.abs(e - p.energy(s)) > 1e-9) { exactOk = false; break; } }
+  return { offset: e0, linear: lin, quadratic: quad, exact: exactOk };
+}

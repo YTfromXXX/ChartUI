@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:backend": "python -m pytest",
     "test": "npm run typecheck && npm run test:backend",
-    "test:meshmeta": "node scripts/check-meshmeta-v2.mjs"
+    "test:meshmeta": "node scripts/check-meshmeta-v2.mjs",
+    "quantum:export": "node scripts/export-spin-problems.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.2",

@@ -34,7 +34,7 @@ export const TASKS: Task[] = [
   { id: 'news-quiz', title: 'ニュースの四択クイズ（NEWS 現象）＋ポートフォリオ区分の予測市場', area: 'ORACLE', status: 'todo', asked: '2026-11-12', note: 'レースの「次のラップのトップは？」が最初の形' },
   { id: 'money-romance', title: '予測市場で車がコミカルに動く・金銭的なラブ模様', area: 'ORACLE', status: 'decide', asked: '2026-11-12', note: 'データが足りないので次回以降（オーナー判断）' },
   { id: 'spin-lab', title: 'スピン LAB：.meshmeta から花・髪・因数分解の問いを作り、アニーリングと QAOA（1 層）で解く（古典シミュレーション）', area: '量子', status: 'done', asked: '2026-11-12', route: '/lab/spin' },
-  { id: 'qpu-cloud', title: '本物の QPU（クラウド）での実行', area: '量子', status: 'decide', asked: '2026-11-12', note: 'どのサービスか・費用・鍵' },
+  { id: 'qpu-cloud', title: 'IBM Quantum 無料枠のチャレンジ（髪：10 量子ビット QAOA）', area: '量子', status: 'doing', asked: '2026-11-12', note: '回路・理想・雑音つきリハーサルまで済。実機の実行はオーナーの手元で（quantum/README.md）', route: '/lab/spin' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
