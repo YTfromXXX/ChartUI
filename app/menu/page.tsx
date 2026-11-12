@@ -85,6 +85,7 @@ export default function WhiteoutMenuPage() {
             <Link href="/lab/crystal-baby" className="hover:text-black">クリスタルベイビー対決</Link>
             <Link href="/lab/prompt-chess" className="hover:text-black">プロンプトチェス</Link>
             <Link href="/lab/honeycomb-punish" className="hover:text-black">ハニカムパニッシュ</Link>
+            <Link href="/lab/library/entrance" className="hover:text-black">図書館の入口</Link>
             <Link href="/famidance" className="hover:text-black">ファミダンス</Link>
           </nav>
         </header>

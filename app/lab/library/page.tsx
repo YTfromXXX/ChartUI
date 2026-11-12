@@ -15,6 +15,7 @@ export default function LibraryPage() {
           </div>
           <nav className="flex gap-3 text-xs">
             <Link href="/lab/colorcube" className="hover:underline">← 博物館</Link>
+            <Link href="/lab/library/entrance" className="hover:underline">入口（望遠鏡の入場）</Link>
             <Link href="/menu" className="hover:underline">ホワイトアウト版</Link>
           </nav>
         </header>

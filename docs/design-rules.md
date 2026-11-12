@@ -13,8 +13,10 @@
 | 隣り合う色 | 色相を 90° 以上離す | `checkRules`、`checkEdition` |
 | 意味の色が優先 | 速度の帯（緑・黄・赤）など意味のある色は、テーマの色より優先 | `lib/engineMenu.ts` |
 | 時間は実時間で | アニメーションはフレーム数でなく経過時間で進める（`1 − e^(−dt·rate)`）。dt は 0 以上に丸める | `app/lab/knot-ladder`、`app/lab/card-slots` |
+| ドリーズームは画面だけ | VR / MR の中と、動きを減らす設定のときはしない（酔いを防ぐ） | `app/lab/library/entrance` |
 | 速すぎる回転は遅く見せる | 実際の回転数をそのまま描かない（例：ボールの縫い目は 40 分の 1） | `app/lab/honeycomb-punish` |
 | 合成データと明記 | 実データでない価格は画面に「合成データ」と書く | 各 LAB |
+| 実在の人物を描くとき | 写真や実物の表紙を使わず、自分で描いた肖像（頭・肩・イニシャル）と表紙にする | `app/lab/library/entrance` |
 | 遊びと本物を分ける | 「量子暗号」風の遊びは、画面に「本物の暗号ではない」と書く。本物の改ざん検出は署名で行う | `lib/smokeCandle.ts`（`basisGame`）、`mesh_meta.py`（`sign_meshmeta`） |
 
 ## 2. 色の規則
