@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:backend": "python -m pytest",
-    "test": "npm run typecheck && npm run test:backend"
+    "test": "npm run typecheck && npm run test:backend",
+    "test:meshmeta": "node scripts/check-meshmeta-v2.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.2",

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url)); const lib = join(here, '..', '..', 'lib');
-export const MODULES = { strip: 'slotStrip', knots: 'knotCrossings', ladder: 'knotLadder', meshmeta: 'meshMeta', colour: 'smokeCandle', glass: 'glassKnot', slots: 'cardSlots', fx: 'fxOrientation' };
+export const MODULES = { strip: 'slotStrip', knots: 'knotCrossings', ladder: 'knotLadder', meshmeta: 'meshMeta', meshmeta2: 'meshMetaV2', colour: 'smokeCandle', glass: 'glassKnot', slots: 'cardSlots', fx: 'fxOrientation' };
 rmSync(join(here, 'src'), { recursive: true, force: true }); rmSync(join(here, 'dist'), { recursive: true, force: true }); mkdirSync(join(here, 'src'));
 // Node ESM needs file extensions on relative imports: './knotCrossings' → './knotCrossings.js'.
 for (const f of Object.values(MODULES)) writeFileSync(join(here, 'src', `${f}.ts`), readFileSync(join(lib, `${f}.ts`), 'utf8').replace(/from '(\.\/[\w-]+)'/g, "from '$1.js'"));

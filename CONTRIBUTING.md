@@ -51,7 +51,7 @@ Emoji are welcome **in data and on screen**, but not in identifiers:
 
 - **Yes:** data fields such as the `.meshmeta` pointers `⏸️` (start) and `▶️` (length), UI labels, docs.
 - **No:** function names, variable names, file names, branch names. They are hard to search and type, and some tools mangle them.
-- Save files as UTF-8. When emoji are compared or hashed, normalise first (NFC). Remember that `⏸️` is two code points (U+23F8 U+FE0F).
+- Save files as UTF-8. Before hashing, strings are normalised to NFC — but NFC does not add or remove U+FE0F, so `⏸` (U+23F8) and `⏸️` (U+23F8 U+FE0F) stay different. Use the exact forms listed in the `.meshmeta` `emoji` table (see `docs/meshmeta-v2.md`).
 - Anyone can propose emoji in data or docs through a pull request. Maintainers review it like any other change.
 
 ## Data and money

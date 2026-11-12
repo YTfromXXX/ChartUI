@@ -116,3 +116,11 @@
 - ゲーム機の枠（オリジナルのデザインでリブート、ORACLE-80）：十字キーでカメラの車、▼で新しいレース、A で配信モード（画面だけを全面に）、B で文字の表示。
 - 配信：OBS でこのページを取り込み、YouTube Live や Discord へ（ページ自体は配信しない）。
 - 次のラップのトップを 4 択で予想（予測市場の最初の形）。プレイヤー Y（パーマネント）の予想と的中をこのブラウザに記録。
+
+## .meshmeta v2（2026-11-12）
+
+- 仕様：`docs/meshmeta-v2.md`。実装：`meshmeta_v2.py` と `lib/meshMetaV2.ts`（どちらも依存なし。Ed25519 だけは cryptography / Web Crypto）。
+- JCS（RFC 8785）＋NFC の正規化、署名の配列（Ed25519 を検証、EIP-712・耐量子は予約）、三角形の記録ごとの Keccak-256 Merkle 木（OpenZeppelin と同じソート済みペア、位置入りの二重ハッシュの葉）と、A〜D の各ポインターの証明。
+- Python が作った固定データ（`tests/fixtures/meshmeta_v2_tetra.json`）を TS がバイト単位で再現する：`npm run test:meshmeta`。
+- 作業中に、v1 の STL 書き出しで −0.0 の符号が Python と TS でずれ、1 バイト違う STL になる不具合を見つけて直した。
+- 次：テストネットの検証コントラクト（根の登録と三角形 1 個の証明）、ブラウザのウォレットでの EIP-712 署名。

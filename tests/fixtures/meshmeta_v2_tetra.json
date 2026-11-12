@@ -1,0 +1,337 @@
+{
+ "vertices": [
+  [
+   1,
+   1,
+   1
+  ],
+  [
+   1,
+   -1,
+   -1
+  ],
+  [
+   -1,
+   1,
+   -1
+  ],
+  [
+   -1,
+   -1,
+   1
+  ],
+  [
+   4,
+   0,
+   0
+  ],
+  [
+   6,
+   0,
+   0
+  ],
+  [
+   6,
+   0,
+   2
+  ],
+  [
+   4,
+   0,
+   2
+  ],
+  [
+   5,
+   2,
+   1
+  ]
+ ],
+ "triangles": [
+  [
+   0,
+   1,
+   2
+  ],
+  [
+   0,
+   3,
+   1
+  ],
+  [
+   0,
+   2,
+   3
+  ],
+  [
+   1,
+   3,
+   2
+  ],
+  [
+   4,
+   5,
+   8
+  ],
+  [
+   5,
+   6,
+   8
+  ],
+  [
+   6,
+   7,
+   8
+  ],
+  [
+   7,
+   4,
+   8
+  ],
+  [
+   4,
+   6,
+   5
+  ],
+  [
+   4,
+   7,
+   6
+  ]
+ ],
+ "stl_hex": "43686172745549206d6573685f6d6574610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a0000003acd133f3acd133f3acd13bf0000803f0000803f0000803f0000803f000080bf000080bf000080bf0000803f000080bf00003acd133f3acd13bf3acd133f0000803f0000803f0000803f000080bf000080bf0000803f0000803f000080bf000080bf00003acd13bf3acd133f3acd133f0000803f0000803f0000803f000080bf0000803f000080bf000080bf000080bf0000803f00003acd13bf3acd13bf3acd13bf0000803f000080bf000080bf000080bf000080bf0000803f000080bf0000803f000080bf0000000000002ef9e4be2ef9643f0000804000000000000000000000c04000000000000000000000a040000000400000803f00002ef964bf2ef9e4be000000000000c04000000000000000000000c04000000000000000400000a040000000400000803f0000000000002ef9e4be2ef964bf0000c04000000000000000400000804000000000000000400000a040000000400000803f00002ef9643f2ef9e4be000000000000804000000000000000400000804000000000000000000000a040000000400000803f0000000000000000803f000000000000804000000000000000000000c04000000000000000400000c04000000000000000000000000000000000803f000000000000804000000000000000000000804000000000000000400000c04000000000000000400000",
+ "meta": {
+  "version": "2.0",
+  "emoji": {
+   "⏸️": "start",
+   "▶️": "length"
+  },
+  "stl_sha256": "070ff92984fd417e5ffd3940eb6cc674da8a200bcea3a5bce11c1f192fff8015",
+  "triangles": 10,
+  "merkle": {
+   "hash": "keccak256",
+   "leaf": "keccak256(keccak256(uint256 index ++ record50))",
+   "node": "sorted-pair",
+   "root": "0x6d5a566b7817fb2917456c8d54db5f52d11f88f11278c411231525eeacde3722"
+  },
+  "pointers": [
+   {
+    "part": "MeshPart_01",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "0.828",
+    "index": 8,
+    "start": 484,
+    "length": 50,
+    "vertices": [
+     496,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x01F0\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x822f0ddb302aa5e2f24fa47e9c87ed98f5994befcdb4a09b1eb1cfdf6f1691fe",
+     "0x587ea7abe2a1b45a2e86f082df0a064acb07c3e8973412eacce63f751f5911ff"
+    ]
+   },
+   {
+    "part": "MeshPart_01",
+    "rank": "No.2",
+    "label": "B",
+    "quality": "0.828",
+    "index": 9,
+    "start": 534,
+    "length": 50,
+    "vertices": [
+     546,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x0222\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0xe764ae286de8eba939fa88fcc988fde309f3641ce12afc946a2103b54a6d34d4",
+     "0x587ea7abe2a1b45a2e86f082df0a064acb07c3e8973412eacce63f751f5911ff"
+    ]
+   },
+   {
+    "part": "MeshPart_02",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "1.000",
+    "index": 0,
+    "start": 84,
+    "length": 50,
+    "vertices": [
+     96,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x0060\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x058739064022e78ce509d3e90e6958ecef96d18d0c40ee019c335fe32ce2b7b3",
+     "0xedcf5b87aacb10dbcad7c6acf49acf3b8294ed1e94ba993fcf1eb7a110797132",
+     "0x440ae06a84c3666caf08a09d365388ff813f4954b02a640bc299e0d2c92e13ab",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_03",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "1.000",
+    "index": 1,
+    "start": 134,
+    "length": 50,
+    "vertices": [
+     146,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x0092\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x380d6f22ad5a00ae07bcda373536adfab59c1a8995e132ae41825b7aacdd3ea7",
+     "0xedcf5b87aacb10dbcad7c6acf49acf3b8294ed1e94ba993fcf1eb7a110797132",
+     "0x440ae06a84c3666caf08a09d365388ff813f4954b02a640bc299e0d2c92e13ab",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_04",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "1.000",
+    "index": 2,
+    "start": 184,
+    "length": 50,
+    "vertices": [
+     196,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x00C4\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x5c15f1183e274838578752cabdd89eb643efa03ded1713c2c0257a7774973d85",
+     "0x15184c889ca1f50cb9247e2df5e8645766c43f72ce0592f33b00153a5929e11f",
+     "0x440ae06a84c3666caf08a09d365388ff813f4954b02a640bc299e0d2c92e13ab",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_05",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "1.000",
+    "index": 3,
+    "start": 234,
+    "length": 50,
+    "vertices": [
+     246,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x00F6\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x3690df0de2ad072c8ae2d4fac0486824dbee5e9c62fdb60de2f20c90296de6bd",
+     "0x15184c889ca1f50cb9247e2df5e8645766c43f72ce0592f33b00153a5929e11f",
+     "0x440ae06a84c3666caf08a09d365388ff813f4954b02a640bc299e0d2c92e13ab",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_06",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "0.966",
+    "index": 4,
+    "start": 284,
+    "length": 50,
+    "vertices": [
+     296,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x0128\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x7d82a78ed36a5a059bd3d32ec879a83b520bcc4c994fe58a408f72d764fe0f59",
+     "0x77cf478c6e6597a05126cd7d1accbe2708396514322c8c362b2b1453adb752e7",
+     "0x9c3a486f7270660c7cfb9908c8dacefb250f50bbd62cd7d8401e043144e45bfa",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_07",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "0.966",
+    "index": 5,
+    "start": 334,
+    "length": 50,
+    "vertices": [
+     346,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x015A\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0x7e09f572e28f33c82df7a82e16201bd414ddb62af1709b920f2a7e8eba550416",
+     "0x77cf478c6e6597a05126cd7d1accbe2708396514322c8c362b2b1453adb752e7",
+     "0x9c3a486f7270660c7cfb9908c8dacefb250f50bbd62cd7d8401e043144e45bfa",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_08",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "0.966",
+    "index": 6,
+    "start": 384,
+    "length": 50,
+    "vertices": [
+     396,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x018C\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0xacdfe5b0e72e40c2ae6a61dd1ef39c80f5b809d09180f2db8ecefa3752bcb876",
+     "0x0e4b2fe0ad837aa02ffacfa0f42d5f3cec4c5edf2f7add945326564f15df14df",
+     "0x9c3a486f7270660c7cfb9908c8dacefb250f50bbd62cd7d8401e043144e45bfa",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   },
+   {
+    "part": "MeshPart_09",
+    "rank": "No.1",
+    "label": "A",
+    "quality": "0.966",
+    "index": 7,
+    "start": 434,
+    "length": 50,
+    "vertices": [
+     446,
+     36
+    ],
+    "data": "[⏸️ (バイト): \"0x01BE\", ▶️ (バイト): \"36\"]",
+    "proof": [
+     "0xec63e279f5b120adfdb1540e78a555e15371044d989728861ee03a9d72304103",
+     "0x0e4b2fe0ad837aa02ffacfa0f42d5f3cec4c5edf2f7add945326564f15df14df",
+     "0x9c3a486f7270660c7cfb9908c8dacefb250f50bbd62cd7d8401e043144e45bfa",
+     "0x99ded51381d6404146ea6f59c039504d70a07be6f2b8c584b4f94b6d02fde0ec"
+    ]
+   }
+  ],
+  "signatures": [
+   {
+    "alg": "Ed25519",
+    "signer": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "sig": "bf164105d0607009a51001aa4caba389d2303f3a6fceadc0dcb9e25874f796a416b4f121eb52b09eb3257831ea1722485686f15771c6c74679e487a88b4e4605"
+   }
+  ]
+ },
+ "signing_sha256": "d3ceae055cab3703abd780486b2124ac2834df14c0aac8e59db3ed3650d5900c",
+ "jcs_case": {
+  "b": 1,
+  "a": "⏸️",
+  "é": "é",
+  "😀": "smile",
+  "": "private use",
+  "list": [
+   true,
+   null,
+   -3,
+   "▶️"
+  ]
+ },
+ "jcs_expected": "{\"a\":\"⏸️\",\"b\":1,\"list\":[true,null,-3,\"▶️\"],\"é\":\"é\",\"😀\":\"smile\",\"\":\"private use\"}"
+}

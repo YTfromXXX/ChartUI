@@ -143,8 +143,10 @@ def write_stl(vertices: Sequence[Vec], triangles: Sequence[Tri], header: bytes =
     out += struct.pack("<I", len(triangles))
     for a, b, c in triangles:
         p, q, r = vertices[a], vertices[b], vertices[c]
-        out += struct.pack("<3f", *_unit_normal(p, q, r))
-        out += struct.pack("<9f", *p, *q, *r)
+        # "+ 0.0" turns −0.0 into +0.0, so Python and JS write the same bytes (the sign of zero
+        # otherwise depends on the order of operations in each language).
+        out += struct.pack("<3f", *(c + 0.0 for c in _unit_normal(p, q, r)))
+        out += struct.pack("<9f", *(c + 0.0 for c in (*p, *q, *r)))
         out += b"\0\0"
     return bytes(out)
 

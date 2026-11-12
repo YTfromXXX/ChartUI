@@ -22,4 +22,4 @@ cure = "cure_oracle.cli:main"
 
 [tool.setuptools]
 packages = ["cure_oracle"]
-py-modules = ["knot_crossings", "mesh_meta", "cure_initial"]
+py-modules = ["knot_crossings", "mesh_meta", "meshmeta_v2", "cure_initial"]

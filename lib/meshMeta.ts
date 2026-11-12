@@ -69,7 +69,7 @@ export function writeStl(vs: V3[], ts: Tri[]): ArrayBuffer {
   dv.setUint32(80, ts.length, true);
   ts.forEach(([a, b, c], i) => {
     const o = 84 + STL_STRIDE * i; const floats = [...unitNormal(vs[a], vs[b], vs[c]), ...vs[a], ...vs[b], ...vs[c]];
-    floats.forEach((f, k) => dv.setFloat32(o + 4 * k, f, true));
+    floats.forEach((f, k) => dv.setFloat32(o + 4 * k, f + 0, true)); // f + 0 turns −0 into +0, matching mesh_meta.py byte for byte
   });
   return buf;
 }
