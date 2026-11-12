@@ -1,8 +1,10 @@
 # chartui
 
-> **Draft README (v0.1.0, for reserving the name).** Titles and section layout are still under discussion — see "Open questions" at the bottom.
+> **Draft README (v0.1.0, for reserving the name).** The section layout may still change — see "Open questions" at the bottom.
 
-Geometry, colour rules and file formats behind **ChartUI**: a 22-angle glass box for market charts, knots read from candlesticks, signed mesh pointers, and design rules you can check with code. No runtime dependencies, works in the browser and in Node.
+**22 angles, one glass box — geometry and design rules for market charts.**
+
+The geometry, colour rules and file formats behind **ChartUI**: a 22-angle glass box for market charts, knots read from candlesticks, signed mesh pointers, and design rules you can check with code. No runtime dependencies, works in the browser and in Node.
 
 ```bash
 npm install chartui
@@ -66,12 +68,14 @@ strip.slotAngle(5);           // which camera angle slot 5 belongs to
 
 0.1.0 is an early release to reserve the name. The API may change before 1.0. Prices in the examples are synthetic; nothing here is trading advice.
 
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/YTfromXXX/ChartUI/blob/main/CONTRIBUTING.md). There are issue templates for a **new knot** and a **new design rule**, and a starter for a new LAB page in `docs/templates/lab-page/`.
+
 ## License
 
 MIT
 
 ## Open questions (to settle before 1.0)
 
-- Title and tagline.
 - Whether React components ship as `chartui/react`.
-- How contributions are templated (issue and PR templates, a "new knot" template, a "new design rule" template).

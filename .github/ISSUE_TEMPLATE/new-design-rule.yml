@@ -1,0 +1,28 @@
+name: New design rule
+description: Propose a design rule for docs/design-rules.md, with a number and the code that checks it.
+title: "[rule] "
+labels: ["design-rule"]
+body:
+  - type: markdown
+    attributes:
+      value: A rule is only added when code can check it. Rules about safety (flashing, contrast, reduced motion) cannot be weakened by a page.
+  - type: dropdown
+    id: section
+    attributes:
+      label: Section
+      options: ["1. Common (all pages)", "2. Colour", "3. Numbers", "4. Physics and geometry", "5. Mente × FamiDance", "6. Prompts"]
+    validations: { required: true }
+  - type: input
+    id: rule
+    attributes: { label: Rule, placeholder: "Neighbouring hues are at least 90° apart" }
+    validations: { required: true }
+  - type: input
+    id: number
+    attributes: { label: The number, placeholder: "≥ 90°" }
+    validations: { required: true }
+  - type: input
+    id: check
+    attributes: { label: Where the code checks it, placeholder: "lib/smokeCandle.ts → checkEdition" }
+  - type: textarea
+    id: why
+    attributes: { label: Why }

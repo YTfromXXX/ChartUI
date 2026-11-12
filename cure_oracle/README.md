@@ -1,6 +1,8 @@
 # cure-oracle
 
-> **Draft README (v0.1.0, for reserving the name).** Titles and section layout are still under discussion.
+> **Draft README (v0.1.0, for reserving the name).** The section layout may still change.
+
+**Signed byte pointers for meshes, knots and market contracts.**
 
 The Python core of **ChartUI / METADOGG ORACLE**. It reads knots from drawn curves, cuts meshes into parts and points at their best triangles byte by byte (`.meshmeta`), signs those pointers so nobody can change them unnoticed, and serves the `cure-initial/1` contract.
 
@@ -50,6 +52,10 @@ assert mm.verify_meshmeta(stl, signed)
 ## Status
 
 0.1.0 reserves the name; the API may change before 1.0. Nothing here is trading or investment advice.
+
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/YTfromXXX/ChartUI/blob/main/CONTRIBUTING.md).
 
 ## License
 
