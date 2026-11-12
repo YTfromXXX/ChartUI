@@ -16,6 +16,8 @@ export const TOO_MANY = 7;
 
 const RESERVED = [/\.example$/i, /\.invalid$/i, /\.test$/i, /\.localhost$/i, /^example\.(com|net|org)$/i];
 const EMAIL = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/;
+/** An address anywhere in the line ("mail: \"x@y.com\"", "ab: x@y.com", "<x@y.com>"), so a prefix cannot smuggle a real one through. */
+const EMAIL_INSIDE = /[^\s@"'<>()[\],;:]+@([^\s@"'<>()[\],;:]+\.[^\s@"'<>()[\],;:]+)/;
 
 export type Entry =
   | { kind: 'fictional'; input: string; address: string }
@@ -40,6 +42,8 @@ export function classify(line: string): Entry | null {
   if (email) {
     return RESERVED.some((r) => r.test(email[1])) ? { kind: 'fictional', input, address: input.toLowerCase() } : { kind: 'real', masked: maskEmail(input) };
   }
+  const inside = input.match(EMAIL_INSIDE);
+  if (inside && !RESERVED.some((r) => r.test(inside[1]))) return { kind: 'real', masked: maskEmail(inside[0]) };
   const slug = slugify(input);
   return slug ? { kind: 'fictional', input, address: `${slug}@${FICTIONAL_DOMAIN}` } : { kind: 'invalid', input };
 }

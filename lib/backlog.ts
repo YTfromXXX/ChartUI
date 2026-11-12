@@ -36,6 +36,9 @@ export const TASKS: Task[] = [
   { id: 'spin-lab', title: 'スピン LAB：.meshmeta から花・髪・因数分解の問いを作り、アニーリングと QAOA（1 層）で解く（古典シミュレーション）', area: '量子', status: 'done', asked: '2026-11-12', route: '/lab/spin' },
   { id: 'qpu-cloud', title: 'IBM Quantum 無料枠のチャレンジ（髪：10 量子ビット QAOA）', area: '量子', status: 'doing', asked: '2026-11-12', note: '回路・理想・雑音つきリハーサルまで済。実機の実行はオーナーの手元で（quantum/README.md）', route: '/lab/spin' },
   { id: 'q-file', title: '隠しゲーム：量子に願いをかける .q（22 区画ルーレット・2 球モード・リズム署名・emoji 20 進数・願いの鎖）', area: '量子', status: 'done', asked: '2026-11-12', route: '/lab/spin', note: 'IBM チャレンジ欄の {:} から。docs/q-file.md' },
+  { id: 'diag-popup', title: 'CELL CONVERGENCE // DIAGNOSTIC をヘッダーの一番上にポップアップ（♥ DIAG）・retest で答えの遅れを計測', area: 'Cure-API', status: 'done', asked: '2026-11-12', route: '/cure-api' },
+  { id: 'designer-gene', title: '肖像アイコンのデザイナーズベイビー用の遺伝子の型（7 座・A〜D）と、EX = 0 の誕生', area: 'Cure-API', status: 'done', asked: '2026-11-12', route: '/cure-api' },
+  { id: 'promotion-qubits', title: '昇格を 2 量子ビットの測定に（00 Q・01 R・10 B・11 N）、答えが届くまで「昇格中」', area: 'プロンプトチェス', status: 'todo', asked: '2026-11-12' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
