@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import MeshMetaV2Panel from '@/components/mesh/MeshMetaV2Panel';
 import { LABELS, analyse, readPointer, readStl, sampleScene, type Analysis, type V3 } from '@/lib/meshMeta';
 
 const glass = 'rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur';
@@ -155,6 +156,8 @@ export default function MeshLabPage() {
           </div>
           <details className="text-xs"><summary className="cursor-pointer text-slate-300">.meshmeta の中身</summary><pre className="mt-1 max-h-64 overflow-auto rounded bg-black/40 p-2" data-testid="meta-json">{metaText}</pre></details>
         </section>
+
+        <MeshMetaV2Panel vs={source.vs} ts={source.ts} sharp={sharp} base={base} />
       </div>
     </main>
   );

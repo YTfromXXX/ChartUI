@@ -125,3 +125,11 @@ export async function verify(stl: Uint8Array, meta: MeshMetaV2, trusted?: string
   const ok = shaOk && rootOk && pointers.every(Boolean) && (signatures.length === 0 || signatures.some((x) => x === true)) && !signatures.some((x) => x === false);
   return { stl_sha256: shaOk, merkle_root: rootOk, pointers, signatures, ok };
 }
+
+/** Add an Ed25519 signature made in the browser (Web Crypto). Returns a new meta; the key never leaves the page. */
+export async function signEd25519(meta: MeshMetaV2, key: CryptoKeyPair): Promise<MeshMetaV2> {
+  const pub = new Uint8Array(await crypto.subtle.exportKey('raw', key.publicKey));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, key.privateKey, bs(signingBytes(meta))));
+  return { ...meta, signatures: [...meta.signatures, { alg: 'Ed25519', signer: toHex(pub).slice(2), sig: toHex(sig).slice(2) }] };
+}
+export const newTestKey = () => crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']) as Promise<CryptoKeyPair>;
