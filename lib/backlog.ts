@@ -41,6 +41,7 @@ export const TASKS: Task[] = [
   { id: 'promotion-qubits', title: '昇格を 2 量子ビットの測定に（00 Q・01 R・10 B・11 N）、答えが届くまで「昇格中」', area: 'プロンプトチェス', status: 'todo', asked: '2026-11-12' },
   { id: 'dual-slot', title: 'Dual・パチスロ（慎重に）：払い出しのないスロットを双六のサイコロに（ポート 3・8・15・20・21・22）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '慎重に作る約束は docs/design-rules.md の 8 章' },
   { id: 'aviator', title: '8. aviator：ポップアップで Dual を初期化（リトル／ネフェリムと翼の幅、平均はいつも 3.5）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '倍率・途中下車・墜落は入れない（クラッシュ型の賭けにしない）' },
+  { id: 'mente-aviator', title: 'Mente：紙飛行機の aviator（倍率＝飛距離÷高さ、人が折った形の差の解析）', area: 'Mente', status: 'done', asked: '2026-11-12', route: '/mente/aviator', note: '実際に折って飛ばした記録を集めると、形の差の解析が本物になる' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
@@ -63,7 +64,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };
