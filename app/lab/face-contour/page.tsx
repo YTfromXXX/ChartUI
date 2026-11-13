@@ -97,9 +97,9 @@ export default function FaceContour() {
       <div className="mx-auto max-w-6xl space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-stone-200 pb-2">
           <div>
-            <p className="text-xs text-[#c8001a]">LAB · 顔型の差分装置 · ホワイトアウト版 AB の 3 体のために</p>
+            <p className="text-xs text-[#c8001a]">LAB · 顔型の差分装置 · ホワイトアウト版 AB の 4 体のために</p>
             <h1 className="text-xl font-semibold">標高の等高線で、顔の輪郭を研究する</h1>
-            <p className="max-w-3xl text-xs text-stone-600">顔を高さの地図にして等高線を引き、3 体を「基準の顔からの差」として大きな形から細かい形へ順に作ります。差の地図は、墨が基準より高い所、赤が低い所です。</p>
+            <p className="max-w-3xl text-xs text-stone-600">顔を高さの地図にして等高線を引き、4 体を「基準の顔からの差」として大きな形から細かい形へ順に作ります。差の地図は、墨が基準より高い所、赤が低い所です。</p>
           </div>
           <nav className="flex items-center gap-3 text-xs"><span className="flex items-center gap-1" title="射出するシンボル（次の作業）"><EthGlyph size={20} color="#1f1f1f" /> 射出するシンボル</span><Link href="/lab/backlog" className="underline">やることボード</Link></nav>
         </header>
