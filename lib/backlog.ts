@@ -42,6 +42,8 @@ export const TASKS: Task[] = [
   { id: 'dual-slot', title: 'Dual・パチスロ（慎重に）：払い出しのないスロットを双六のサイコロに（ポート 3・8・15・20・21・22）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '慎重に作る約束は docs/design-rules.md の 8 章' },
   { id: 'aviator', title: '8. aviator：ポップアップで Dual を初期化（リトル／ネフェリムと翼の幅、平均はいつも 3.5）', area: 'Fami ポート', status: 'done', asked: '2026-11-12', route: '/lab/dual-slot', note: '倍率・途中下車・墜落は入れない（クラッシュ型の賭けにしない）' },
   { id: 'mente-aviator', title: 'Mente：紙飛行機の aviator（倍率＝飛距離÷高さ、人が折った形の差の解析）', area: 'Mente', status: 'done', asked: '2026-11-12', route: '/mente/aviator', note: '実際に折って飛ばした記録を集めると、形の差の解析が本物になる' },
+  { id: 'seat-gaze', title: '4 人・8 人卓の席の色と目線（複素平面の点に 表面積：質量 をゆっくり与える）・5:5 の Mac の Y', area: 'テトラアルカナ', status: 'done', asked: '2026-11-13', route: '/lab/seat-gaze', note: '8 人はノイマンルールでデッキ 2 つ（288 枚）' },
+  { id: 'seat-gaze-tetra', title: '席と目線をテトラアルカナの本番の卓（手牌・河）につなぐ', area: 'テトラアルカナ', status: 'todo', asked: '2026-11-13' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
