@@ -110,7 +110,16 @@ export const ETH = 'Ξ';
 //   wings  翼・扇        horizontal fans to both sides at temple height
 //   bob    ボブと前髪    a plateau round the head with a blunt fringe line across the forehead
 //   braids 編み込み      cornrow ridges over the scalp — they read like contour lines
-export type HairStyle = 'none' | 'tower' | 'wings' | 'bob' | 'braids';
+export type HairStyle = 'none' | 'tower' | 'wings' | 'bob' | 'braids' | BobVariant;
+/** Four new bob variants, opened from the bob button — for tuning texture and accent per figure. */
+export type BobVariant = 'bob-asym' | 'bob-inward' | 'bob-blunt' | 'bob-layer';
+export const BOB_VARIANTS: { id: BobVariant; name: string; note: string }[] = [
+  { id: 'bob-asym', name: '左右非対称', note: '左は長く、右は短い。前髪は斜め' },
+  { id: 'bob-inward', name: '内巻き', note: '毛先が内側へ丸まり、あごの横に小さな山' },
+  { id: 'bob-blunt', name: '切りそろえ', note: '外へ張った四角い輪郭と、低い一直線の前髪' },
+  { id: 'bob-layer', name: '段（レイヤー）', note: '上から下へ 3 段に薄くなる' },
+];
+export const isBob = (s: HairStyle) => s === 'bob' || s.startsWith('bob-');
 export const HAIR_STYLES: { id: HairStyle; name: string; note: string }[] = [
   { id: 'tower', name: '縦の塔', note: '頭頂から高く。花の小さな山を添える' },
   { id: 'wings', name: '翼・扇', note: 'こめかみの高さで左右へ広げる' },
@@ -124,6 +133,10 @@ export function hairHeight(style: HairStyle, p: FaceParams, x: number, y: number
     case 'tower': return 0.95 * g2(x, y, 0, 1.15, 0.22, 0.32) + 0.12 * (g2(x, y, -0.22, 0.95, 0.07, 0.07) + g2(x, y, 0.2, 1.3, 0.07, 0.07) + g2(x, y, -0.05, 1.45, 0.06, 0.06)) + (head > 0 && y > p.hairline ? 0.12 : 0);
     case 'wings': return 0.55 * (g2(x, y, -0.95, 0.62, 0.32, 0.07) + g2(x, y, 0.95, 0.62, 0.32, 0.07)) + (head > 0 && y > p.hairline ? 0.1 : 0);
     case 'bob': { if (head <= 0) return 0; const fringe = y > 0.36; const sides = Math.abs(x) > p.rx * 0.78 && y > -0.35; return fringe || sides ? 0.28 : 0; }
+    case 'bob-asym': { const lock = x < -p.rx * 0.74 && x > -(p.rx + 0.34) && y > -0.95 && y < 0.7; if (lock) return 0.28; if (head <= 0) return 0; const fringe = y > 0.36 + 0.18 * x; const right = x > p.rx * 0.8 && y > -0.05; return fringe || right ? 0.28 : 0; }
+    case 'bob-inward': { if (head <= 0) return 0.13 * (g2(x, y, -p.rx * 0.95, -0.42, 0.09, 0.07) + g2(x, y, p.rx * 0.95, -0.42, 0.09, 0.07)); const fringe = y > 0.4; const sides = Math.abs(x) > p.rx * 0.8 && y > -0.38; return (fringe || sides ? 0.24 : 0) + 0.13 * (g2(x, y, -p.rx * 0.95, -0.42, 0.09, 0.07) + g2(x, y, p.rx * 0.95, -0.42, 0.09, 0.07)); }
+    case 'bob-blunt': { const box = Math.abs(x) < p.rx + 0.3 && y > -0.5 && y < p.ry + 0.32; if (!box) return 0; const fringe = y > 0.22; const sides = Math.abs(x) > p.rx * 0.82; return fringe || sides ? 0.3 : 0; }
+    case 'bob-layer': { if (head <= 0) return 0; const sides = Math.abs(x) > p.rx * 0.76; if (y > 0.45) return 0.3; if (sides && y > 0.0) return 0.2; if (sides && y > -0.45) return 0.11; return 0; }
     case 'braids': return head > 0 && y > p.hairline - 0.1 ? 0.07 * Math.max(0, Math.sin(x * 22)) + 0.05 : 0;
     default: return 0;
   }
@@ -133,3 +146,20 @@ export const headGrid = (p: FaceParams, style: HairStyle, nx = 90, ny = 110) => 
 /** Silhouette (z above a small threshold) and how much two silhouettes overlap (IoU: 1 = identical). */
 export const silhouette = (g: Grid, t = 0.02) => Array.from(g.z, (v) => v > t);
 export function iou(a: boolean[], b: boolean[]) { let i = 0; let u = 0; for (let k = 0; k < a.length; k += 1) { if (a[k] && b[k]) i += 1; if (a[k] || b[k]) u += 1; } return u ? i / u : 1; }
+
+// ---------- 7 slots at the bottom: accessories and left/right colour asymmetry ----------
+// Each slot is one accent idea: where the accessory sits (head coordinates), and the colour of the
+// left and right halves of the hair. Slot 7 is left empty on purpose (◻︎ = still open).
+// Colours are the page's ink / red / indigo / bronze, all ≥ 3:1 against white (lines and fills).
+export const ACCENT_COLORS = { ink: '#1f1f1f', red: '#c8001a', indigo: '#2b3a67', bronze: '#7a5c12' } as const;
+export type AccentShape = 'flower' | 'ribbon' | 'comb' | 'pins' | 'feather' | 'beads' | 'open';
+export type AccentSlot = { id: number; name: string; shape: AccentShape; at: [number, number][]; left: keyof typeof ACCENT_COLORS; right: keyof typeof ACCENT_COLORS; note: string };
+export const ACCENT_SLOTS: AccentSlot[] = [
+  { id: 1, name: '花（左）', shape: 'flower', at: [[-0.55, 0.85]], left: 'ink', right: 'ink', note: '色は左右同じ。左上の花だけで片寄せる' },
+  { id: 2, name: 'リボン（右）', shape: 'ribbon', at: [[0.7, 0.55]], left: 'ink', right: 'red', note: '右半分だけ赤。リボンも右' },
+  { id: 3, name: '櫛（頭頂）', shape: 'comb', at: [[0, 1.2]], left: 'indigo', right: 'ink', note: '左が藍、右が墨。飾りは中央で左右差を受け止める' },
+  { id: 4, name: 'ピン 3 本（左）', shape: 'pins', at: [[-0.7, 0.6], [-0.6, 0.45], [-0.5, 0.3]], left: 'ink', right: 'ink', note: '同じ色で、小さな線の数だけ片寄せる' },
+  { id: 5, name: '羽（右）', shape: 'feather', at: [[0.75, 1.0]], left: 'bronze', right: 'ink', note: '色は左、飾りは右。重さを交差させる' },
+  { id: 6, name: '玉の連なり（両側）', shape: 'beads', at: [[-0.9, 0.2], [-0.92, 0.0], [-0.9, -0.2], [0.9, 0.2], [0.92, 0.0]], left: 'red', right: 'indigo', note: '左 3 個・右 2 個、色も左右で違う' },
+  { id: 7, name: '空き', shape: 'open', at: [], left: 'ink', right: 'ink', note: 'まだ決めていないマス（◻︎）' },
+];

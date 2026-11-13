@@ -56,6 +56,8 @@ export const TASKS: Task[] = [
   { id: 'black-ab', title: 'ブラックアウト版 AB（PowerPoint B 版）：仮面のデザインを議論してから', area: '版', status: 'decide', asked: '2026-11-13' },
   { id: 'face-contour', title: '顔型の差分装置（基準の顔・3 体の差・等高線、輪郭→量感→鼻と眉→口とあご先→髪の生え際の順）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'eth-launcher', title: 'イーサリアム（Ξ）を射出するアイコン：「自由」は飛ぶほど重く、射出した分だけ球体の割れ目が増える', area: '版', status: 'decide', asked: '2026-11-13', note: 'Mente 式のメモにとどめる（docs/mente/memo.md）。本当に必要になったら作る' },
+  { id: 'bob-variants', title: 'ボブを押すと開く新しい 4 つの型（左右非対称・内巻き・切りそろえ・段）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
+  { id: 'accent-strip', title: '下部の 7 マス：アクセサリーと色の左右差（横スクロール、7 マス目は空き）— 中身を一緒に検討', area: '版', status: 'decide', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
