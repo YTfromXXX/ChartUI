@@ -54,7 +54,7 @@ const silPath = (sil, x0, y0, s, fill) => { const c = []; for (let j = 0; j < NY
   const s = 2; const w = NX * s; let body = '';
   faces.forEach((p, i) => {
     const g = F.headGrid(p, STYLES[i], NX, NY, F.DETAILS[i]); const top = F.extent(g).hi; const lv = Array.from({ length: 10 }, (_, k) => ((k + 1) * top) / 11);
-    body += contourPaths(g, lv, 10 + i * (w + 16), 10, s) + `<text x="${10 + i * (w + 16) + w / 2}" y="${NY * s + 30}" font-size="12" text-anchor="middle" fill="${INK}">${NAMES[i]} (${STYLES[i]})</text>`;
+    body += contourPaths(g, lv, 10 + i * (w + 16), 10, s) + `<text x="${10 + i * (w + 16) + w / 2}" y="${NY * s + 30}" font-size="12" text-anchor="middle" fill="${INK}">${NAMES[i]}</text>`;
   });
   writeFileSync(out('figures/fig1-contours.svg'), svg(10 + 4 * (w + 16), NY * s + 42, body));
 }
@@ -70,13 +70,13 @@ const silPath = (sil, x0, y0, s, fill) => { const c = []; for (let j = 0; j < NY
   const W = 520; const H = 250; const L = 60; const B = 200; const T = 20; const bw = 22; const gap = (W - L - 20) / pairs.length;
   const y = (v) => B - (v - 0.5) * ((B - T) / 0.5); let body = '';
   for (const v of [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]) body += `<line x1="${L}" x2="${W - 10}" y1="${y(v)}" y2="${y(v)}" stroke="#e7e5e4"/><text x="${L - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="${INK}">${v.toFixed(1)}</text>`;
-  body += `<line x1="${L}" x2="${W - 10}" y1="${y(0.75)}" y2="${y(0.75)}" stroke="${RED}" stroke-dasharray="4 3"/><text x="${L + 4}" y="${y(0.75) - 4}" font-size="10" fill="${RED}">0.75 = too similar</text>`;
+  body += `<line x1="${L}" x2="${W - 10}" y1="${y(0.75)}" y2="${y(0.75)}" stroke="${RED}" stroke-dasharray="4 3"/>`;
   fourRows.forEach((row, k) => {
     const x = L + 10 + k * gap;
     body += `<rect x="${x}" y="${y(row.faceOnly)}" width="${bw}" height="${B - y(row.faceOnly)}" fill="${GREY}"/><rect x="${x + bw + 3}" y="${y(row.withHair)}" width="${bw}" height="${B - y(row.withHair)}" fill="${INK}"/>`;
     body += `<text x="${x + bw}" y="${B + 14}" font-size="9" text-anchor="middle" fill="${INK}">${row.a.split(' ').pop()}–${row.b.split(' ').pop()}</text>`;
   });
-  body += `<text x="${L}" y="${H - 14}" font-size="10" fill="${INK}"><tspan fill="${GREY}">■</tspan> face only   <tspan fill="${INK}">■</tspan> with hair   (IoU of silhouettes; lower = easier to tell apart)</text>`;
+  body += `<text x="${L}" y="${H - 14}" font-size="10" fill="${INK}"><tspan fill="${GREY}">■</tspan> face only   <tspan fill="${INK}">■</tspan> with hair     <tspan fill="${RED}">- - -</tspan> 0.75 = too similar   (lower = easier to tell apart)</text>`;
   writeFileSync(out('figures/fig3-iou.svg'), svg(W, H, body));
 }
 // Fig. 4: style × style IoU on the reference face (grey scale, numbers printed).

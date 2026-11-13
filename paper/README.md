@@ -8,22 +8,42 @@
 
 | ファイル | 中身 |
 |---|---|
-| `main.tex` | 本文（英語、約 4 ページ） |
+| `main.tex` | 本文（英語、5 ページ） |
+| `main.pdf` | 組版した見本 |
+| `arxiv-submission.tar.gz` | arXiv に上げるまとめ |
 | `refs.bib` | 参考文献 5 件 |
 | `figures/*.pdf`（と `.svg`） | 図 4 枚 |
 | `data/results.json`・`data/table-*.tex` | 数値と表 |
 
 図・表・数値は全部 `node scripts/paper-figures.mjs` で作り直せる（ラボのページと同じコード `lib/faceContour.ts` から計算する）。
 
-## 提出の前にすること（オーナーの作業）
+## できていること（2026-11-13）
 
-1. **著者名**：`main.tex` の `AUTHOR NAME` を本名（または arXiv に登録する名前）と所属に替える。arXiv の著者名は公開される。メールアドレスは本文に書かなくてよい。
-2. **参考文献を確かめる**：`refs.bib` の Mann et al.（arXiv:2212.07960）は、この作業環境から arXiv に接続できなかったため、著者の全員と題をまだ確かめていない。ページを開いて書き写す。ほかの 4 件（Jaccard 1912、Lorensen & Cline 1987、Lorenz 1943、Glocker et al. 2009）もできれば確かめる。
-3. **組版**：この環境には TeX がないので、まだ PDF にしていない。Overleaf に `paper/` の中身をそのまま上げて、pdflatex でコンパイルして見た目を確かめる。
-4. **arXiv のアカウント**：作って、初めての分野ではエンドースメント（推薦）が必要になることがある。分野の候補：主分野 `cs.GR`（グラフィックス）、副分野 `cs.HC`（ヒューマンコンピュータインタラクション）。
-5. **提出の形**：TeX のソース（`main.tex`・`refs.bib`・`figures/*.pdf`・`data/*.tex`）を zip か tar にまとめて上げる。BibTeX を使うので、Overleaf で作った `main.bbl` も一緒に入れる。
-6. **ライセンス**：提出のときに選ぶ（例：CC BY 4.0）。
-7. 規則や手順は変わることがあるので、提出の前に arXiv の案内（Submission と Endorsement のページ）を読む。
+- 著者名：**Y.T.**（所属：Independent researcher）。メールアドレスは本文に入れていない（arXiv のアカウントにだけ登録する）。
+- 組版：pdflatex でコンパイル済み（5 ページ、エラーなし）。`main.pdf` が見本。
+- 提出用のまとめ：`arxiv-submission.tar.gz`（`main.tex`・`main.bbl`・`refs.bib`・図 4 枚の PDF・表 3 つ）。空のフォルダに展開して、そのままコンパイルできることを確かめた。
+
+## 提出の前に残っていること（オーナーの作業）
+
+1. **Mann et al. の確認**：`refs.bib` の arXiv:2212.07960 は、作業環境から arXiv に接続できなかったため、著者の全員と題をまだ確かめていない。ページを開いて書き写し、`bibtex` → `pdflatex` を 2 回で作り直す（または Overleaf で）。直したら `.tar.gz` も作り直す。
+2. **エンドースメント**：初めての分野では推薦が必要なことがある。分野の候補：主分野 `cs.GR`、副分野 `cs.HC`。
+3. **著者名**：イニシャルだけ（Y.T.）の著者名は、モデレーターから確認を求められることがある。そのときは登録名と合わせる。
+4. **ライセンス**：提出のときに選ぶ（例：CC BY 4.0）。
+5. 手順は変わることがあるので、提出の前に arXiv の案内（Submission と Endorsement のページ）を読む。
+
+作り直し方（図・表・PDF・まとめ）：
+
+```bash
+node scripts/paper-figures.mjs
+```
+
+```bash
+cd paper && pdflatex main && bibtex main && pdflatex main && pdflatex main
+```
+
+```bash
+cd paper && tar -czf arxiv-submission.tar.gz main.tex main.bbl refs.bib figures/*.pdf data/*.tex
+```
 
 ## 正直に書いてあること（限界）
 

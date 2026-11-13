@@ -9,8 +9,8 @@
 \usepackage{xcolor}
 
 \title{Telling Stylized Avatars Apart at a Glance:\\Contour Height Maps and Silhouette Overlap for Hairstyle Design in Shared XR}
-% TODO before submission: replace with the real author name(s) and affiliation (arXiv lists authors publicly).
-\author{AUTHOR NAME\\\small Independent researcher}
+% Author as the owner chose it (arXiv lists authors publicly).
+\author{Y.T.\\\small Independent researcher}
 \date{}
 
 \begin{document}
@@ -67,7 +67,7 @@ This threshold is a design heuristic chosen from inspecting the small filled sil
 Table~\ref{tab:outline} lists the outlines of the four figures; each keeps one outline cue of its own (round, roundest and shortest, slim oval, heart-shaped).
 Still, with faces alone every pair overlaps strongly, with IoU between $0.87$ and $0.95$ (Table~\ref{tab:four}, grey bars in Fig.~\ref{fig:iou}, top row of Fig.~\ref{fig:sil}).
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \begin{tabular}{lccc}
 \toprule
@@ -85,7 +85,7 @@ Giving each figure a different dominant hairstyle (ponytail, bob, buns, cloud) p
 An earlier assignment in which two figures both had round masses (bob and cloud) left that pair at $0.81$; separating them by direction---a flat, low helmet against a cloud raised above the crown---resolved it.
 In practice, dominant shapes are easiest to separate when they differ in direction: round, tall, wide, or off to one side.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \begin{tabular}{llcc}
 \toprule
@@ -98,21 +98,21 @@ In practice, dominant shapes are easiest to separate when they differ in directi
 \label{tab:four}
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.85\linewidth]{figures/fig3-iou.pdf}
 \caption{IoU per pair: faces only (grey) and with hair (black). The dashed line marks the working threshold $0.75$.}
 \label{fig:iou}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.95\linewidth]{figures/fig1-contours.pdf}
 \caption{Contour lines of the four figures with hair (ten levels each).}
 \label{fig:contours}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.7\linewidth]{figures/fig2-silhouettes.pdf}
 \caption{The squint test: filled silhouettes, faces only (top) and with hair (bottom).}
@@ -125,14 +125,14 @@ Braids overlap a bare head at $0.87$ and wings at $0.87$: they change the surfac
 The cloud is the most distinct from a bare head ($0.52$).
 Variants of one style behave the same way (Table~\ref{tab:bob}): a blunt cut that widens the outline ($0.76$ against the plain bob) or an asymmetric cut ($0.84$) changes the silhouette, while an inward curl or layering ($0.92$) mostly does not.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.6\linewidth]{figures/fig4-style-matrix.pdf}
 \caption{IoU between hairstyles on the same reference face (darker = more alike).}
 \label{fig:matrix}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \begin{tabular}{lc}
 \toprule
