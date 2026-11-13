@@ -97,6 +97,7 @@ export default function MenteGame() {
             <p className="text-2xl font-semibold" data-testid="stage-title">{name}を探せ</p>
             <p className="text-xs text-stone-600">ゲームの本編は次の作業で（ここまでが header の件）。</p>
             <p className="text-xs"><Link href="/mente/game/swarm" className="underline" data-testid="to-swarm">6〜7 年目のイベント：瓶を拾う者たち（BA と PE）</Link></p>
+            <p className="text-xs"><Link href="/mente/game/years" className="underline" data-testid="to-years">1〜12 年目の進行と、最後の塔（ミニゲームの仮置き）</Link></p>
             {name !== ORIGINAL && <button type="button" onClick={reset} className="text-[11px] text-stone-600 underline">もとの名前（{ORIGINAL}）に戻す</button>}
           </div>
         </section>
