@@ -4,7 +4,14 @@ import Link from 'next/link';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, type Scene } from '@/lib/chessGame3';
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
+import { keccak256 } from '@/lib/meshMetaV2';
 import { sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
+
+/** 住まい symbols and the Sanctuary resident each one suits: together they count double and forge a key fragment. */
+const DWELLING_MATCH: Record<string, string> = { 定住指数: 'B3', 近所の返信率: 'B3', 庭の手入れ指数: 'B1', 窓の灯り指数: 'B4', 朝と夜の投稿の幅: 'B2', 同じ景色の写真の数: 'B2' };
+const enc = new TextEncoder();
+const hex4 = (s: string) => Array.from(keccak256(enc.encode(s)).slice(0, 2), (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+type KeyFragment = { hex: string; prev: string; ticker: string; who: string; turn: number };
 
 const FILTER_COLOR: Record<Filter, string> = { 事実: '#1f1f1f', 噂: '#2b3a67', 感情: '#c8001a' };
 const CELL = 40; const PAD = 22; const FLOOR_W = SIZE * CELL + PAD * 2;
@@ -107,6 +114,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const [held, setHeld] = useState<Sym | null>(null);
   const [badges, setBadges] = useState<Record<string, Sym>>({});
   const [focus, setFocus] = useState<Partial<Record<Color, Sym>>>({});
+  const [keys, setKeys] = useState<KeyFragment[]>([]);
+  const [aligned, setAligned] = useState(0);
   const rnd = useRef(() => Math.random());
   const done = turn >= TURNS;
   const news = NEWS[Math.min(turn, TURNS - 1)];
@@ -155,12 +164,18 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     const crashed = events.some((e) => e.kind === 'crash');
     let delta = crashed ? -1 : dev.id !== cpuDev.id ? 1 : 0;
     const notes: string[] = [crashed ? '同じマスでぶつかった。読み方が衝突して、調和が一つ減った。' : delta > 0 ? `違うデバイスから、同じニュースを読んだ。${news.harmony}` : '同じデバイスから読んだ。調和は増えも減りもしない。'];
-    const acts: string[] = []; const used: string[] = []; const usedFocus: Color[] = [];
+    const acts: string[] = []; const used: string[] = []; const usedFocus: Color[] = []; const forged: KeyFragment[] = []; let alignedNow = false;
     for (const m of [white.move, black.move]) {
       if (!m) continue; const who = PEOPLE[m.id]; const color: Color = m.id.startsWith('W') ? 'white' : 'black';
       let act = `${who.name}（${who.role}）は、${who.act[turn % 3]}`;
       const b = badges[m.id];
-      if (b) { used.push(m.id); if (b.filter === who.filter) { delta += 1; notes.push(`${who.name} が持っていた ${b.ticker} の合図（${b.signal}）と、${who.name} の読み方（${who.filter}）が同じ向きを見た。調和 +1。`); } else notes.push(`${who.name} が持っていた ${b.ticker} の合図は［${b.filter}］、${who.name} の読み方は［${who.filter}］。少しずれた。`); if (b.signal === '下向きの交差') act += '。下向きの合図を気にして、少し慎重に'; }
+      const base = b ? b.name.replace('（合成）', '') : '';
+      if (b && b.theme === '住まい' && DWELLING_MATCH[base] === m.id) {
+        used.push(m.id); delta += 2; alignedNow = true;
+        const prev = (forged.at(-1) ?? keys.at(-1))?.hex ?? '0000'; const hex = hex4(`${prev}/${b.ticker}/${m.id}/${turn}`);
+        forged.push({ hex, prev, ticker: b.ticker, who: who.name, turn: turn + 1 });
+        notes.push(`${who.name} と「${base}」がそろった（住まいの銘柄 × その住人）。調和 +2。サンクチュアリの鍵のかけら ${hex}（前のかけら ${prev} を指す）が生まれた。`);
+      } else if (b) { used.push(m.id); if (b.filter === who.filter) { delta += 1; alignedNow = true; notes.push(`${who.name} が持っていた ${b.ticker} の合図（${b.signal}）と、${who.name} の読み方（${who.filter}）が同じ向きを見た。調和 +1。`); } else notes.push(`${who.name} が持っていた ${b.ticker} の合図は［${b.filter}］、${who.name} の読み方は［${who.filter}］。少しずれた。`); if (b.signal === '下向きの交差') act += '。下向きの合図を気にして、少し慎重に'; }
       const f = focus[color];
       if (f) { usedFocus.push(color); notes.push(`${sideName(color)}は ${f.ticker}（${f.theme}）の${f.signal}を見て、${f.theme}のニュースに集中した。`); if (f.filter === who.filter) { delta += 1; notes.push('チームの集中と、動いた人の読み方がそろった。調和 +1。'); } }
       acts.push(act + '。');
@@ -170,9 +185,11 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     setLog((l) => [{ turn: turn + 1, lines, events, acts, harmony: delta, notes }, ...l]);
     setBadges((b) => { const n = { ...b }; used.forEach((id) => delete n[id]); return n; });
     setFocus((f) => { const n = { ...f }; usedFocus.forEach((c) => delete n[c]); return n; });
+    if (delta > 0) alignedNow = true;
+    setKeys((k) => [...k, ...forged]); setAligned((a) => a + (alignedNow ? 1 : 0));
     setHarmony((h) => h + delta); setPieces(next); setTurn((t) => t + 1); setPrompt(''); setPicked(null);
   };
-  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); };
+  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); };
   const clickCell = (s: Sq) => {
     if (done) return;
     const here = pieces.find((p) => p.alive && same(p.at, s));
@@ -250,6 +267,14 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {warn && <p className="text-[11px] text-[#c8001a]" role="alert" data-testid="warn">{warn}</p>}
             {held && <p className="text-[11px] text-[#c8001a]" data-testid="held">持っている銘柄：{held.ticker}（駒かチームを押すと渡す）</p>}
             <p className="text-sm" data-testid="harmony">調和：{harmony}</p>
+            <div className="space-y-1 border border-[#2b3a67] p-2 text-[11px]" data-testid="crypto">
+              <p className="font-semibold">🔐 サンクチュアリの暗号</p>
+              <p data-testid="harmony-rate">調和率：{turn ? Math.round((aligned / turn) * 100) : 0}%（{aligned} / {turn} ターン）</p>
+              <p className="text-[10px] text-stone-500">量子の言葉では、二つのチームの読みを測ったとき、同じ向きにそろって出る確率。そろうたびに、鍵の材料が増える。</p>
+              <p>鍵のかけら {keys.length} 個（3 個で鍵）：{keys.length ? keys.map((k) => k.hex).join(' ← ') : 'まだない'}</p>
+              {keys.length >= 3 && <p className="text-[#2f6b1a]" data-testid="key-done">鍵が組み上がった：{keys.slice(-3).map((k) => k.hex).join('')}（どのかけらも、一つ前のかけらを指している）</p>}
+              <p className="text-[10px] text-stone-500">「住まい」の銘柄を、それに合う住人（定住指数・近所の返信率 → ニエベス、庭の手入れ指数 → ペルペトゥア、窓の灯り指数 → チェロ、朝と夜の投稿の幅・同じ景色の写真の数 → オスバルド）に渡して動かすと、調和 +2 と鍵のかけら。</p>
+            </div>
             {done && <p className="border border-stone-200 bg-[#fafaf9] p-2 text-xs" data-testid="end">{TURNS} つのニュースを解体した。調和は {harmony}。同じ出来事を、違うデバイスで読むほど、ぶつからずに並べる。</p>}
           </aside>
 

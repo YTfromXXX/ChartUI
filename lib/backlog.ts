@@ -89,6 +89,8 @@ export const TASKS: Task[] = [
   { id: 'chess-game3', title: '3 ゲーム目「チョークの部屋」を遊べる形に：ニュースの解体・SNS の投稿・デバイスかメタ視点からのプロンプトでだけ動く・調和', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess3' },
   { id: 'chess-symbols', title: 'チョークの部屋：1 ゲーム目を遊べる形に、合成の銘柄の無限スクロール（ドラッグ＆ドロップで駒やチームに少し影響）、3 ゲーム目に建築家（製図板）の選択案', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess1' },
   { id: 'chess1-scenes', title: '1 ゲーム目の台詞を画面に（マネキン形式の止まった絵／広告リアリズム形式の切り替え）、製図板はニュースのテーマを優先、サンクチュアリ × SNS の合成の銘柄（住まいの信号・投稿から生まれる銘柄）', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess1' },
+  { id: 'sanctuary-crypto', title: '住まいの銘柄 × その住人で調和 +2、鍵のかけらの鎖（サンクチュアリの暗号）、調和率（量子の言葉で）', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess3' },
+  { id: 'mirage-room', title: '2 ゲーム目の冒頭：ストイックが蜃気楼の部屋に隠れる（暗号愛の長台詞）、背後に忍び寄るベルトランの回想（祖父の時計店）', area: 'アクティビスト', status: 'doing', asked: '2026-11-13', note: 'docs/story/chess-games.md（マネキン形式の台本）' },
   { id: 'peek-stoic-room', title: '場面：ベルトラン（ビットコイン準備企業）がストイックルームをのぞく。夫婦の場面はストイックの音のないテレビの中の番組（スーパーメタ形式）', area: 'アクティビスト', status: 'doing', asked: '2026-11-13' },
   { id: 'story-200-rest', title: '物語 200 の続き（4〜12 年目、153 問）を順に書き足す。7〜8 年目でアラン・シリトー・ゲームの伏線を回収、10 年目ごろに機械の答え（BA・PE・フォン）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'stoic-profile', title: 'ストイックのプロフィール：ガレージアイランドの詩人、酔いどれ草の農園、トトシ中本とおもちゃの王国', area: '版', status: 'done', asked: '2026-11-13', note: 'docs/story/stoic-profile.md（サトシに性的な要素は結びつけない形に書き直した）' },
