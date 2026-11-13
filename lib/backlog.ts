@@ -75,7 +75,7 @@ export const TASKS: Task[] = [
   { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'banner-22', title: 'バナー：{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}（中身は空けておく）', area: '版', status: 'decide', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'screensaver', title: '記念：塔と飛行機のスクリーンセーバーをダウンロード（MENTE の幾何学ロゴ、HTML 一枚）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
-  { id: 'year9-cloth', title: '9 年目：ストイックが自分から布を外すか（登場人物の問いで一緒に考える）', area: '版', status: 'decide', asked: '2026-11-13' },
+  { id: 'year9-cloth', title: '9 年目：ストイックは布を外さず、端を折り返す（フォン（仮）を操縦する Luna の無線、A／B の場面）', area: '版', status: 'doing', asked: '2026-11-13' },
   { id: 'find-vitalik-body', title: '「ヴィタリックを探せ」の本編（アリミノボーイ・アリミノガールの登場）— 姿は描かず、名前はタイトルの言葉だけ', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
