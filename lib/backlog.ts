@@ -55,7 +55,8 @@ export const TASKS: Task[] = [
   { id: 'white-ab', title: 'ホワイトアウト版 AB（サトシを探せ版）v0.1：クローンしてすぐ遊べる 3 場面（OP・回想 LAB・デッキ）', area: '版', status: 'done', asked: '2026-11-13', note: 'editions/white-ab/' },
   { id: 'black-ab', title: 'ブラックアウト版 AB（PowerPoint B 版）：仮面のデザインを議論してから', area: '版', status: 'decide', asked: '2026-11-13' },
   { id: 'face-contour', title: '顔型の差分装置（基準の顔・3 体の差・等高線、輪郭→量感→鼻と眉→口とあご先→髪の生え際の順）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
-  { id: 'eth-launcher', title: 'イーサリアム（Ξ）を射出するアイコン：「自由」は飛ぶほど重く、射出した分だけ球体の割れ目が増える', area: '版', status: 'todo', asked: '2026-11-13', note: '射出する道具の形は銃以外（種まき器・紙吹雪の筒・スプリンクラーなど）から選ぶ' },
+  { id: 'eth-launcher', title: 'イーサリアム（Ξ）を射出するアイコン：「自由」は飛ぶほど重く、射出した分だけ球体の割れ目が増える', area: '版', status: 'decide', asked: '2026-11-13', note: 'Mente 式のメモにとどめる（docs/mente/memo.md）。本当に必要になったら作る' },
+  { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },

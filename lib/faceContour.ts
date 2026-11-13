@@ -102,3 +102,34 @@ export function contour(g: Grid, level: number): [number, number, number, number
 
 /** Ethereum, for this project: the text glyph Ξ (U+039E, the customary ether sign — there is no Ethereum code point like ₿ U+20BF). */
 export const ETH = 'Ξ';
+
+// ---------- hairstyle types (for VR / MR): silhouettes read at a glance ----------
+// Techniques read from avant-garde wig competition work (general types only — no single piece is
+// copied): one dominant silhouette per head, then one texture, then one accent.
+//   tower  縦の塔        a tall updo above the crown, with small bumps for flowers
+//   wings  翼・扇        horizontal fans to both sides at temple height
+//   bob    ボブと前髪    a plateau round the head with a blunt fringe line across the forehead
+//   braids 編み込み      cornrow ridges over the scalp — they read like contour lines
+export type HairStyle = 'none' | 'tower' | 'wings' | 'bob' | 'braids';
+export const HAIR_STYLES: { id: HairStyle; name: string; note: string }[] = [
+  { id: 'tower', name: '縦の塔', note: '頭頂から高く。花の小さな山を添える' },
+  { id: 'wings', name: '翼・扇', note: 'こめかみの高さで左右へ広げる' },
+  { id: 'bob', name: 'ボブと前髪', note: '頭を包む高原と、額を横切る前髪の線' },
+  { id: 'braids', name: '編み込み', note: '頭皮の上の細い畝（等高線のように見える）' },
+];
+const g2 = (x: number, y: number, cx: number, cy: number, sx: number, sy: number) => Math.exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2) / 2);
+export function hairHeight(style: HairStyle, p: FaceParams, x: number, y: number): number {
+  const head = 1 - (x / (p.rx + 0.14)) ** 2 - ((y - 0.08) / (p.ry + 0.12)) ** 2;
+  switch (style) {
+    case 'tower': return 0.95 * g2(x, y, 0, 1.15, 0.22, 0.32) + 0.12 * (g2(x, y, -0.22, 0.95, 0.07, 0.07) + g2(x, y, 0.2, 1.3, 0.07, 0.07) + g2(x, y, -0.05, 1.45, 0.06, 0.06)) + (head > 0 && y > p.hairline ? 0.12 : 0);
+    case 'wings': return 0.55 * (g2(x, y, -0.95, 0.62, 0.32, 0.07) + g2(x, y, 0.95, 0.62, 0.32, 0.07)) + (head > 0 && y > p.hairline ? 0.1 : 0);
+    case 'bob': { if (head <= 0) return 0; const fringe = y > 0.36; const sides = Math.abs(x) > p.rx * 0.78 && y > -0.35; return fringe || sides ? 0.28 : 0; }
+    case 'braids': return head > 0 && y > p.hairline - 0.1 ? 0.07 * Math.max(0, Math.sin(x * 22)) + 0.05 : 0;
+    default: return 0;
+  }
+}
+/** Face plus hair, sampled on a larger window so towers and wings fit. */
+export const headGrid = (p: FaceParams, style: HairStyle, nx = 90, ny = 110) => sample((x, y) => height(p, x, y) + hairHeight(style, p, x, y), nx, ny, -1.35, 1.35, -1.3, 1.75);
+/** Silhouette (z above a small threshold) and how much two silhouettes overlap (IoU: 1 = identical). */
+export const silhouette = (g: Grid, t = 0.02) => Array.from(g.z, (v) => v > t);
+export function iou(a: boolean[], b: boolean[]) { let i = 0; let u = 0; for (let k = 0; k < a.length; k += 1) { if (a[k] && b[k]) i += 1; if (a[k] || b[k]) u += 1; } return u ? i / u : 1; }
