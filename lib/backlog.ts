@@ -81,6 +81,7 @@ export const TASKS: Task[] = [
   { id: 'story-200-batch1', title: '物語 200 の第 1 弾：プロローグ（ガレージアイランド、コーディングの場面）＋ 1 年目 14 問。実況チャット・コンボ・豆知識・サトシパラメーター・OP', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'story-200-batch2', title: '物語 200 の第 2 弾：2 年目 16 問（本編 15〜30）、アラン・シリトー・ゲーム（音のないテレビとテキストボックス）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'story-200-batch3', title: '物語 200 の第 3 弾：3 年目 17 問（本編 31〜47）、脱コード化された SF（エンジニアの言葉と千のプラトー、用語メモ、鍵の 4 択 A 指紋／B DNA 螺旋／C 眼球／D 心拍数）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/story' },
+  { id: 'story-gifs-interlude', title: '動く挿絵（ガラスの層・ボクセルの心臓の GIF）と間奏 1（息つぎのない長文、BA と PE の背景の拍）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'story-200-rest', title: '物語 200 の続き（4〜12 年目、153 問）を順に書き足す。7〜8 年目でアラン・シリトー・ゲームの伏線を回収、10 年目ごろに機械の答え（BA・PE・フォン）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'stoic-profile', title: 'ストイックのプロフィール：ガレージアイランドの詩人、酔いどれ草の農園、トトシ中本とおもちゃの王国', area: '版', status: 'done', asked: '2026-11-13', note: 'docs/story/stoic-profile.md（サトシに性的な要素は結びつけない形に書き直した）' },
   { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },

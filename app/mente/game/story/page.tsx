@@ -86,6 +86,13 @@ export default function StoryPlayer() {
   const [nudge, setNudge] = useState<NudgeReason | null>(null);
   const check = useCallback(() => { if (nudge) return; const r = shouldNudge(events.current, Date.now(), since.current); if (r) { setNudge(r); since.current = 0; } }, [nudge]);
   useEffect(() => { const t = window.setInterval(check, 5000); return () => window.clearInterval(t); }, [check]);
+  // Background beat: BA and PE drop sound words into the chat at a changing tempo (never faster than ~3 per second).
+  useEffect(() => {
+    const r = beat.rhythm; if (!r) return undefined;
+    const ts: number[] = []; let at = 400;
+    r.words.forEach((w, k) => { at += Math.max(340, r.tempo[k] ?? 800); ts.push(window.setTimeout(() => setChat((cs) => [...cs.slice(-60), { ...w, k: Date.now() + k }]), at)); });
+    return () => ts.forEach((t) => window.clearTimeout(t));
+  }, [beat]);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' }); }, [chat]);
 
   const pick = (c: number) => {
@@ -108,7 +115,7 @@ export default function StoryPlayer() {
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2">
           <div>
             <p className="text-[11px] text-stone-600">イーサリアムの黄金のアイコンを探せ（仮）</p>
-            <h1 className="text-lg">物語 200 — {beat.part === 'prologue' ? `プロローグ：ガレージアイランド（${beat.id}）` : `本編 ${beat.no} / ${TOTAL_BEATS}`}</h1>
+            <h1 className="text-lg">物語 200 — {beat.part === 'prologue' ? `プロローグ：ガレージアイランド（${beat.id}）` : beat.part === 'interlude' ? `間奏 ${beat.id.split('-')[1]} — ${beat.place}` : `本編 ${beat.no} / ${TOTAL_BEATS}`}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <SatoshiParam />
@@ -122,7 +129,14 @@ export default function StoryPlayer() {
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <section className="space-y-3" aria-live="polite" data-testid="beat">
             <p className="text-[11px] text-stone-500">場所：{beat.place} · {beat.speaker}</p>
-            {beat.text.map((t) => <p key={t} className="text-sm leading-7">{t}</p>)}
+            {beat.gif && (
+              <picture data-testid="beat-gif">
+                <source srcSet={beat.gif.still} media="(prefers-reduced-motion: reduce)" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={beat.gif.src} alt={beat.gif.alt} className="mx-auto h-48 w-auto border border-stone-200" style={{ imageRendering: 'pixelated' }} />
+              </picture>
+            )}
+            {beat.text.map((t) => <p key={t} className={`text-sm leading-7 ${beat.part === 'interlude' ? 'tracking-wide' : ''}`}>{t}</p>)}
             {beat.code && <Terminal lines={beat.code} />}
             {beat.dub && <DubScene key={beat.id} dub={beat.dub} onDone={(l) => { if (dubbed) return; setDubbed(true); [{ who: 'BA-80BF', text: `「${l}」…うまい` }, { who: 'PE-05F0', text: 'くちぱく せいこう！' }].forEach((c, k) => window.setTimeout(() => setChat((cs) => [...cs.slice(-60), { ...c, k: Date.now() + k }]), 400 + k * 600)); }} />}
             {(!beat.dub || dubbed) && <><p className="border-l-4 border-[#c8001a] pl-3 text-base font-semibold" data-testid="question">{beat.q}</p>

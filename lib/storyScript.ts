@@ -4,6 +4,7 @@
 // Batch 1: the Garage Island prologue (P1–P8, not counted in the 200) and year 1 (beats 1–14).
 // Batch 2: year 2 (beats 15–30), with the Alan Sillitoe game (a muted-TV dubbing scene with a text box).
 // Batch 3: year 3 (beats 31–47), decoded: engineering words and Thousand-Plateaus concepts, with a glossary.
+// Interlude 1 (after beat 45): long run-on prose with a background beat from BA and PE in the chat.
 // Rules: no real person speaks or appears; nothing here has a price; Stoic never smokes.
 
 export type ChatLine = { who: string; text: string };
@@ -11,10 +12,14 @@ export type Choice = { label: string; reply: string[]; correct?: boolean; chat?:
 /** The Alan Sillitoe game: a muted TV mouths words; the player types their own line to fit the mouth. */
 export type Dub = { tv: string; beats: number; hint: string; after: string };
 export type Beat = {
-  id: string; part: 'prologue' | 'y1' | 'y2' | 'y3'; no: number | null; place: string; speaker: string;
+  id: string; part: 'prologue' | 'y1' | 'y2' | 'y3' | 'interlude'; no: number | null; place: string; speaker: string;
   text: string[]; q: string; choices: Choice[]; code?: string[]; fact?: string; dub?: Dub;
   /** Engineering / Thousand-Plateaus words used in the beat, with a one-line meaning (shown as a glossary). */
   terms?: [string, string][];
+  /** A looping illustration (GIF) with its still frame for reduced motion. */
+  gif?: { src: string; still: string; alt: string };
+  /** Background beat in the chat while the beat is read: sound words dripping at a changing tempo (ms between drops). */
+  rhythm?: { words: ChatLine[]; tempo: number[] };
 };
 
 const BA = 'BA-80BF'; const BA2 = 'BA-52FF'; const PE = 'PE-05F0'; const PE2 = 'PE-4970';
@@ -357,7 +362,7 @@ export const SCRIPT: Beat[] = [
       { label: '差出人が分かる', correct: false, reply: ['「差出人は、まだ分からない。分かるのは時刻と順番」'], chat: [{ who: PE2, text: 'だれかは ひみつ' }] },
       { label: '手紙が消せる', correct: false, reply: ['「逆。消したら、上に積んだレイヤーが全部崩れる。だから消せない」'], chat: [{ who: BA, text: '逆ｗ' }] },
     ] },
-  { id: 'Y3-03', part: 'y3', no: 33, place: '島（語り）', speaker: 'Luna（四つ）',
+  { id: 'Y3-03', part: 'y3', no: 33, place: '島（語り）', speaker: 'Luna（四つ）', gif: { src: '/story/glass-strata.gif', still: '/story/glass-strata.png', alt: 'ガラスの器の中で、砂と水の層が一段ずつ積み重なっていく' },
     text: ['島では、四つになった Luna が、浜の石を一列に並べていた。', '「これ、プラトー。こっちも、プラトー。ぜんぶ、たかさがちがう」'],
     q: 'Luna の言う「プラトー」とは？',
     terms: [['プラトー', '高原。この物語では、時刻の印が積み重なってできた、平らな一段のこと'], ['ストラタ（地層）', '時間が積み重なってできた層']],
@@ -377,7 +382,7 @@ export const SCRIPT: Beat[] = [
       { label: '根っこみたいに横へ広がる図（リゾーム）', reply: ['「中心のない図。どこから読み始めてもいい。……でも、手紙の鎖には始まりがある。そこは違う」', 'アリミノボーイは、リゾームの図の上に、細い一本の矢印を引いた。'], chat: [{ who: BA, text: 'リゾーム＋一本の矢印' }, { who: PE2, text: 'むずい けど すき' }] },
       { label: '螺旋', reply: ['「螺旋なら、一年で一周。十二年で十二周」。灯台守の息子は、旋回する飛行機を見上げた。'], chat: [{ who: BA2, text: '螺旋は旋回と同じ形' }] },
     ] },
-  { id: 'Y3-05', part: 'y3', no: 35, place: '倉庫のラボ', speaker: 'アリミノボーイ',
+  { id: 'Y3-05', part: 'y3', no: 35, place: '倉庫のラボ', speaker: 'アリミノボーイ', gif: { src: '/story/voxel-heart.gif', still: '/story/voxel-heart.png', alt: 'カードスロットの中で、ボクセルの心臓が鼓動している' },
     text: ['「鍵の素材を決めたい。手紙の鎖を、何に結びつける？」', '「たぶん、どれも正解で、どれも少しずつ間違い。でも一つ選ばないと、ビルドが通らない」'],
     q: '鎖の鍵は、何で作る？',
     terms: [['ビルド', '部品を組み立てて、動く形にすること'], ['生体認証', '体の特徴（指紋・眼・心拍など）で本人を確かめること。この物語では架空の鍵の話']],
@@ -469,6 +474,25 @@ export const SCRIPT: Beat[] = [
     choices: [
       { label: '一通目から最新まで、指紋がつながっているか', correct: true, reply: ['一本ずつ、指で鎖をたどった。どこも切れていなかった。「デプロイ」'], chat: [{ who: BA, text: 'テスト大事' }, { who: PE, text: 'でぷろい！' }] },
       { label: '図がきれいか', correct: false, reply: ['きれいだった。でも、二十三通目と二十四通目のあいだで、指紋が一文字ずれていた。貼る前に気づいてよかった。'], chat: [{ who: BA2, text: '見た目より中身' }] },
+    ] },
+  { id: 'INT-1', part: 'interlude', no: null, place: 'デプロイの夜から朝まで', speaker: 'アリミノガール（語り・息つぎなし）',
+    gif: { src: '/story/voxel-heart.gif', still: '/story/voxel-heart.png', alt: 'カードスロットの中で、ボクセルの心臓が鼓動している' },
+    rhythm: {
+      words: [{ who: BA, text: 'ドン' }, { who: PE, text: 'ぱ' }, { who: BA2, text: 'ドン' }, { who: PE2, text: 'ぱっ' }, { who: BA, text: 'ドン、ドン' }, { who: PE, text: 'ぱ ぱ ぱ' }, { who: BA2, text: '（四つ打ち）' }, { who: PE2, text: 'ちっ ちっ' }, { who: BA, text: 'ドン' }, { who: PE, text: '……' }, { who: BA2, text: '（ブレイク）' }, { who: PE2, text: 'ぱ' }, { who: BA, text: 'ドーン' }],
+      tempo: [1100, 900, 700, 550, 420, 360, 340, 340, 600, 1400, 2200, 900, 1500],
+    },
+    text: [
+      'その夜、ラボの灯りは消えなかった。六角の鎖を貼り出す前の、あの長い夜——帆の修理屋の娘は糊の刷毛を口にくわえたまま指で指紋を一文字ずつなぞり、灯台守の息子は「レンダリング、レンダリング」と寝言みたいに繰り返し、アリミノボーイはコミットの言葉を三回書き直して三回消して、そのあいだじゅう窓の外では潮が満ちて引いて満ちて、港の倉庫の床板の下で BA-52FF がなにかを数え、数え、数えていた。',
+      'わたしは見ていた。見ていたし、聞いていた。音を消したテレビの口の動きみたいに、夜じゅうの全部が、形だけで、つぎからつぎへ——紙がめくれる、インクが乾く、六角の角が一つ切り落とされてまた貼り直される、誰かが「マージ！」と叫んで誰かが「まだ早い！」と叫び返す、鍵は指紋か DNA か眼球か心拍か、いやどれでもいい、ハッシュだけ残せ、中身は海へ、形だけ壁へ——そういうものが、全部いっぺんに、ほとんど一拍のうちに、起きていた。',
+      'そして、ふいに、止まった。',
+      '止まったのは、PE-05F0 たちが踊るのをやめたからだった。床の下の数える声も止まった。ラボの全員が、壁の鎖の、まだ誰も指でたどっていない最後の一段を見ていた。二十三通目と、二十四通目のあいだ。指紋が、一文字だけ、ずれていた。',
+      'ゆっくりと、とてもゆっくりと、アリミノボーイがペンを取った。8 ではなく B。上の丸が、閉じていない。彼はそれを直し、ペンを置き、誰も何も言わず、窓の外で潮が一回だけ満ちた。',
+      'それから、また全部が動き出した——刷毛と、寝言と、コミットと、床下の数える声と、六角の角と、海と、港と、鎖と、まだ見ない四段目のために島の浜で小さな石を握りしめて眠っている四つの子の、その小さな拳のなかの、ひとつの石の、重さまで。朝が来た。デプロイ。',
+    ],
+    q: 'この間奏を、どう読む？',
+    choices: [
+      { label: '速く読む（息つぎなしで）', reply: ['息つぎなしで読むと、夜は一拍だった。止まったところだけが、長かった。'], chat: [{ who: BA, text: '一拍の夜' }, { who: PE, text: 'はやよみ' }] },
+      { label: 'ゆっくり読む（止まったところで止まる）', reply: ['ゆっくり読むと、8 と B のあいだに、潮が一回満ちるだけの時間があった。'], chat: [{ who: BA2, text: 'ブレイクが効く' }, { who: PE2, text: 'しお いっかい' }] },
     ] },
   { id: 'Y3-16', part: 'y3', no: 46, place: '港の掲示板', speaker: 'アリミノガール（語り）',
     text: ['朝、港の人たちが掲示板の前に集まった。六角の鎖を、指でたどる人、首をかしげる人。', 'PE-05F0 たちは、図の前で踊っていた。'],
