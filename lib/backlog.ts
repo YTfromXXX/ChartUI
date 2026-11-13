@@ -60,6 +60,10 @@ export const TASKS: Task[] = [
   { id: 'accent-strip', title: '下部の 7 マスをポニーテールと定める（根元 1 → 毛先 7、3 体目＝ポニーテール（仮））', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'rough-outlines', title: 'ポニーテールの顔を基準に、3 体の大まかなデフォルトの輪郭（段階 1〜2）を研究する', area: '版', status: 'doing', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'four-figures', title: '4 体（ポニーテール・ボブ・2 体目・1 体目）の顔を可愛く、髪の動く部分（前髪の比・サイドの左右・2 色）で個性をならべる', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
+  { id: 'hair-four-resume', title: '髪型 3 体 → 4 体の続き（予習と復習は docs/mente/memo.md）：残り 3 体の小物棚・2 色と性別の色の規則・仮面・「アリミノ」の名前の確認', area: '版', status: 'todo', asked: '2026-11-13', route: '/lab/face-contour' },
+  { id: 'mente-switch', title: 'Mente の 🔄（切り替え）：「いったん Mente での作業を切り替えてゲームをする？」YES / NO', area: 'Mente', status: 'done', asked: '2026-11-13', route: '/mente' },
+  { id: 'find-vitalik-header', title: 'イベント：タイトルの名前をクリック → 吹き出し（placeholder「ヴィタリックを探せ」）→ 「〜を探せ版」に書き換え（header まで）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game' },
+  { id: 'find-vitalik-body', title: '「ヴィタリックを探せ」の本編（アリミノボーイ・アリミノガールの登場）— 姿は描かず、名前はタイトルの言葉だけ', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
@@ -83,7 +87,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };

@@ -35,10 +35,10 @@ export const BASE: FaceParams = { rx: 0.78, ry: 1.02, forehead: 0.15, cheek: 0.1
  * a soft jaw, a small chin and fuller cheeks. Each keeps one outline cue of its own:
  *   ポニーテール  round, fullest cheeks
  *   ボブ          the roundest and shortest (the youngest look), biggest forehead
- *   2 体目        a slim oval (still short of long), the clearest chin
- *   1 体目        heart-shaped: wide cheekbones, tiny jaw, pointed chin
+ *   アリミノガール（2 体目）  a slim oval (still short of long), the clearest chin
+ *   アリミノボーイ（1 体目）  heart-shaped: wide cheekbones, tiny jaw, pointed chin
  */
-export const FIGURE_NAMES = ['ポニーテール（仮）', 'ボブ（仮）', '2 体目', '1 体目'] as const;
+export const FIGURE_NAMES = ['ポニーテール（仮）', 'ボブ（仮）', 'アリミノガール（仮）', 'アリミノボーイ（仮）'] as const;
 export const PONY_FIGURE = 0;
 export const FACES: FaceParams[] = [
   { ...BASE, rx: 0.84, ry: 0.98, forehead: 0.2, cheek: 0.15, jaw: 0.03, nose: 0.14, noseY: -0.18, brow: 0.05, mouth: 0.04, chin: 0.04, hairline: 0.52, hairRise: 0.14 },

@@ -8,6 +8,7 @@ import MenteNotificationArea from '@/components/mente/MenteNotificationArea';
 import MenteResourceFeed from '@/components/mente/MenteResourceFeed';
 import EyeNoseTransplant from '@/components/mente/EyeNoseTransplant';
 import MoonSneakerPanel from '@/components/mente/MoonSneakerPanel';
+import SwitchToGame from '@/components/mente/SwitchToGame';
 import { SensorySpiceKit } from '@/app/cure-api/TSMonsterEngine';
 import { useCureAPIStore } from '@/lib/cureApiStore';
 import { MENTE_LOG, MENTE_MEMBERS, memberById } from '@/lib/menteChat';
@@ -60,7 +61,7 @@ export default function MentePage() {
             <Link href="/mente/aviator" className="font-bold text-[#7a0f22] hover:underline">紙飛行機 aviator</Link>
           </nav>
         </header>
-        <p className="font-serif text-6xl font-bold italic text-[#7a0f22]/80">Mente</p>
+        <div className="flex items-center gap-4"><p className="font-serif text-6xl font-bold italic text-[#7a0f22]/80">Mente</p><SwitchToGame /></div>
         {fromQuiz && (
           <p className="inline-block bg-black px-2 py-1 text-xs font-bold italic text-white">クイズクオンタム Q{fromQuiz} からのテレフォンを受信しました</p>
         )}
