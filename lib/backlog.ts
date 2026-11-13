@@ -93,6 +93,7 @@ export const TASKS: Task[] = [
   { id: 'mirage-room', title: '2 ゲーム目の冒頭：ストイックが蜃気楼の部屋に隠れる（暗号愛の長台詞）、背後に忍び寄るベルトランの回想（祖父の時計店）', area: 'アクティビスト', status: 'doing', asked: '2026-11-13', note: 'docs/story/chess-games.md（マネキン形式の台本）' },
   { id: 'chess4-mirage-text', title: '4 ゲーム目「ミームコインの野」を遊べる形に（注目の目盛り）、盤に蜃気楼の部屋、2・5・6・7 ゲーム目を経済学に結びつけたテキストに、港の時計台の小話', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess4' },
   { id: 'chess-wild', title: '大胆モード：デバイスの不具合（スプーフィング・不正ログイン・混信・カメラの乗っ取り・脳波のノイズ）、ニュースへの介入（指紋で見つかる）、先回り（監査と取り調べ）、20 秒の速いモード、デバイスなしは XR ブレインインターフェースで自由移動', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess3' },
+  { id: 'chess-link-drone', title: 'エーリアルの長押しの助言 → 建築家ボタンを隠し、🔗 リンク装置（SNCT・住まいの協同組合）に、ドローン機材（GPS のなりすまし）、四つ打ちの合成銘柄を追加', area: 'アクティビスト', status: 'done', asked: '2026-11-13', route: '/mente/game/chess4' },
   { id: 'peek-stoic-room', title: '場面：ベルトラン（ビットコイン準備企業）がストイックルームをのぞく。夫婦の場面はストイックの音のないテレビの中の番組（スーパーメタ形式）', area: 'アクティビスト', status: 'doing', asked: '2026-11-13' },
   { id: 'story-200-rest', title: '物語 200 の続き（4〜12 年目、153 問）を順に書き足す。7〜8 年目でアラン・シリトー・ゲームの伏線を回収、10 年目ごろに機械の答え（BA・PE・フォン）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/story' },
   { id: 'stoic-profile', title: 'ストイックのプロフィール：ガレージアイランドの詩人、酔いどれ草の農園、トトシ中本とおもちゃの王国', area: '版', status: 'done', asked: '2026-11-13', note: 'docs/story/stoic-profile.md（サトシに性的な要素は結びつけない形に書き直した）' },

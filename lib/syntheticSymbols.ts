@@ -17,6 +17,8 @@ const THEMES: { theme: Theme; filter: Filter; team: Sym['team']; names: string[]
   { theme: '鉄道', filter: '噂', team: 'white', names: ['始発鉄道', '工場駅前', '三駅ぶんの空席'] },
   // Game 4: fictional meme coins (original names only; no real coin's name or mascot)
   { theme: 'ミーム', filter: '噂', team: 'both', names: ['くしゃみ猫コイン', 'まばたき金魚コイン', 'PE 群コイン', 'ドン・ぱコイン', '四つ打ちコイン', 'ブレイクコイン'] },
+  // the 四つ打ち family (four-on-the-floor): more fictional meme coins named after rhythms
+  { theme: 'ミーム', filter: '噂', team: 'both', names: ['四つ打ちハウスコイン', '四つ打ちテクノコイン', '四つ打ちディスココイン', '裏打ちハイハットコイン', 'キックドラムコイン', 'BPM128 コイン', 'ブレイクビーツコイン', '四つ打ちアンビエントコイン'] },
   // Sanctuary × SNS: composite signals of "are people still living there?" (aggregate, fictional, never one person)
   { theme: '住まい', filter: '感情', team: 'black', names: ['定住指数', '庭の手入れ指数', '窓の灯り指数', '近所の返信率', '朝と夜の投稿の幅', '同じ景色の写真の数'] },
 ];

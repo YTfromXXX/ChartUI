@@ -5,7 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, type Scene } from '@/lib/chessGame3';
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
 import { keccak256 } from '@/lib/meshMetaV2';
-import { BRAIN_RULE, drift, faultChance, interceptor, newsPrint, parseFree, randomMove } from '@/lib/chessWild';
+import { BRAIN_RULE, drift, faultChance, floorSlip, interceptor, newsPrint, parseFree, randomMove } from '@/lib/chessWild';
 import { sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
 
 /** 住まい symbols and the Sanctuary resident each one suits: together they count double and forge a key fragment. */
@@ -128,6 +128,10 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const [frozen, setFrozen] = useState<string[]>([]);
   const [fast, setFast] = useState(false);
   const [left, setLeft] = useState(20);
+  // Long-press on Ariel's meta view: Ariel advises hiding the architect banner behind a short LINK device.
+  const [arielHint, setArielHint] = useState(false);
+  const press = useRef<number | null>(null);
+  const longPress = { onPointerDown: () => { press.current = window.setTimeout(() => setArielHint(true), 600); }, onPointerUp: () => { if (press.current) window.clearTimeout(press.current); }, onPointerLeave: () => { if (press.current) window.clearTimeout(press.current); }, onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setArielHint(true); } };
   const [aligned, setAligned] = useState(0);
   const rnd = useRef(() => Math.random());
   const done = turn >= TURNS;
@@ -188,6 +192,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
       if (devId === 'terminal') { const hijack = randomMove(side, pieces, inMirage, rnd.current); mineR = { move: hijack, why: `⚠ 不正ログイン：誰かのセッションで、別のプロンプトが実行された（${hijack ? `${hijack.id} → ${sqName(hijack.to)}` : 'どこへも'}）` }; notes.push('⚠ 不正ログイン：ターミナルの古いセッションが、もう一度再生された（リプレイのたとえ）。送った手の代わりに、別の手が走った。'); }
       if (devId === 'radio' && mineR.move) { const ic = interceptor(foe, mineR.move.to, pieces); if (ic) { foeR = { move: ic, why: `⚠ 混信で聞いた先へ ${ic.id} → ${sqName(ic.to)}` }; notes.push('⚠ 混信：あなたの無線のプロンプトが、相手の無線にも流れた（間に誰かがいるたとえ）。相手が同じ区画を狙った。'); } else notes.push('⚠ 混信：雑音が入ったが、相手は聞き取れなかった。'); }
       if (devId === 'ariel') { capDevice = true; notes.push(`⚠ カメラの乗っ取り：エーリアル ${camera} の映像がすり替えられ、別の部屋を映していた。違うデバイスで読んだ得点は数えない。`); }
+      if (devId === 'drone' && mineR.move) { const d = floorSlip(mineR.move, pieces, inMirage, rnd.current); if (!same(d.to, mineR.move.to)) { mineR = { move: d, why: `⚠ GPS のなりすまし：${d.id} は ${sqName(d.to)} に着陸した（階がずれた）` }; notes.push('⚠ GPS のなりすまし（たとえ）：ドローンの位置の知らせがすり替えられ、着陸する階がずれた。'); } else notes.push('⚠ GPS のなりすまし：位置がゆらいだが、着陸は無事だった。'); }
       if (devId === 'brain' && mineR.move) { const d = drift(mineR.move, pieces, inMirage, rnd.current); if (!same(d.to, mineR.move.to)) { mineR = { move: d, why: `⚠ 脳波のノイズ：${d.id} は ${sqName(d.to)} に降りた（一マスずれた）` }; notes.push('⚠ 脳波のノイズ：考えた区画から、一マスずれた。'); } }
     }
     const white = side === 'white' ? mineR : foeR; const black = side === 'white' ? foeR : mineR;
@@ -216,7 +221,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
       if (f) { usedFocus.push(color); notes.push(`${sideName(color)}は ${f.ticker}（${f.theme}）の${f.signal}を見て、${f.theme}のニュースに集中した。`); if (f.filter === who.filter) { delta += 1; notes.push('チームの集中と、動いた人の読み方がそろった。調和 +1。'); } }
       acts.push(act + '。');
     }
-    const devLabel = (d: typeof dev, mine: boolean) => (d.id === 'brain' ? '🧠 XR ブレインインターフェース' : d.meta ? `${d.icon} エーリアル ${mine ? camera : 1 + Math.floor(rnd.current() * 22)} のメタ視点` : `${d.icon} ${d.name}`);
+    const devLabel = (d: typeof dev, mine: boolean) => (d.id === 'drone' ? '🛸 ドローン機材（空からの視点）' : d.id === 'brain' ? '🧠 XR ブレインインターフェース' : d.meta ? `${d.icon} エーリアル ${mine ? camera : 1 + Math.floor(rnd.current() * 22)} のメタ視点` : `${d.icon} ${d.name}`);
     const lines = [{ side: sideName(side) + (side === 'black' ? '（あなた＝建築家）' : '（あなた）'), device: devLabel(dev, true), prompt: myText, why: mineR.why }, { side: sideName(foe), device: devLabel(cpuDev, false), prompt: foeText, why: foeR.why }];
     setLog((l) => [{ turn: turn + 1, lines, events, acts, harmony: delta, notes }, ...l]);
     setBadges((b) => { const n = { ...b }; used.forEach((id) => delete n[id]); return n; });
@@ -259,7 +264,9 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
           {allowArchitect && (
             <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="side">参加のしかた：
               <button type="button" onClick={() => reset('white')} className="border px-2 py-0.5" style={{ borderColor: side === 'white' ? '#c8001a' : '#d6d3d1' }}>アクティブギャング（白）</button>
-              <button type="button" data-testid="as-architect" onClick={() => reset('black')} className="border px-2 py-0.5" style={{ borderColor: side === 'black' ? '#c8001a' : '#d6d3d1' }}>建築家オスバルド（製図板）としてサンクチュアリ（黒）</button>
+              {side === 'black' ? <span className="border border-[#2b3a67] px-2 py-0.5 text-[#2b3a67]">🔗 SNCT として参加中（製図板）</span>
+                : arielHint ? <button type="button" data-testid="link-sanctuary" onClick={() => reset('black')} className="border border-dashed border-[#2b3a67] px-2 py-0.5 text-left text-[#2b3a67] underline decoration-dotted">🔗 SNCT · 住まいの協同組合（六角温室の共同住宅を運営）</button>
+                : <span className="px-1 text-stone-400" aria-hidden>（……）</span>}
             </div>
           )}
         </header>
@@ -319,7 +326,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
               {frozen.length > 0 && <p className="text-[#c8001a]">取り調べ中：{frozen.map((id) => PEOPLE[id].name).join('・')}（このターンは動けない）</p>}
             </div>
             <p className="text-xs font-semibold">プロンプトを送るデバイス</p>
-            <div className="grid grid-cols-2 gap-1 text-xs">{DEVICES.map((d) => <button key={d.id} type="button" data-testid={`dev-${d.id}`} onClick={() => setDevice(d.id)} className="border px-2 py-1 text-left" style={{ borderColor: device === d.id ? '#c8001a' : '#d6d3d1', background: device === d.id ? '#fff1f2' : 'white' }}>{d.icon} {d.name}</button>)}</div>
+            <div className="grid grid-cols-2 gap-1 text-xs">{DEVICES.map((d) => <button key={d.id} type="button" data-testid={`dev-${d.id}`} onClick={() => setDevice(d.id)} {...(d.id === 'ariel' ? longPress : {})} title={d.id === 'ariel' ? '長押しで、エーリアルの助言' : undefined} className="border px-2 py-1 text-left" style={{ borderColor: device === d.id ? '#c8001a' : '#d6d3d1', background: device === d.id ? '#fff1f2' : 'white' }}>{d.icon} {d.name}</button>)}</div>
+            {arielHint && side === 'white' && <div className="border border-[#2b3a67] bg-[#f5f7fb] p-2 text-[11px]" role="note" data-testid="ariel-hint"><p className="font-semibold">👁 エーリアルの助言</p><p>「建築家オスバルド（製図板）としてのサンクチュアリ（黒）」は、バナー（ただの看板）になってしまう可能性がある。誰か一人の名前か、具体的な商いのかたちを短くまとめた、効くリンク装置に変えて、隠しておくといい。</p><p className="mt-1 text-stone-600">→ 参加のしかたの欄に、🔗 のリンク装置を置いた。押すと、建築家として参加できる。</p></div>}
             {device === 'ariel' && <label className="block text-xs">エーリアル <input type="number" min={1} max={22} value={camera} onChange={(e) => setCamera(Math.max(1, Math.min(22, Number(e.target.value) || 1)))} className="w-14 border border-stone-400 bg-white px-1" /> / 22 から見る</label>}
             <textarea data-testid="prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} placeholder={side === 'white' ? '例：W1 を c3@2F へ' : '例：B2 を c3@2F へ'} className="w-full border border-stone-400 bg-white px-2 py-1 text-sm text-[#1f1f1f]" disabled={done} />
             <button type="button" data-testid="send" onClick={() => send()} disabled={done} className="w-full border border-[#1f1f1f] bg-[#1f1f1f] py-1.5 text-sm text-white disabled:opacity-40">送る</button>

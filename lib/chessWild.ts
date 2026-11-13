@@ -56,3 +56,9 @@ export function interceptor(color: Color, target: Sq, pieces: Piece[]): Move {
 const enc = new TextEncoder();
 /** The news's fingerprint (4 hex of keccak-256): tampering changes it. */
 export const newsPrint = (x: unknown) => Array.from(keccak256(enc.encode(JSON.stringify(x))).slice(0, 2), (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/** Drone fault (GPS spoofing, a game metaphor): the landing slips to the same bay one floor up or down, if empty. */
+export function floorSlip(m: NonNullable<Move>, pieces: Piece[], blocked: (s: Sq) => boolean, rnd: () => number): NonNullable<Move> {
+  const opts = [m.to.f - 1, m.to.f + 1].filter((f) => f >= 0 && f < FLOORS).map((f) => ({ ...m.to, f })).filter((s) => !blocked(s) && !pieces.some((p) => p.alive && same(p.at, s)));
+  return opts.length ? { id: m.id, to: opts[Math.floor(rnd() * opts.length)] } : m;
+}
