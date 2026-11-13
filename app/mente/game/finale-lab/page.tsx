@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import MenteLogoGeo from '@/components/mente/MenteLogoGeo';
 import { MAGNETS, lunaHand, magnets, nearest, snap, struggling, type FlightLog } from '@/lib/fibPanel';
 
 // Finale research: Luna flies the hacked aviator to the honeycomb tower and lands on its top deck,
@@ -182,6 +183,14 @@ export default function FinaleLab() {
             <p className="text-[10px] text-stone-600">内側の輪：低い / 中：中ほど / 外側：高い（3 段 × 22）。点を押すと手動になる。</p>
           </div>
         </div>
+        <section className="flex flex-wrap items-center gap-4 border-y border-stone-200 py-3" aria-label="記念のスクリーンセーバー" data-testid="screensaver">
+          <MenteLogoGeo className="h-7" />
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold">記念：塔と飛行機のスクリーンセーバー</p>
+            <p className="text-stone-600">22 のエーリアルが、9 秒ごとにゆっくり角度を変えて飛行機を眺めます。点滅なし・通信なし。HTML 一枚で、ブラウザで開いてクリックすると全画面になります。</p>
+            <p className="flex flex-wrap gap-3"><a href="/downloads/mente-screensaver.html" download="mente-screensaver.html" data-testid="screensaver-download" className="border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1 text-white">スクリーンセーバーをダウンロード</a><a href="/downloads/mente-screensaver.html" target="_blank" rel="noopener" className="underline">先に見てみる</a></p>
+          </div>
+        </section>
         <p className="text-[11px] text-stone-600">研究用の試作です。塔にぶつかる演出はなく、触れると押し戻されます。3・6・9・10 年目の結果（輪の大きさ・重さ・見張り・BA と PE）はまだつないでいません。</p>
       </div>
     </main>
