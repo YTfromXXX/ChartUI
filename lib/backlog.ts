@@ -73,6 +73,8 @@ export const TASKS: Task[] = [
   { id: 'mente-nudge', title: '乱れたときだけ、Mente 式にそっと「アリミノボーイに聞く」（迷い・急ぎ・やり直し・つまずき）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year1' },
   { id: 'finale-22', title: '最後の面の研究：Luna の飛行機 × エーリアル達の 22 アングル（メタ視点のデバイス、自動と手動）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'year9-dice', title: '9 年目を遊べる形に：クレーターのサイコロ（歩数と色を両者が決める、同じ形のクレーターはない、十字を横切って次の螺旋へ）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year9' },
+  { id: 'arxiv-paper', title: 'arXiv 初投稿の下書き：顔の等高線とシルエットの重なり（IoU）で、XR のアバターを見分けやすくする（paper/）', area: '研究', status: 'doing', asked: '2026-11-13', note: '著者名・Mann et al. の確認・Overleaf で組版・エンドースメントはオーナーの作業（paper/README.md）' },
+  { id: 'finale-3d', title: '最後の面を 3D のリアルな動画ゲームに（three.js：塔・aviator・22 アングル・旋回の輪に入る瞬間、クレーターの指紋を鍵に）', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'banner-22', title: 'バナー：{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}（中身は空けておく）', area: '版', status: 'decide', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'screensaver', title: '記念：塔と飛行機のスクリーンセーバーをダウンロード（MENTE の幾何学ロゴ、HTML 一枚）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
