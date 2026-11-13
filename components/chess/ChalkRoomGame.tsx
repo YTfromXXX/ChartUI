@@ -5,6 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, type Scene } from '@/lib/chessGame3';
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
 import { keccak256 } from '@/lib/meshMetaV2';
+import { BRAIN_RULE, drift, faultChance, interceptor, newsPrint, parseFree, randomMove } from '@/lib/chessWild';
 import { sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
 
 /** 住まい symbols and the Sanctuary resident each one suits: together they count double and forge a key fragment. */
@@ -119,6 +120,14 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const [focus, setFocus] = useState<Partial<Record<Color, Sym>>>({});
   const [keys, setKeys] = useState<KeyFragment[]>([]);
   const [attention, setAttention] = useState(0);
+  // Bold mode: device faults, tampering with the news, insider-like peeking, and a turn timer.
+  const [wild, setWild] = useState(true);
+  const [noise, setNoise] = useState(0);
+  const [tamper, setTamper] = useState<Record<number, Filter>>({});
+  const [peeked, setPeeked] = useState(false);
+  const [frozen, setFrozen] = useState<string[]>([]);
+  const [fast, setFast] = useState(false);
+  const [left, setLeft] = useState(20);
   const [aligned, setAligned] = useState(0);
   const rnd = useRef(() => Math.random());
   const done = turn >= TURNS;
@@ -156,19 +165,41 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     return out;
   }, [side, done, turn, pieces, prefer, news, postSyms]);
 
-  const send = () => {
+  const shownNews = { ...news, parts: news.parts.map((x, k) => (tamper[k] ? { ...x, filter: tamper[k] } : x)) };
+  const printOrig = newsPrint(news.parts); const printNow = newsPrint(shownNews.parts);
+  const cycle = (k: number) => { const order: Filter[] = ['事実', '噂', '感情']; const cur = tamper[k] ?? news.parts[k].filter; const nx = order[(order.indexOf(cur) + 1) % 3]; setTamper((t) => { const n = { ...t }; if (nx === news.parts[k].filter) delete n[k]; else n[k] = nx; return n; }); };
+
+  const send = (timeout = false) => {
     if (done) return;
-    if (!device) { setWarn('決まり：手は、デバイスかメタ視点からのプロンプトで送ります。まずデバイスを選んでください。'); return; }
-    if (!prompt.trim()) { setWarn('プロンプトが空です。駒を押して行き先を押すと、プロンプトの下書きが入ります。'); return; }
-    setWarn('');
-    const dev = DEVICES.find((d) => d.id === device)!; const cpuDev = DEVICES[Math.floor(rnd.current() * DEVICES.length)];
+    if (!timeout && !prompt.trim()) { setWarn('プロンプトが空です。駒を押して行き先を押すと、プロンプトの下書きが入ります。'); return; }
+    const devId = device ?? 'brain';
+    setWarn(device ? '' : BRAIN_RULE);
+    const dev = DEVICES.find((d) => d.id === devId)!; const cpuPool = DEVICES.filter((d) => d.id !== 'brain'); const cpuDev = cpuPool[Math.floor(rnd.current() * cpuPool.length)];
     const guard = (r: ReturnType<typeof parsePrompt>) => (r.move && inMirage(r.move.to) ? { move: null, why: `${r.move.id} は蜃気楼の部屋に入れない（見えるが、鍵がない） — 駐車のまま` } : r);
-    const mineR = guard(parsePrompt(prompt, side, pieces)); const foeText = cpuPrompt(foe, pieces, rnd.current); const foeR = guard(parsePrompt(foeText, foe, pieces));
+    const myText = timeout ? '（時間切れ）' : prompt;
+    let mineR = timeout ? { move: null, why: '時間切れ — 駐車のまま' } : devId === 'brain' ? parseFree(prompt, side, pieces, inMirage) : guard(parsePrompt(prompt, side, pieces));
+    if (mineR.move && frozen.includes(mineR.move.id)) mineR = { move: null, why: `${mineR.move.id} は取り調べ中で動けない — 駐車のまま` };
+    const foeText = cpuPrompt(foe, pieces, rnd.current); let foeR = guard(parsePrompt(foeText, foe, pieces));
+    const notes: string[] = []; let penalty = 0; let capDevice = false;
+    // --- device faults (bold mode) ---
+    const chance = faultChance(turn, noise);
+    if (wild && rnd.current() < chance) {
+      if (devId === 'phone') notes.push('⚠ スプーフィング：スマホに、なりすましの「速報」が届いた。差出人の指紋が、どの投稿も指していない。');
+      if (devId === 'terminal') { const hijack = randomMove(side, pieces, inMirage, rnd.current); mineR = { move: hijack, why: `⚠ 不正ログイン：誰かのセッションで、別のプロンプトが実行された（${hijack ? `${hijack.id} → ${sqName(hijack.to)}` : 'どこへも'}）` }; notes.push('⚠ 不正ログイン：ターミナルの古いセッションが、もう一度再生された（リプレイのたとえ）。送った手の代わりに、別の手が走った。'); }
+      if (devId === 'radio' && mineR.move) { const ic = interceptor(foe, mineR.move.to, pieces); if (ic) { foeR = { move: ic, why: `⚠ 混信で聞いた先へ ${ic.id} → ${sqName(ic.to)}` }; notes.push('⚠ 混信：あなたの無線のプロンプトが、相手の無線にも流れた（間に誰かがいるたとえ）。相手が同じ区画を狙った。'); } else notes.push('⚠ 混信：雑音が入ったが、相手は聞き取れなかった。'); }
+      if (devId === 'ariel') { capDevice = true; notes.push(`⚠ カメラの乗っ取り：エーリアル ${camera} の映像がすり替えられ、別の部屋を映していた。違うデバイスで読んだ得点は数えない。`); }
+      if (devId === 'brain' && mineR.move) { const d = drift(mineR.move, pieces, inMirage, rnd.current); if (!same(d.to, mineR.move.to)) { mineR = { move: d, why: `⚠ 脳波のノイズ：${d.id} は ${sqName(d.to)} に降りた（一マスずれた）` }; notes.push('⚠ 脳波のノイズ：考えた区画から、一マスずれた。'); } }
+    }
     const white = side === 'white' ? mineR : foeR; const black = side === 'white' ? foeR : mineR;
     const { pieces: next, events } = resolveTurn(pieces, white.move, black.move);
     const crashed = events.some((e) => e.kind === 'crash');
-    let delta = crashed ? -1 : dev.id !== cpuDev.id ? 1 : 0;
-    const notes: string[] = [crashed ? '同じマスでぶつかった。読み方が衝突して、調和が一つ減った。' : delta > 0 ? `違うデバイスから、同じニュースを読んだ。${news.harmony}` : '同じデバイスから読んだ。調和は増えも減りもしない。'];
+    let delta = crashed ? -1 : dev.id !== cpuDev.id && !capDevice ? 1 : 0;
+    notes.unshift(crashed ? '同じマスでぶつかった。読み方が衝突して、調和が一つ減った。' : delta > 0 ? `違うデバイスから、同じニュースを読んだ。${news.harmony}` : '調和は増えも減りもしない。');
+    if (devId === 'phone' && notes.some((n) => n.startsWith('⚠ スプーフィング')) && mineR.move && PEOPLE[mineR.move.id].filter === '噂') { delta -= 1; notes.push(`${PEOPLE[mineR.move.id].name}は噂に強いぶん、なりすましの速報を信じてしまった。調和 −1。`); }
+    // --- the audit: tampering and insider-like moves ---
+    if (Object.keys(tamper).length) { penalty += 2; notes.push(`🔎 監査：ニュースの指紋が一致しない（元 ${printOrig} ／ 今 ${printNow}）。介入（改ざん）は、指紋で見つかる。調和 −2。`); }
+    if (peeked && mineR.move) { penalty += 2; notes.push(`🔎 監査：公開前のニュースをのぞいてから動いた（先回り）。鎖のタイムスタンプが、公開より前の手を記録している。${PEOPLE[mineR.move.id].name}は次のターン、取り調べで動けない。調和 −2。（現実の市場では、公開前の重要な情報で売り買いすることはインサイダー取引で、法律で禁じられている）`); }
+    delta -= penalty;
     const acts: string[] = []; const used: string[] = []; const usedFocus: Color[] = []; const forged: KeyFragment[] = []; let alignedNow = false;
     for (const m of [white.move, black.move]) {
       if (!m) continue; const who = PEOPLE[m.id]; const color: Color = m.id.startsWith('W') ? 'white' : 'black';
@@ -185,17 +216,27 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
       if (f) { usedFocus.push(color); notes.push(`${sideName(color)}は ${f.ticker}（${f.theme}）の${f.signal}を見て、${f.theme}のニュースに集中した。`); if (f.filter === who.filter) { delta += 1; notes.push('チームの集中と、動いた人の読み方がそろった。調和 +1。'); } }
       acts.push(act + '。');
     }
-    const devLabel = (d: typeof dev, mine: boolean) => (d.meta ? `${d.icon} エーリアル ${mine ? camera : 1 + Math.floor(rnd.current() * 22)} のメタ視点` : `${d.icon} ${d.name}`);
-    const lines = [{ side: sideName(side) + (side === 'black' ? '（あなた＝建築家）' : '（あなた）'), device: devLabel(dev, true), prompt, why: mineR.why }, { side: sideName(foe), device: devLabel(cpuDev, false), prompt: foeText, why: foeR.why }];
+    const devLabel = (d: typeof dev, mine: boolean) => (d.id === 'brain' ? '🧠 XR ブレインインターフェース' : d.meta ? `${d.icon} エーリアル ${mine ? camera : 1 + Math.floor(rnd.current() * 22)} のメタ視点` : `${d.icon} ${d.name}`);
+    const lines = [{ side: sideName(side) + (side === 'black' ? '（あなた＝建築家）' : '（あなた）'), device: devLabel(dev, true), prompt: myText, why: mineR.why }, { side: sideName(foe), device: devLabel(cpuDev, false), prompt: foeText, why: foeR.why }];
     setLog((l) => [{ turn: turn + 1, lines, events, acts, harmony: delta, notes }, ...l]);
     setBadges((b) => { const n = { ...b }; used.forEach((id) => delete n[id]); return n; });
     setFocus((f) => { const n = { ...f }; usedFocus.forEach((c) => delete n[c]); return n; });
     if (delta > 0) alignedNow = true;
     setAttention((a) => a + news.parts.filter((x) => x.filter === '噂').length + news.posts.filter((x) => x.kind === '噂').length * 2);
     setKeys((k) => [...k, ...forged]); setAligned((a) => a + (alignedNow ? 1 : 0));
+    setNoise((n) => n + (devId === 'brain' ? 2 : 0));
+    setFrozen(peeked && mineR.move ? [mineR.move.id] : []);
+    setTamper({}); setPeeked(false); setLeft(20);
     setHarmony((h) => h + delta); setPieces(next); setTurn((t) => t + 1); setPrompt(''); setPicked(null);
   };
-  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); setAttention(0); };
+  const sendRef = useRef(send); sendRef.current = send;
+  useEffect(() => {
+    if (!fast || done) return undefined;
+    const t = window.setInterval(() => setLeft((x) => Math.max(0, x - 1)), 1000); // only counts down (no side effects in the updater)
+    return () => window.clearInterval(t);
+  }, [fast, done]);
+  useEffect(() => { if (fast && !done && left === 0) sendRef.current(true); }, [fast, done, left]); // time's up: send once
+  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); setAttention(0); setNoise(0); setTamper({}); setPeeked(false); setFrozen([]); setLeft(20); };
   const clickCell = (s: Sq) => {
     if (done) return;
     const here = pieces.find((p) => p.alive && same(p.at, s));
@@ -214,7 +255,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
         <header className="space-y-1 border-b border-stone-200 pb-2">
           <h1 className="text-lg">{title}</h1>
           {intro && <p className="text-xs text-stone-600">{intro}</p>}
-          <p className="border-l-4 border-[#c8001a] pl-2 text-xs" data-testid="rule">決まり：すべての手は、<strong>デバイスかメタ視点からのプロンプト</strong>で進む。何も、ひとりでには動かない。</p>
+          <p className="border-l-4 border-[#c8001a] pl-2 text-xs" data-testid="rule">決まり：すべての手は、<strong>デバイスかメタ視点からのプロンプト</strong>で進む。デバイスを選ばずに送ると、<strong>XR ブレインインターフェース</strong>で、好きな区画へ自由に動かせる（サンクチュアリ構想の要求。ただし脳波のノイズがたまる）。</p>
           {allowArchitect && (
             <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="side">参加のしかた：
               <button type="button" onClick={() => reset('white')} className="border px-2 py-0.5" style={{ borderColor: side === 'white' ? '#c8001a' : '#d6d3d1' }}>アクティブギャング（白）</button>
@@ -229,7 +270,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {!done && <>
               <p className="text-base font-semibold" data-testid="headline">「{news.headline}」{news.theme && <span className="ml-2 text-[11px] font-normal text-stone-500">テーマ：{news.theme}</span>}</p>
               {news.scene && <ScenePanel key={turn} scene={news.scene} />}
-              <div className="flex flex-wrap gap-2">{news.parts.map((p) => <span key={p.label} className="border px-2 py-0.5 text-xs" style={{ borderColor: FILTER_COLOR[p.filter], color: FILTER_COLOR[p.filter] }}>{p.label}：{p.text}<span className="ml-1 text-[10px]">［{p.filter}］</span></span>)}</div>
+              <div className="flex flex-wrap gap-2">{shownNews.parts.map((p, k) => <button type="button" key={p.label} data-testid={`part-${k}`} onClick={() => wild && cycle(k)} title={wild ? '押すと、この部品のフィルターを書き換える（介入）' : undefined} className="border px-2 py-0.5 text-left text-xs" style={{ borderColor: FILTER_COLOR[p.filter], color: FILTER_COLOR[p.filter], background: tamper[k] ? '#fff1f2' : 'white' }}>{p.label}：{p.text}<span className="ml-1 text-[10px]">［{p.filter}］{tamper[k] ? '（介入）' : ''}</span></button>)}</div>
+              {wild && <p className="text-[11px]" data-testid="news-print">ニュースの指紋：<span className="font-semibold">{printOrig}</span>{printNow !== printOrig && <span className="text-[#c8001a]"> → {printNow}（一致しない：介入の跡）</span>} <span className="text-stone-500">· 部品を押すと、フィルターを書き換えられる（介入）。</span></p>}
               <div className="grid gap-1 sm:grid-cols-3">{news.posts.map((p) => <div key={p.handle} className="border border-stone-200 bg-[#fafaf9] p-2 text-[11px]"><p className="text-stone-500">▶ {p.handle} · {p.views}</p><p>{p.text}</p><p className="text-[10px]" style={{ color: FILTER_COLOR[p.kind] }}>［{p.kind}］</p></div>)}</div>
             </>}
             <svg viewBox={`0 0 ${FLOOR_W * FLOORS} ${SIZE * CELL + PAD * 2 + 14}`} className="w-full rounded bg-[#2f2f2f]" aria-label="チョークで描いた 3 つの階" data-testid="board">
@@ -268,11 +310,19 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
                 <p className="text-[10px] text-stone-500">案を押すと、プロンプトの下書きと、その銘柄を持った状態になります。駒に渡すかどうかは、あなたが決める。</p>
               </div>
             )}
+            <div className="space-y-1 border border-[#c8001a] p-2 text-[11px]" data-testid="wild">
+              <label className="flex items-center gap-1"><input type="checkbox" checked={wild} onChange={(e) => setWild(e.target.checked)} />大胆モード（デバイスの不具合・介入・先回り）</label>
+              <label className="flex items-center gap-1"><input type="checkbox" data-testid="fast" checked={fast} onChange={(e) => { setFast(e.target.checked); setLeft(20); }} />速いモード（1 ターン 20 秒）{fast && !done && <span className="ml-1 font-semibold" data-testid="timer">残り {left} 秒</span>}</label>
+              {wild && <p data-testid="fault">デバイスの不具合の起きやすさ：{Math.round(faultChance(turn, noise) * 100)}% · 脳波のノイズ：{noise}</p>}
+              {wild && !done && turn + 1 < TURNS && <button type="button" data-testid="peek" onClick={() => setPeeked(true)} className="border border-stone-400 px-1.5">次のニュースをのぞく（先回り）</button>}
+              {peeked && turn + 1 < TURNS && <p className="text-[#c8001a]" data-testid="peeked">公開前：「{NEWS[turn + 1].headline}」— これを見て動くと、監査に記録される。</p>}
+              {frozen.length > 0 && <p className="text-[#c8001a]">取り調べ中：{frozen.map((id) => PEOPLE[id].name).join('・')}（このターンは動けない）</p>}
+            </div>
             <p className="text-xs font-semibold">プロンプトを送るデバイス</p>
             <div className="grid grid-cols-2 gap-1 text-xs">{DEVICES.map((d) => <button key={d.id} type="button" data-testid={`dev-${d.id}`} onClick={() => setDevice(d.id)} className="border px-2 py-1 text-left" style={{ borderColor: device === d.id ? '#c8001a' : '#d6d3d1', background: device === d.id ? '#fff1f2' : 'white' }}>{d.icon} {d.name}</button>)}</div>
             {device === 'ariel' && <label className="block text-xs">エーリアル <input type="number" min={1} max={22} value={camera} onChange={(e) => setCamera(Math.max(1, Math.min(22, Number(e.target.value) || 1)))} className="w-14 border border-stone-400 bg-white px-1" /> / 22 から見る</label>}
             <textarea data-testid="prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} placeholder={side === 'white' ? '例：W1 を c3@2F へ' : '例：B2 を c3@2F へ'} className="w-full border border-stone-400 bg-white px-2 py-1 text-sm text-[#1f1f1f]" disabled={done} />
-            <button type="button" data-testid="send" onClick={send} disabled={done} className="w-full border border-[#1f1f1f] bg-[#1f1f1f] py-1.5 text-sm text-white disabled:opacity-40">送る</button>
+            <button type="button" data-testid="send" onClick={() => send()} disabled={done} className="w-full border border-[#1f1f1f] bg-[#1f1f1f] py-1.5 text-sm text-white disabled:opacity-40">送る</button>
             {warn && <p className="text-[11px] text-[#c8001a]" role="alert" data-testid="warn">{warn}</p>}
             {held && <p className="text-[11px] text-[#c8001a]" data-testid="held">持っている銘柄：{held.ticker}（駒かチームを押すと渡す）</p>}
             <p className="text-sm" data-testid="harmony">調和：{harmony}</p>

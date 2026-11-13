@@ -16,6 +16,7 @@ export const DEVICES: Device[] = [
   { id: 'terminal', icon: '🖥', name: 'ターミナル' },
   { id: 'radio', icon: '📻', name: '無線' },
   { id: 'ariel', icon: '👁', name: 'エーリアルのメタ視点', meta: true },
+  { id: 'brain', icon: '🧠', name: 'XR ブレインインターフェース' },
 ];
 
 export type Person = { id: string; name: string; role: string; attire: string; filter: Filter; act: string[] };
