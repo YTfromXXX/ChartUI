@@ -7,6 +7,7 @@
 // Harmony: two different devices reading the same news without colliding adds harmony; a crash takes it away.
 // All companies, people, posts and numbers are fictional; nothing has a price; no advice to buy or sell.
 import type { Color } from '@/lib/promptChess';
+import type { Theme } from '@/lib/syntheticSymbols';
 
 export type Filter = '事実' | '噂' | '感情';
 export type Device = { id: string; icon: string; name: string; meta?: boolean };
@@ -31,29 +32,33 @@ export const PEOPLE: Record<string, Person> = {
 
 export type Part = { label: string; text: string; filter: Filter };
 export type Post = { handle: string; text: string; views: string; kind: Filter };
-export type News = { headline: string; parts: Part[]; posts: Post[]; harmony: string };
+/** A scene shown with the news: mannequin still frames, ad-realism, or a switch from one to the other. */
+export type Look = 'mannequin' | 'ad';
+export type Frame = { pose: string; lines: [string, string][]; style?: Look };
+export type Scene = { style: Look | 'switch'; frames: Frame[] };
+export type News = { headline: string; parts: Part[]; posts: Post[]; harmony: string; theme?: Theme; scene?: Scene };
 export const NEWS: News[] = [
-  { headline: 'ある港町で、雨の日が十日続いた',
+  { headline: 'ある港町で、雨の日が十日続いた', theme: 'ホテル',
     parts: [{ label: '何が', text: '雨が十日続いた', filter: '事実' }, { label: 'どこで', text: 'ある港町', filter: '事実' }, { label: 'なぜ', text: '海の上の空気が、いつもより湿っている', filter: '噂' }, { label: 'どう感じる', text: '洗濯物が乾かない', filter: '感情' }],
     posts: [{ handle: '@port_umbrella', text: '傘が売り切れてた。港の店、全部。', views: '1.2万回', kind: '事実' }, { handle: '@hotel_breakfast_fan', text: '雨の日のホテルの朝食、窓際が埋まるの早い', views: '8,400回', kind: '噂' }, { handle: '@laundry_blues', text: '十日目。もう笑うしかない', views: '3.1万回', kind: '感情' }],
     harmony: '同じ雨を、傘の数で読む人と、朝食の席で読む人と、洗濯物で読む人がいる。' },
-  { headline: '港の古い倉庫が一つ、売りに出た',
+  { headline: '港の古い倉庫が一つ、売りに出た', theme: '港',
     parts: [{ label: '誰が', text: '古い倉庫の持ち主', filter: '事実' }, { label: '何を', text: '倉庫を売りに出した', filter: '事実' }, { label: 'なぜ', text: '後継ぎがいない、という話', filter: '噂' }, { label: 'どう感じる', text: '子どものころ遊んだ場所がなくなる', filter: '感情' }],
     posts: [{ handle: '@warehouse_walk', text: '倉庫の前、看板が立ってた。写真だけ撮った', views: '5,600回', kind: '事実' }, { handle: '@harbor_rumor', text: 'ホテルになるらしいよ（たぶん）', views: '2.4万回', kind: '噂' }, { handle: '@old_port_kid', text: 'ここで鬼ごっこした。さみしい', views: '9,900回', kind: '感情' }],
     harmony: '売りに出た倉庫を、看板として見る人、未来のホテルとして見る人、思い出として見る人。' },
-  { headline: '短い動画で、あるホテルの朝食が話題になった',
+  { headline: '短い動画で、あるホテルの朝食が話題になった', theme: '動画',
     parts: [{ label: '何が', text: 'ホテルの朝食の動画', filter: '事実' }, { label: 'どれだけ', text: '再生回数が三日で百万回', filter: '事実' }, { label: 'なぜ', text: '窓から見える島がきれいだから、らしい', filter: '噂' }, { label: 'どう感じる', text: '行ってみたい', filter: '感情' }],
     posts: [{ handle: '@noche_morning', text: '窓の外の島、ほんとにこの色だった', views: '100万回', kind: '感情' }, { handle: '@data_hotel', text: '動画は百万回。でも予約サイトの空室は変わってない', views: '4,200回', kind: '事実' }, { handle: '@island_rumor', text: '来月から値上げするって聞いた', views: '6.7万回', kind: '噂' }],
     harmony: '百万回の再生と、変わらない空室。注目は、まだ値段にも予約にもなっていない。' },
-  { headline: '朝の電車の始発が、一本増えた',
+  { headline: '朝の電車の始発が、一本増えた', theme: '鉄道',
     parts: [{ label: '何が', text: '始発が一本増えた', filter: '事実' }, { label: 'いつ', text: '来月の一日から', filter: '事実' }, { label: 'なぜ', text: '工場の駅で降りる人が戻ってきたから、という話', filter: '噂' }, { label: 'どう感じる', text: '少し早く起きなきゃ', filter: '感情' }],
     posts: [{ handle: '@first_train', text: '始発、ほんとに増えてる。時刻表を撮った', views: '7,300回', kind: '事実' }, { handle: '@factory_station', text: '工場の駅、最近ちょっと混んでる気がする', views: '1.5万回', kind: '噂' }, { handle: '@sleepy_commuter', text: '早起きがつらい人、手を挙げて', views: '4.4万回', kind: '感情' }],
     harmony: '一本の電車を、時刻表で読む人、駅の混み具合で読む人、眠気で読む人。' },
-  { headline: 'ある会社の社長が、交代した',
+  { headline: 'ある会社の社長が、交代した', theme: '準備の金庫',
     parts: [{ label: '誰が', text: '社長', filter: '事実' }, { label: '何を', text: '交代した', filter: '事実' }, { label: 'なぜ', text: '取締役会で意見が割れた、という噂', filter: '噂' }, { label: 'どう感じる', text: '新しい社長は、窓のある部屋で話すだろうか', filter: '感情' }],
     posts: [{ handle: '@filings_daily', text: '届け出、出てた。日付は昨日', views: '3,800回', kind: '事実' }, { handle: '@boardroom_whisper', text: '総会の前に、もう決まってたらしい', views: '5.2万回', kind: '噂' }, { handle: '@window_watcher', text: '前の社長、窓の外を一度も見なかったよね', views: '1.1万回', kind: '感情' }],
     harmony: '同じ交代を、届け出の日付で読む人と、総会の前の空気で読む人と、窓で読む人。' },
-  { headline: '島の天気予報が、外れた',
+  { headline: '島の天気予報が、外れた', theme: '温室',
     parts: [{ label: '何が', text: '晴れの予報が、雨になった', filter: '事実' }, { label: 'どこで', text: '島', filter: '事実' }, { label: 'なぜ', text: '予報の機械が、古い紙のデータを読んでいた、という話', filter: '噂' }, { label: 'どう感じる', text: '外れた日のほうが、覚えている', filter: '感情' }],
     posts: [{ handle: '@island_weather', text: '予報：晴れ。実際：雨。記録として残す', views: '2,900回', kind: '事実' }, { handle: '@old_data', text: '予報の機械、古いチャートを読んでるらしい', views: '3.3万回', kind: '噂' }, { handle: '@rainy_memory', text: '外れた日の雨って、なんか忘れない', views: '2.2万回', kind: '感情' }],
     harmony: '外れた予報を、記録として残す人、機械を疑う人、思い出にする人。全部、同じ雨。' },

@@ -1,18 +1,65 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type News } from '@/lib/chessGame3';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, type Scene } from '@/lib/chessGame3';
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
-import { sparkPath, symbolAt, type Sym, type Theme } from '@/lib/syntheticSymbols';
+import { sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
 
 const FILTER_COLOR: Record<Filter, string> = { 事実: '#1f1f1f', 噂: '#2b3a67', 感情: '#c8001a' };
 const CELL = 40; const PAD = 22; const FLOOR_W = SIZE * CELL + PAD * 2;
-const THEME_ROOM: Record<Theme, string> = { ホテル: '窓（港）', 港: '受付', 準備の金庫: '金庫室', 温室: '温室の入口', 動画: '動画の壁', 鉄道: '帳簿の部屋' };
+const THEME_ROOM: Record<Theme, string> = { ホテル: '窓（港）', 港: '受付', 準備の金庫: '金庫室', 温室: '温室の入口', 動画: '動画の壁', 鉄道: '帳簿の部屋', 住まい: '庭' };
 type LogEntry = { turn: number; lines: { side: string; device: string; prompt: string; why: string }[]; events: TurnEvent[]; acts: string[]; harmony: number; notes: string[] };
 
+/** A stiff mannequin figure (head, torso, arms at fixed angles) — original, simple shapes. */
+function Mannequin({ x, name, k }: { x: number; name: string; k: number }) {
+  const arm = [-35, 20, -10, 45][k % 4];
+  return (
+    <g transform={`translate(${x} 0)`}>
+      <circle cx={0} cy={22} r={9} fill="#d9cbb6" stroke="#8a7a63" />
+      <path d="M-11 34h22l-4 34h-14z" fill="#d9cbb6" stroke="#8a7a63" />
+      <line x1={-11} y1={38} x2={-11 - 16 * Math.cos((arm * Math.PI) / 180)} y2={38 + 16 * Math.sin((arm * Math.PI) / 180)} stroke="#8a7a63" strokeWidth={4} strokeLinecap="round" />
+      <line x1={11} y1={38} x2={27} y2={44} stroke="#8a7a63" strokeWidth={4} strokeLinecap="round" />
+      <line x1={-5} y1={68} x2={-6} y2={92} stroke="#8a7a63" strokeWidth={5} /><line x1={5} y1={68} x2={6} y2={92} stroke="#8a7a63" strokeWidth={5} />
+      <text x={0} y={106} fontSize={9} textAnchor="middle" fill="#57534e">{name}</text>
+    </g>
+  );
+}
+
+/** The turn's scene: mannequin still frames (cut, never faded) or ad-realism, frame by frame. */
+function ScenePanel({ scene }: { scene: Scene }) {
+  const [k, setK] = useState(0);
+  const frame = scene.frames[Math.min(k, scene.frames.length - 1)];
+  const look: Look = frame.style ?? (scene.style === 'switch' ? 'mannequin' : scene.style);
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || k >= scene.frames.length - 1) return undefined;
+    const t = window.setTimeout(() => setK((x) => x + 1), 3600); return () => window.clearTimeout(t);
+  }, [k, scene]);
+  const speakers = frame.lines.map(([w]) => w.replace(/（.*）/, ''));
+  return (
+    <div className="space-y-1" data-testid="scene" data-look={look}>
+      {look === 'mannequin' ? (
+        <div className="border border-[#d6c9b4] bg-[#efe7dc]">
+          <svg viewBox="0 0 360 112" className="h-28 w-full" aria-label="マネキンの止まった絵">{(speakers.length ? speakers : ['', '', '']).map((n, i, a) => <Mannequin key={i} k={k + i} x={(360 / (a.length + 1)) * (i + 1)} name={n} />)}</svg>
+          <p className="px-3 text-[11px] italic text-stone-600">{frame.pose}</p>
+          <div className="mt-1 space-y-0.5 bg-black/80 px-3 py-1.5 text-center text-sm text-white" data-testid="captions">{frame.lines.length ? frame.lines.map(([w, t]) => <p key={t}>{w}「{t}」</p>) : <p className="text-white/60">（無言）</p>}</div>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-md bg-white p-3 shadow-[0_2px_14px_#0000001a] ring-1 ring-stone-200">
+          <p className="text-[11px] text-stone-500">{frame.pose}</p>
+          {frame.lines.map(([w, t]) => <p key={t} className="text-sm"><span className="mr-2 font-semibold">{w}</span>「{t}」</p>)}
+        </div>
+      )}
+      <div className="flex items-center justify-between text-[11px] text-stone-500">
+        <span>{look === 'mannequin' ? 'マネキン形式' : '広告リアリズム形式'} · 絵 {Math.min(k, scene.frames.length - 1) + 1} / {scene.frames.length}</span>
+        {k < scene.frames.length - 1 && <button type="button" data-testid="next-frame" onClick={() => setK((x) => x + 1)} className="border border-stone-400 px-2">次の絵 ▶</button>}
+      </div>
+    </div>
+  );
+}
+
 /** Endless strip of synthetic symbols (loads 12 more whenever its end scrolls into view). */
-function SymbolStrip({ prefer, held, onHold }: { prefer?: Theme; held: Sym | null; onHold: (s: Sym | null) => void }) {
+function SymbolStrip({ prefer, held, onHold, extra }: { prefer?: Theme; held: Sym | null; onHold: (s: Sym | null) => void; extra: Sym[] }) {
   const [count, setCount] = useState(12);
   const box = useRef<HTMLDivElement>(null); const end = useRef<HTMLDivElement>(null);
   const syms = useMemo(() => Array.from({ length: count }, (_, i) => symbolAt(i, prefer)), [count, prefer]);
@@ -26,14 +73,16 @@ function SymbolStrip({ prefer, held, onHold }: { prefer?: Theme; held: Sym | nul
       <p className="text-xs font-semibold">合成の銘柄（無限スクロール）</p>
       <p className="text-[10px] text-stone-500">駒かチームへドラッグ＆ドロップ。押して持ってから、駒やチームを押しても渡せる。</p>
       <div ref={box} className="h-[26rem] space-y-1 overflow-y-auto border border-stone-200 p-1" data-testid="symbols" aria-label="合成の銘柄の列">
-        {syms.map((s) => (
-          <button key={s.i} type="button" draggable data-testid={`sym-${s.i}`} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(s.i)); onHold(s); }} onClick={() => onHold(held?.i === s.i ? null : s)}
+        {extra.length > 0 && <p className="px-1 text-[10px] font-semibold text-[#2b3a67]" data-testid="post-symbols">このニュースの投稿から生まれた銘柄</p>}
+        {[...extra, ...syms].map((s, n) => (<Fragment key={`${s.i}-${n}`}>
+          {n === extra.length && extra.length > 0 && <p className="px-1 pt-1 text-[10px] font-semibold text-stone-500">ほかの合成の銘柄</p>}
+          <button type="button" draggable data-testid={`sym-${s.i}`} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(s.i)); onHold(s); }} onClick={() => onHold(held?.i === s.i ? null : s)}
             className="flex w-full items-center gap-2 border px-1.5 py-1 text-left text-[11px]" style={{ borderColor: held?.i === s.i ? '#c8001a' : '#e7e5e4', background: held?.i === s.i ? '#fff1f2' : 'white' }}>
             <span className="w-11 font-semibold">{s.ticker}</span>
             <svg viewBox="0 0 80 22" className="h-5 w-16 shrink-0" aria-hidden><path d={sparkPath(s.series)} fill="none" stroke={s.signal === '上向きの交差' ? '#2f6b1a' : s.signal === '下向きの交差' ? '#c8001a' : '#78716c'} strokeWidth={1.2} /></svg>
             <span className="min-w-0 flex-1 truncate">{s.name}<br /><span className="text-stone-500">{s.theme} · {s.signal} · ［{s.filter}］</span></span>
           </button>
-        ))}
+        </Fragment>))}
         <div ref={end} className="py-2 text-center text-[10px] text-stone-400">…まだ続く…</div>
       </div>
     </div>
@@ -63,6 +112,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const news = NEWS[Math.min(turn, TURNS - 1)];
   const foe: Color = side === 'white' ? 'black' : 'white';
   const targets = useMemo(() => { const p = pieces.find((q) => q.id === picked); return p ? legalMoves(p, pieces) : []; }, [picked, pieces]);
+  const postSyms = useMemo(() => (done ? [] : news.posts.map((p) => symbolFromPost(p.handle, p.kind, news.theme ?? '住まい'))), [news, done]);
+  const lookup = (i: number) => postSyms.find((s) => s.i === i) ?? symbolAt(i, prefer);
 
   const give = (target: string, s: Sym | null) => {
     if (!s) return;
@@ -71,14 +122,15 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   };
   const dropProps = (target: string) => ({
     onDragOver: (e: React.DragEvent) => e.preventDefault(),
-    onDrop: (e: React.DragEvent) => { e.preventDefault(); const i = Number(e.dataTransfer.getData('text/plain')); give(target, Number.isFinite(i) ? symbolAt(i, prefer) : held); },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); const i = Number(e.dataTransfer.getData('text/plain')); give(target, Number.isFinite(i) ? lookup(i) : held); },
     onClick: () => give(target, held),
   });
 
   // The architect's drafting board: three proposals for which symbol a piece should go after.
   const proposals = useMemo(() => {
     if (side !== 'black' || done) return [];
-    const pool = Array.from({ length: 24 }, (_, i) => symbolAt(i + turn * 3, prefer));
+    const theme = news.theme;
+    const pool = [...postSyms, ...Array.from({ length: 36 }, (_, i) => symbolAt(i + turn * 3, prefer))].sort((a, b) => Number(b.theme === theme) - Number(a.theme === theme));
     const mine = pieces.filter((p) => p.alive && p.color === 'black');
     const out: { sym: Sym; id: string; to: Sq; room: string }[] = [];
     for (const sym of pool) {
@@ -89,7 +141,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
       if (out.length === 3) break;
     }
     return out;
-  }, [side, done, turn, pieces, prefer]);
+  }, [side, done, turn, pieces, prefer, news, postSyms]);
 
   const send = () => {
     if (done) return;
@@ -152,7 +204,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
           <section className="space-y-2" aria-label="ニュースと盤">
             <p className="text-[11px] text-stone-500">{done ? 'すべてのターンが終わった' : `ターン ${turn + 1} / ${TURNS} · NEWS`}</p>
             {!done && <>
-              <p className="text-base font-semibold" data-testid="headline">「{news.headline}」</p>
+              <p className="text-base font-semibold" data-testid="headline">「{news.headline}」{news.theme && <span className="ml-2 text-[11px] font-normal text-stone-500">テーマ：{news.theme}</span>}</p>
+              {news.scene && <ScenePanel key={turn} scene={news.scene} />}
               <div className="flex flex-wrap gap-2">{news.parts.map((p) => <span key={p.label} className="border px-2 py-0.5 text-xs" style={{ borderColor: FILTER_COLOR[p.filter], color: FILTER_COLOR[p.filter] }}>{p.label}：{p.text}<span className="ml-1 text-[10px]">［{p.filter}］</span></span>)}</div>
               <div className="grid gap-1 sm:grid-cols-3">{news.posts.map((p) => <div key={p.handle} className="border border-stone-200 bg-[#fafaf9] p-2 text-[11px]"><p className="text-stone-500">▶ {p.handle} · {p.views}</p><p>{p.text}</p><p className="text-[10px]" style={{ color: FILTER_COLOR[p.kind] }}>［{p.kind}］</p></div>)}</div>
             </>}
@@ -185,7 +238,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {side === 'black' && !done && (
               <div className="space-y-1 border border-[#2b3a67] p-2 text-[11px]" data-testid="drafting-board">
                 <p className="font-semibold">📐 製図板（建築家の選択案）</p>
-                {proposals.map((o, k) => <button key={k} type="button" data-testid={`proposal-${k}`} onClick={() => { setPrompt(`${o.id} を ${sqName(o.to)} へ`); setHeld(o.sym); }} className="block w-full border border-stone-200 px-1.5 py-1 text-left hover:bg-[#f5f5f4]">案 {'ABC'[k]}：{o.sym.ticker} {o.sym.name}（{o.sym.signal}）<br />→ {PEOPLE[o.id].name}を「{o.room}」の方へ（{sqName(o.to)}）</button>)}
+                {proposals.map((o, k) => <button key={k} type="button" data-testid={`proposal-${k}`} onClick={() => { setPrompt(`${o.id} を ${sqName(o.to)} へ`); setHeld(o.sym); }} className="block w-full border border-stone-200 px-1.5 py-1 text-left hover:bg-[#f5f5f4]">案 {'ABC'[k]}：{o.sym.ticker} {o.sym.name}（{o.sym.signal}）{o.sym.theme === news.theme && <span className="ml-1 text-[#2b3a67]">· ニュースのテーマ</span>}<br />→ {PEOPLE[o.id].name}を「{o.room}」の方へ（{sqName(o.to)}）</button>)}
                 <p className="text-[10px] text-stone-500">案を押すと、プロンプトの下書きと、その銘柄を持った状態になります。駒に渡すかどうかは、あなたが決める。</p>
               </div>
             )}
@@ -200,7 +253,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {done && <p className="border border-stone-200 bg-[#fafaf9] p-2 text-xs" data-testid="end">{TURNS} つのニュースを解体した。調和は {harmony}。同じ出来事を、違うデバイスで読むほど、ぶつからずに並べる。</p>}
           </aside>
 
-          <aside><SymbolStrip prefer={prefer} held={held} onHold={setHeld} /></aside>
+          <aside><SymbolStrip prefer={prefer} held={held} onHold={setHeld} extra={postSyms} /></aside>
         </div>
 
         <section className="space-y-2" aria-label="記録" data-testid="log">
