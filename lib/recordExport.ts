@@ -18,6 +18,7 @@ export const RECORD_KEYS: { key: string; what: string }[] = [
   { key: 'chartui-knot-inventory-v1', what: '結び目の持ち物' },
   { key: 'chartui-quiz-quantum', what: 'クイズクオンタム' },
   { key: 'chartui-synthetic-index', what: '合成インデックス' },
+  { key: 'chartui-golden-run-v1', what: '「黄金のアイコンを探せ」の進み具合（選んだ選択肢・書き写せた文字）' },
   { key: 'chartui-edition-title-v1', what: 'ゲームのタイトルの書き換え（〜を探せ版）' },
   { key: 'chartui-cure-api-state', what: 'Cure-API の状態（ヘッダーの表示・シミュレーションの設定）' },
 ];

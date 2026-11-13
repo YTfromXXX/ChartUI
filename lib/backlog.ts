@@ -68,6 +68,7 @@ export const TASKS: Task[] = [
   { id: 'swarm-event', title: '6〜7 年目のイベント：BA-xxxx・PE-xxxx がプレイヤー側と画面側の両方から増える（keccak の名前の鎖、値段なし）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/swarm' },
   { id: 'swarm-story', title: '階段を数えた者（アリミノボーイと眠る水夫たちは「だいたい」知る）と、NFT・ミームコインをストイックとサトシの書から見る — docs/story/swarm-and-tokens.md', area: '版', status: 'decide', asked: '2026-11-13' },
   { id: 'years-finale', title: '1〜12 年目の進行：3・6・9・10 年目のミニゲーム（仮置き）と、最後の塔（Luna が aviator をハックして着陸、ラスボスは旋回する自動操縦）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/years' },
+  { id: 'year1-story', title: '1〜2 年目：2 択・4 択の物語、「アリミノボーイに聞く」（たぶん {～} のあいだ）、ストイックの暴落のチャート、指紋の書き写し（高度計の正直さ）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year1' },
   { id: 'find-vitalik-body', title: '「ヴィタリックを探せ」の本編（アリミノボーイ・アリミノガールの登場）— 姿は描かず、名前はタイトルの言葉だけ', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
@@ -92,7 +93,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/years', '12 年の進行と最後の塔']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/year1', '1〜2 年目（港）'], ['/mente/game/years', '12 年の進行と最後の塔']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };

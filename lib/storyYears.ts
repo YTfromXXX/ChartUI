@@ -5,21 +5,23 @@
 // sets down on the top deck. Touching the tower bounces the plane back to try again.
 // The last boss is the circling autopilot — the rule from Stoic's paper that Little set running.
 
-export type Outcomes = { chain: number; helpers: number; balance: number; unseen: number };
+export type Outcomes = { copy: number; chain: number; helpers: number; balance: number; unseen: number };
 export const OUTCOME_RANGE: Record<keyof Outcomes, { min: number; max: number; label: string }> = {
+  copy: { min: 0, max: 12, label: '1〜2 年目：正しく書き写した指紋の文字' },
   chain: { min: 0, max: 12, label: '3 年目：正しく並べた瓶の数' },
   helpers: { min: -10, max: 10, label: '6 年目：あなたが増やした数 − 画面が増やした数（浜に残った分）' },
   balance: { min: 0, max: 100, label: '9 年目：天秤のつり合い（%）' },
   unseen: { min: 0, max: 6, label: '10 年目：印だけで見分けた手紙の組' },
 };
-export const DEFAULT_OUTCOMES: Outcomes = { chain: 6, helpers: 0, balance: 50, unseen: 3 };
+export const DEFAULT_OUTCOMES: Outcomes = { copy: 6, chain: 6, helpers: 0, balance: 50, unseen: 3 };
 
 export type MiniGame = { id: string; name: string; who: string; how: string; leaves: keyof Outcomes; changes: string };
 export type Year = { year: number; chapter: string; event: string; mini?: MiniGame; route?: string };
 
 export const YEARS: Year[] = [
-  { year: 1, chapter: '1 はじめに', event: '最初の手紙。日付と島の名前だけ' },
-  { year: 2, chapter: '2 取引', event: '前の手紙の指紋を書き写すことを思いつく' },
+  { year: 1, chapter: '1 はじめに', event: '最初の手紙。日付と島の名前だけ。港で「アリミノボーイに聞く」', route: '/mente/game/year1' },
+  { year: 2, chapter: '2 取引', event: '前の手紙の指紋を書き写すことを思いつく', route: '/mente/game/year1',
+    mini: { id: 'copy-fingerprint', name: '指紋の書き写し', who: 'アリミノボーイ（本土の港）', how: '前の手紙の指紋（16 進の 4 文字）を、次の手紙に一文字ずつ書き写す。一文字ごとに、よく似た 4 つの候補から選ぶ（8 と B、0 と D など）', leaves: 'copy', changes: '最終面：高度計の正直さ。書き写し違いが多いと、高度計にストイックの暴落のチャートが重なり、落ちていないのに落ちているように見える' } },
   { year: 3, chapter: '3 タイムスタンプサーバー', event: '指紋の鎖ができる',
     mini: { id: 'bottle-order', name: '瓶の順番', who: 'ネフェリムと幼い Luna（島）', how: '浜に打ち上げられた 12 本の瓶を、底の指紋だけを手がかりに、古い順に並べ直す。時間は潮が満ちるまで', leaves: 'chain', changes: '最終面：Luna のハックの正確さ＝塔の輪の大きさ（正しく並べるほど輪が広い）' } },
   { year: 4, chapter: '4 プルーフ・オブ・ワーク', event: '手紙ごとに浜で石を積む' },
@@ -42,6 +44,20 @@ export function finale(o: Outcomes) {
   const startWeight = 1.6 - 0.6 * (o.balance / 100);                     // 1.0–1.6: heavier start = less reach
   const reach = Math.max(0, Math.min(1, 1.9 - startWeight));             // share of the climb the plane can keep up
   const watchRings = Math.max(1, 4 - Math.floor(o.unseen / 2));          // 1–4 circling patrol loops of the autopilot
+  const altimeter = o.copy / 12;                                          // 0–1: how honest the altimeter is
   const crew = o.helpers > 2 ? '見張りを手伝う' : o.helpers < -2 ? '機体を揺らす' : 'どちらでもない（眠っている）';
-  return { ring, startWeight, reach, watchRings, crew };
+  return { ring, startWeight, reach, watchRings, crew, altimeter };
 }
+
+// ---------- Stoic's crash: a fictional chart revealed a little more each year ----------
+// One night's chart (not any real asset), 48 points: calm, a first dip, the fall, a small rebound.
+// Year y shows the first share of it; the whole night is seen only in year 12.
+export const CRASH: number[] = Array.from({ length: 48 }, (_, i) => {
+  const calm = 100 + 1.2 * Math.sin(i * 0.9) + 0.6 * Math.sin(i * 2.3);
+  if (i < 14) return calm;
+  if (i < 22) return calm - (i - 13) * 1.1;                     // the first dip (years 1–5)
+  if (i < 38) return calm - 9 - (i - 21) ** 1.45;                // the fall (to about −65%)
+  return calm - 9 - 16 ** 1.45 + (i - 37) * 1.5;           // a small rebound, far below the start
+});
+/** Points of the crash chart shown in year y (1–12). Slow at first, the fall arrives late. */
+export const crashShown = (y: number) => Math.max(6, Math.round(48 * (y / 12) ** 1.3));

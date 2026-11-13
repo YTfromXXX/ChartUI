@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DEFAULT_OUTCOMES, OUTCOME_RANGE, YEARS, finale, type Outcomes } from '@/lib/storyYears';
 
 /**
@@ -11,6 +11,8 @@ import { DEFAULT_OUTCOMES, OUTCOME_RANGE, YEARS, finale, type Outcomes } from '@
  */
 export default function Years() {
   const [o, setO] = useState<Outcomes>(DEFAULT_OUTCOMES);
+  // The year-2 result from a played run, if any (per viewer).
+  useEffect(() => { try { const r = JSON.parse(window.localStorage.getItem('chartui-golden-run-v1') ?? 'null'); if (r && typeof r.copy === 'number') setO((x) => ({ ...x, copy: r.copy })); } catch { /* none */ } }, []);
   const f = finale(o);
   return (
     <main className="min-h-screen bg-white px-4 py-4 font-mono text-[#1f1f1f]">
@@ -57,6 +59,7 @@ export default function Years() {
             <p>塔の輪の大きさ：<span data-testid="f-ring">{f.ring.toFixed(2)}</span>（Luna のハックの正確さ）</p>
             <p>飛び立つときの重さ：{f.startWeight.toFixed(2)} → 塔まで持つ割合 <span data-testid="f-reach">{Math.round(f.reach * 100)}%</span>（「自由」は飛ぶほど重くなる）</p>
             <p>自動操縦の見張りの輪：<span data-testid="f-watch">{f.watchRings}</span> 重</p>
+            <p>高度計の正直さ：<span data-testid="f-alt">{Math.round(f.altimeter * 100)}%</span>（低いほど、ストイックの暴落のチャートが重なって見える）</p>
             <p>乗り込んだ BA と PE：<span data-testid="f-crew">{f.crew}</span></p>
             <p className="pt-1 text-[11px] text-stone-600">最後の面は着陸です。塔にぶつかる演出はなく、触れると機体が押し戻されてやり直しになります。</p>
           </div>
