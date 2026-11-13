@@ -72,6 +72,8 @@ export const TASKS: Task[] = [
   { id: 'package-200', title: 'パッケージ：物語 200 ＋ ミニゲーム 12（1 年に 1 つ）', area: '版', status: 'doing', asked: '2026-11-13' },
   { id: 'mente-nudge', title: '乱れたときだけ、Mente 式にそっと「アリミノボーイに聞く」（迷い・急ぎ・やり直し・つまずき）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year1' },
   { id: 'finale-22', title: '最後の面の研究：Luna の飛行機 × エーリアル達の 22 アングル（メタ視点のデバイス、自動と手動）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/finale-lab' },
+  { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
+  { id: 'banner-22', title: 'バナー：{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}（中身は空けておく）', area: '版', status: 'decide', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'year9-cloth', title: '9 年目：ストイックが自分から布を外すか（登場人物の問いで一緒に考える）', area: '版', status: 'decide', asked: '2026-11-13' },
   { id: 'find-vitalik-body', title: '「ヴィタリックを探せ」の本編（アリミノボーイ・アリミノガールの登場）— 姿は描かず、名前はタイトルの言葉だけ', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },

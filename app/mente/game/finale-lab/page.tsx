@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { MAGNETS, lunaHand, magnets, nearest, snap, struggling, type FlightLog } from '@/lib/fibPanel';
 
 // Finale research: Luna flies the hacked aviator to the honeycomb tower and lands on its top deck,
 // while the Ariels (22 cameras on a ring round the island) direct the player's view — the "meta
@@ -52,6 +53,13 @@ export default function FinaleLab() {
   const keys = useRef<Record<string, boolean>>({});
   const reduce = useRef(false);
   const [, force] = useState(0);
+  // Fibonacci magnet panel: the player's puck, Luna's hand when she helps, and the signs of struggling.
+  const puck = useRef<[number, number]>([0, 0]);
+  const [assist, setAssist] = useState<string | null>(null);
+  const luna = useRef<[number, number]>([0, 0]);
+  const flight = useRef<FlightLog>({ touches: [], flips: [], lastProgress: performance.now() });
+  const lastSign = useRef(0); const best = useRef(9); const quietUntil = useRef(0);
+  const assistRef = useRef<string | null>(null); assistRef.current = assist;
 
   const phase = phaseOf(plane, landed);
   const cam = mode === 'auto' ? autoCam(plane, phase) : manualCam;
@@ -71,15 +79,21 @@ export default function FinaleLab() {
       setLittle((t) => t + dt * 0.5);
       if (!landed) setPlane((p) => {
         const k = keys.current; let { x, y, z, hd } = p;
-        if (k.ArrowLeft) hd += 1.6 * dt; if (k.ArrowRight) hd -= 1.6 * dt;
-        if (k.ArrowUp) z += 0.4 * dt; if (k.ArrowDown) z -= 0.4 * dt;
+        const keyTurn = k.ArrowLeft ? -1 : k.ArrowRight ? 1 : 0; const keyClimb = k.ArrowUp ? 1 : k.ArrowDown ? -1 : 0;
+        let turn = keyTurn || puck.current[0]; let climb = keyClimb || puck.current[1];
+        const sign = Math.sign(turn); if (sign && lastSign.current && sign !== lastSign.current) flight.current.flips.push(now); if (sign) lastSign.current = sign;
+        luna.current = lunaHand(p, DECK_Z);
+        if (assistRef.current) { turn = (turn + luna.current[0]) / 2; climb = (climb + luna.current[1]) / 2; }
+        hd -= turn * 1.6 * dt; z += climb * 0.4 * dt;
         const v = Math.hypot(x, y) < 0.6 ? 0.18 : 0.35; x += Math.cos(hd) * v * dt; y += Math.sin(hd) * v * dt; z = Math.max(0.2, Math.min(2.6, z));
         const d = Math.hypot(x, y);
-        if (d < TOWER_R + 0.05 && z < DECK_Z - 0.02) { const s = (TOWER_R + 0.4) / (d || 1); x *= s; y *= s; hd += Math.PI; setMsg('塔に触れた：押し戻された（もう一度）'); }
-        if (d < 0.25 && z >= DECK_Z - 0.02 && z <= DECK_Z + 0.15) { setLanded(true); setMsg('着陸した。旋回が止まった。'); return { x, y, z: DECK_Z, hd }; }
-        RINGS.forEach((rp, i) => { if (Math.hypot(x - rp[0], y - rp[1], z - rp[2]) < RING_SIZE) setPassed((ps) => (ps.includes(i) ? ps : [...ps, i])); });
+        if (d < best.current - 0.05) { best.current = d; flight.current.lastProgress = now; }
+        if (d < TOWER_R + 0.05 && z < DECK_Z - 0.02) { const s2 = (TOWER_R + 0.4) / (d || 1); x *= s2; y *= s2; hd += Math.PI; flight.current.touches.push(now); setMsg('塔に触れた：押し戻された（もう一度）'); }
+        if (d < 0.25 && z >= DECK_Z - 0.02 && z <= DECK_Z + 0.15) { setLanded(true); setMsg(assistRef.current ? 'Luna と一緒に着陸した。旋回が止まった。' : '着陸した。旋回が止まった。'); return { x, y, z: DECK_Z, hd }; }
+        RINGS.forEach((rp, i) => { if (Math.hypot(x - rp[0], y - rp[1], z - rp[2]) < RING_SIZE) { flight.current.lastProgress = now; setPassed((ps) => (ps.includes(i) ? ps : [...ps, i])); } });
         return { x, y, z, hd };
       });
+      if (!landed && !assistRef.current && now > quietUntil.current) { const why = struggling(flight.current, now); if (why) setAssist(why); }
       // Camera: glide toward the chosen Ariel (cut at once with reduced motion).
       const target = camAt(cam); const vw = view.current; const s = reduce.current ? 1 : Math.min(1, dt * 2.5);
       const da = Math.atan2(Math.sin(target.a - vw.a), Math.cos(target.a - vw.a)); vw.a += da * s; vw.h += (target.h - vw.h) * s;
@@ -97,7 +111,9 @@ export default function FinaleLab() {
   const planePts: V3[] = [[plane.x + Math.cos(plane.hd) * 0.14, plane.y + Math.sin(plane.hd) * 0.14, plane.z], [plane.x + Math.cos(plane.hd + 2.5) * 0.1, plane.y + Math.sin(plane.hd + 2.5) * 0.1, plane.z], [plane.x + Math.cos(plane.hd - 2.5) * 0.1, plane.y + Math.sin(plane.hd - 2.5) * 0.1, plane.z]];
   const lt = little; const lp: V3 = [ORBIT_R * Math.cos(lt), ORBIT_R * Math.sin(lt), 1.7];
   const hold = (key: string, on: boolean) => { keys.current[key] = on; };
-  const reset = () => { setPlane({ x: 2.7, y: 0.4, z: 1.6, hd: Math.PI }); setLanded(false); setPassed([]); setMsg(''); };
+  const reset = () => { setPlane({ x: 2.7, y: 0.4, z: 1.6, hd: Math.PI }); setLanded(false); setPassed([]); setMsg(''); best.current = 9; flight.current.lastProgress = performance.now(); };
+  const panelRef = useRef<SVGSVGElement>(null); const dragging = useRef(false);
+  const toPanel = (e: React.PointerEvent): [number, number] => { const r = panelRef.current!.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * 2 - 1; const py = -(((e.clientY - r.top) / r.height) * 2 - 1); const l = Math.hypot(px, py); return l > 1 ? [px / l, py / l] : [px, py]; };
 
   return (
     <main className="min-h-screen bg-white px-4 py-4 font-mono text-[#1f1f1f]">
@@ -106,6 +122,13 @@ export default function FinaleLab() {
           <span>研究：最後の面の操縦（Luna の飛行機 × エーリアル達の 22 アングル）</span>
           <span className="flex gap-3"><Link href="/mente/game/years" className="underline">12 年の進行</Link><Link href="/mente/game" className="underline">タイトルへ</Link></span>
         </p>
+        <div className="border-2 border-[#1f1f1f] px-3 py-2 text-center text-sm tracking-wide" role="note" data-testid="banner-22">{'{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}'}</div>
+        {assist && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border border-[#22b8c8] bg-white px-3 py-1.5 text-xs" role="status" data-testid="luna-assist">
+            <span><span className="mr-2 bg-black px-1 text-[10px] font-bold italic text-white">Mente · そっと</span>Luna：「いっしょに飛ぼう。わたしの手も、パネルに置くね。」（{assist}）</span>
+            <button type="button" onClick={() => { setAssist(null); quietUntil.current = performance.now() + 30_000; flight.current = { touches: [], flips: [], lastProgress: performance.now() }; }} className="border border-stone-400 px-2 py-0.5">ひとりで飛ぶ</button>
+          </div>
+        )}
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full border border-stone-300 bg-[#f7f9fb]" aria-label="エーリアルの見ている画面" data-testid="finale-view">
           <path d={line(circle([0, 0, 0], 2.9, false), true)} fill="none" stroke="#d6d3d1" />
           <path d={line(circle([0, 0, 1.7], ORBIT_R, false), true)} fill="none" stroke="#c8001a" strokeDasharray="4 4" strokeOpacity={0.5} />
@@ -123,7 +146,7 @@ export default function FinaleLab() {
 
         <div className="flex flex-wrap items-start gap-4 text-xs">
           <div className="space-y-1">
-            <p className="font-semibold">Luna の操縦（矢印キー、または押し続ける）</p>
+            <p className="font-semibold">あなたの操縦（矢印キー、または押し続ける）</p>
             <div className="grid w-40 grid-cols-3 gap-1">
               <span /><button type="button" onPointerDown={() => hold('ArrowUp', true)} onPointerUp={() => hold('ArrowUp', false)} onPointerLeave={() => hold('ArrowUp', false)} className="border border-black py-1">上昇</button><span />
               <button type="button" onPointerDown={() => hold('ArrowLeft', true)} onPointerUp={() => hold('ArrowLeft', false)} onPointerLeave={() => hold('ArrowLeft', false)} className="border border-black py-1">左</button>
@@ -131,6 +154,22 @@ export default function FinaleLab() {
               <button type="button" onPointerDown={() => hold('ArrowRight', true)} onPointerUp={() => hold('ArrowRight', false)} onPointerLeave={() => hold('ArrowRight', false)} className="border border-black py-1">右</button>
               <span /><button type="button" onPointerDown={() => hold('ArrowDown', true)} onPointerUp={() => hold('ArrowDown', false)} onPointerLeave={() => hold('ArrowDown', false)} className="border border-black py-1">下降</button><span />
             </div>
+          </div>
+          <div className="space-y-1">
+            <p className="font-semibold">フィボナッチのマグネット操縦パネル</p>
+            <svg ref={panelRef} viewBox="-1.15 -1.15 2.3 2.3" className="h-40 w-40 touch-none select-none" aria-label="操縦パネル（34 個の磁石）" data-testid="fib-panel"
+              onPointerDown={(e) => { dragging.current = true; (e.target as Element).setPointerCapture?.(e.pointerId); puck.current = snap(...toPanel(e)); }}
+              onPointerMove={(e) => { if (dragging.current) puck.current = snap(...toPanel(e)); }}
+              onPointerUp={() => { dragging.current = false; puck.current = magnets[nearest(...puck.current)]; }}
+              onDoubleClick={() => { puck.current = [0, 0]; }}>
+              <circle r={1} fill="#fafaf9" stroke="#d6d3d1" strokeWidth={0.01} />
+              <line x1={-1} x2={1} y1={0} y2={0} stroke="#e7e5e4" strokeWidth={0.01} /><line y1={-1} y2={1} x1={0} x2={0} stroke="#e7e5e4" strokeWidth={0.01} />
+              {magnets.map(([mx, my], i) => <circle key={i} cx={mx} cy={-my} r={i === 0 ? 0.045 : 0.03} fill="white" stroke="#7a5c12" strokeWidth={0.012} />)}
+              {assist && <circle cx={luna.current[0]} cy={-luna.current[1]} r={0.09} fill="none" stroke="#22b8c8" strokeWidth={0.03} data-testid="luna-hand" />}
+              <circle cx={puck.current[0]} cy={-puck.current[1]} r={0.07} fill="#1f1f1f" />
+              <text x={0} y={-1.05} fontSize={0.1} textAnchor="middle" fill="#57534e">上昇</text><text x={0} y={1.12} fontSize={0.1} textAnchor="middle" fill="#57534e">下降</text>
+            </svg>
+            <p className="text-[10px] text-stone-600">黒：あなたの手 · {assist ? '水色：Luna の手（二つの手の間を飛ぶ）' : `磁石 ${MAGNETS} 個（ひまわりの種の並び）`}。中心をダブルクリックで手を離す。</p>
           </div>
           <div className="space-y-1">
             <p className="font-semibold">メタ視点のデバイス（エーリアル達）</p>
