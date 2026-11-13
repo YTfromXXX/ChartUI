@@ -97,6 +97,7 @@ export default function MenteGame() {
             <p className="text-2xl font-semibold" data-testid="stage-title">{name}を探せ</p>
             <p className="text-xs text-stone-600">ゲームの本編は次の作業で（ここまでが header の件）。</p>
             <p className="text-xs"><Link href="/mente/game/swarm" className="underline" data-testid="to-swarm">6〜7 年目のイベント：瓶を拾う者たち（BA と PE）</Link></p>
+            <p className="text-xs"><Link href="/mente/game/story" className="underline" data-testid="to-story">物語 200 を遊ぶ（プロローグ：ガレージアイランド → 1 年目）</Link></p>
             <p className="text-xs"><Link href="/mente/game/year1" className="underline" data-testid="to-year1">1〜2 年目から遊ぶ（港・アリミノボーイに聞く・指紋の書き写し）</Link></p>
             <p className="text-xs"><Link href="/mente/game/year9" className="underline" data-testid="to-year9">9 年目：クレーターのサイコロ（フォン（仮）を操縦する Luna）</Link></p>
             <p className="text-xs"><Link href="/mente/game/years" className="underline" data-testid="to-years">1〜12 年目の進行と、最後の塔（ミニゲームの仮置き）</Link></p>

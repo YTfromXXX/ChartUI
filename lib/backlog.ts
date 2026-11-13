@@ -77,6 +77,10 @@ export const TASKS: Task[] = [
   { id: 'finale-3d', title: '最後の面を 3D のリアルな動画ゲームに（three.js、夜明け：暗い空 → 藍 → 朱、甲板に降りる瞬間に日の光が黄金の Ξ に当たる）', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'verse-plan', title: '論文 v2：Verse の定義を広げる（入力 → 量子の形の問題 → 署名 → 出力 → 共有）、実験 4 つと一般向けの演出', area: '研究', status: 'todo', asked: '2026-11-13', note: 'docs/research/verse-plan.md。v1 は提出用に固定' },
   { id: 'arimino-products', title: 'アリミノボーイ・アリミノガールのヘアスタイリング剤（物語の商品）— 公開前にオリジナルの名前へ', area: '版', status: 'decide', asked: '2026-11-13', note: '実在のブランド名と同じなので、商品名と人物名は公開前に替える' },
+  { id: 'golden-ibm', title: 'IBM 無料枠の台本を「黄金のアイコンを探せ」に：4 体の髪の割り当て（16 量子ビット）と 9 年目の布（2 量子ビット）', area: '量子', status: 'done', asked: '2026-11-13', note: 'quantum/golden_icon_challenge.py。ローカルと偽のチップで確かめ済み。実機はオーナーの手元で' },
+  { id: 'story-200-batch1', title: '物語 200 の第 1 弾：プロローグ（ガレージアイランド、コーディングの場面）＋ 1 年目 14 問。実況チャット・コンボ・豆知識・サトシパラメーター・OP', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/story' },
+  { id: 'story-200-rest', title: '物語 200 の続き（2〜12 年目、186 問）を順に書き足す', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/story' },
+  { id: 'stoic-profile', title: 'ストイックのプロフィール：ガレージアイランドの詩人、酔いどれ草の農園、トトシ中本とおもちゃの王国', area: '版', status: 'done', asked: '2026-11-13', note: 'docs/story/stoic-profile.md（サトシに性的な要素は結びつけない形に書き直した）' },
   { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'banner-22', title: 'バナー：{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}（中身は空けておく）', area: '版', status: 'decide', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'screensaver', title: '記念：塔と飛行機のスクリーンセーバーをダウンロード（MENTE の幾何学ロゴ、HTML 一枚）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
@@ -105,7 +109,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/year1', '1〜2 年目（港）'], ['/mente/game/year9', '9 年目（クレーターのサイコロ）'], ['/mente/game/years', '12 年の進行と最後の塔'], ['/mente/game/finale-lab', '最後の面の研究（22 アングル）']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/story', '物語 200'], ['/mente/game/year1', '1〜2 年目（港）'], ['/mente/game/year9', '9 年目（クレーターのサイコロ）'], ['/mente/game/years', '12 年の進行と最後の塔'], ['/mente/game/finale-lab', '最後の面の研究（22 アングル）']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };

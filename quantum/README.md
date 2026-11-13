@@ -24,3 +24,34 @@ python -c "from qiskit_ibm_runtime import QiskitRuntimeService as S; S.save_acco
 - Results land in `quantum/results/`; load the JSON in the spin lab to compare it with the ideal and
   the rehearsal. Commit a real-QPU result if you want it shown for everyone.
 - This environment cannot reach IBM's servers, so the real-QPU step runs on your machine.
+
+## 「イーサリアムの黄金のアイコンを探せ」（仮）の台本 — `golden_icon_challenge.py`
+
+ゲームの問いを IBM の無料枠で量子計算機に聞く。どちらも 1 回の実行で回路 1 つ、数秒の QPU 時間。
+
+| 問い | 中身 | 量子ビット |
+|---|---|---|
+| `hair` | 島の考える機械フォン（仮）への問い：4 体（ポニーテール・ボブ・アリミノガール・アリミノボーイ）に、どの髪の主役を割り当てると、いちばん見分けやすいか。シルエットの重なり（IoU）の合計を小さくする QUBO、QAOA 1 層 | 16 |
+| `cloth` | 9 年目の観測の切れ目：2 つの角度（.q と同じ整数のミリラジアン）で、布がどうなるかを測る。00 布はそのまま／01 端を折り返す／10 手が止まる／11 布を外す | 2 |
+
+```bash
+node scripts/export-golden-problem.mjs
+```
+
+```bash
+python quantum/golden_icon_challenge.py hair --mode local
+```
+
+```bash
+python quantum/golden_icon_challenge.py cloth --mode fake --angles 2094 1571
+```
+
+```bash
+python quantum/golden_icon_challenge.py hair --mode ibm
+```
+
+試した結果（2026-11-13、この作業環境）：
+
+- `hair`：いちばん見分けやすい割り当ては「ポニーテール＝雲、ボブ＝ボブ、アリミノガール＝ポニーテール、アリミノボーイ＝二つの輪」（重なりの合計 3.887）。いまの画面の割り当ては 3.916 で、ほぼ同じ。QAOA 1 層の理想の計算で、いちばんの答えが出る割合は 0.051%（でたらめに選ぶと 0.037%）。偽の IBM チップ（FakeTorino）の雑音ありでは平均のエネルギーが 12.5 → 20.5 に悪くなった（16 量子ビットの回路が深いため）。正直に：速さの得はなく、「ゲームの問いを量子計算機に聞ける」ことを見せるもの。
+- `cloth`：理想 12.5 / 37.5 / 12.5 / 37.5%、偽のチップで 13.1 / 37.4 / 12.7 / 36.8%（理想からの距離 0.008）。
+- 実機（`--mode ibm`）はオーナーの手元で、保存したアカウントで走らせる。鍵はリポジトリに入れない。
