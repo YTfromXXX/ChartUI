@@ -29,6 +29,9 @@ export const STEPS = [
 
 export const BASE: FaceParams = { rx: 0.78, ry: 1.02, forehead: 0.15, cheek: 0.1, jaw: 0.06, nose: 0.24, noseY: -0.1, brow: 0.08, mouth: 0.06, chin: 0.07, hairline: 0.62, hairRise: 0.1 };
 /** Three faces: 1 stays close to the base; 2 differs most in the jaw; 3 in the forehead and brow. */
+/** Provisional names (仮). Figure 3 wears the ponytail and is named after it for now. */
+export const FIGURE_NAMES = ['1 体目', '2 体目', 'ポニーテール（仮）'] as const;
+export const PONY_FIGURE = 2;
 export const FACES: FaceParams[] = [
   { ...BASE, rx: 0.8, ry: 1.0, cheek: 0.12, nose: 0.22, mouth: 0.05, hairline: 0.58, hairRise: 0.12 },
   { ...BASE, rx: 0.72, ry: 1.14, jaw: 0.16, cheek: 0.07, nose: 0.27, noseY: -0.14, chin: 0.13, mouth: 0.08, hairline: 0.7, hairRise: 0.06 },
@@ -36,8 +39,8 @@ export const FACES: FaceParams[] = [
 ];
 
 /** Use the face's own values up to step s, the base's beyond it. */
-export function atStep(face: FaceParams, s: number): FaceParams {
-  const out = { ...BASE };
+export function atStep(face: FaceParams, s: number, base: FaceParams = BASE): FaceParams {
+  const out = { ...base };
   for (const st of STEPS) if (st.step <= s) for (const k of st.keys) (out as Record<string, number>)[k] = face[k as keyof FaceParams];
   return out;
 }
@@ -110,7 +113,7 @@ export const ETH = 'Ξ';
 //   wings  翼・扇        horizontal fans to both sides at temple height
 //   bob    ボブと前髪    a plateau round the head with a blunt fringe line across the forehead
 //   braids 編み込み      cornrow ridges over the scalp — they read like contour lines
-export type HairStyle = 'none' | 'tower' | 'wings' | 'bob' | 'braids' | BobVariant;
+export type HairStyle = 'none' | 'tower' | 'wings' | 'bob' | 'braids' | 'ponytail' | BobVariant;
 /** Four new bob variants, opened from the bob button — for tuning texture and accent per figure. */
 export type BobVariant = 'bob-asym' | 'bob-inward' | 'bob-blunt' | 'bob-layer';
 export const BOB_VARIANTS: { id: BobVariant; name: string; note: string }[] = [
@@ -125,6 +128,7 @@ export const HAIR_STYLES: { id: HairStyle; name: string; note: string }[] = [
   { id: 'wings', name: '翼・扇', note: 'こめかみの高さで左右へ広げる' },
   { id: 'bob', name: 'ボブと前髪', note: '頭を包む高原と、額を横切る前髪の線' },
   { id: 'braids', name: '編み込み', note: '頭皮の上の細い畝（等高線のように見える）' },
+  { id: 'ponytail', name: 'ポニーテール', note: '頭頂の右から肩へ流れる 7 つの節（下の 7 マス）' },
 ];
 const g2 = (x: number, y: number, cx: number, cy: number, sx: number, sy: number) => Math.exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2) / 2);
 export function hairHeight(style: HairStyle, p: FaceParams, x: number, y: number): number {
@@ -137,9 +141,23 @@ export function hairHeight(style: HairStyle, p: FaceParams, x: number, y: number
     case 'bob-inward': { if (head <= 0) return 0.13 * (g2(x, y, -p.rx * 0.95, -0.42, 0.09, 0.07) + g2(x, y, p.rx * 0.95, -0.42, 0.09, 0.07)); const fringe = y > 0.4; const sides = Math.abs(x) > p.rx * 0.8 && y > -0.38; return (fringe || sides ? 0.24 : 0) + 0.13 * (g2(x, y, -p.rx * 0.95, -0.42, 0.09, 0.07) + g2(x, y, p.rx * 0.95, -0.42, 0.09, 0.07)); }
     case 'bob-blunt': { const box = Math.abs(x) < p.rx + 0.3 && y > -0.5 && y < p.ry + 0.32; if (!box) return 0; const fringe = y > 0.22; const sides = Math.abs(x) > p.rx * 0.82; return fringe || sides ? 0.3 : 0; }
     case 'bob-layer': { if (head <= 0) return 0; const sides = Math.abs(x) > p.rx * 0.76; if (y > 0.45) return 0.3; if (sides && y > 0.0) return 0.2; if (sides && y > -0.45) return 0.11; return 0; }
+    case 'ponytail': { let z = head > 0 && y > p.hairline ? 0.1 : 0; const t = ponyDist(x, y); if (t.d < t.w) z += (0.3 - 0.12 * t.u) * Math.sqrt(1 - (t.d / t.w) ** 2); return z; }
     case 'braids': return head > 0 && y > p.hairline - 0.1 ? 0.07 * Math.max(0, Math.sin(x * 22)) + 0.05 : 0;
     default: return 0;
   }
+}
+/** The ponytail's 7 segments (root → tip), front view: from the crown on the right, out and down past the shoulder. */
+export const PONY: [number, number][] = [[0.3, 1.12], [0.62, 1.08], [0.9, 0.9], [1.05, 0.6], [1.08, 0.25], [1.04, -0.1], [0.98, -0.42]];
+/** Distance from (x, y) to the tail's centre line, the tail's half-width there (thick root → thin tip) and how far along it is (u: 0 root … 1 tip). */
+export function ponyDist(x: number, y: number) {
+  let best = { d: Infinity, w: 0.1, u: 0 }; const n = PONY.length - 1;
+  for (let k = 0; k < n; k += 1) {
+    const [ax, ay] = PONY[k]; const [bx, by] = PONY[k + 1]; const vx = bx - ax; const vy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+    const d = Math.hypot(x - ax - t * vx, y - ay - t * vy); const u = (k + t) / n;
+    if (d < best.d) best = { d, w: 0.15 - 0.08 * u + 0.025 * Math.cos(u * n * 2 * Math.PI), u };
+  }
+  return best;
 }
 /** Face plus hair, sampled on a larger window so towers and wings fit. */
 export const headGrid = (p: FaceParams, style: HairStyle, nx = 90, ny = 110) => sample((x, y) => height(p, x, y) + hairHeight(style, p, x, y), nx, ny, -1.35, 1.35, -1.3, 1.75);
@@ -147,7 +165,8 @@ export const headGrid = (p: FaceParams, style: HairStyle, nx = 90, ny = 110) => 
 export const silhouette = (g: Grid, t = 0.02) => Array.from(g.z, (v) => v > t);
 export function iou(a: boolean[], b: boolean[]) { let i = 0; let u = 0; for (let k = 0; k < a.length; k += 1) { if (a[k] && b[k]) i += 1; if (a[k] || b[k]) u += 1; } return u ? i / u : 1; }
 
-// ---------- 7 slots at the bottom: accessories and left/right colour asymmetry ----------
+// ---------- the ponytail: 7 slots at the bottom (accessories and left/right colour asymmetry) ----------
+// The strip is defined as the ponytail: slot k is segment k of the tail (root 1 → tip 7).
 // Each slot is one accent idea: where the accessory sits (head coordinates), and the colour of the
 // left and right halves of the hair. Slot 7 is left empty on purpose (◻︎ = still open).
 // Colours are the page's ink / red / indigo / bronze, all ≥ 3:1 against white (lines and fills).
