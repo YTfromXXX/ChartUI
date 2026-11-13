@@ -72,6 +72,7 @@ export const TASKS: Task[] = [
   { id: 'package-200', title: 'パッケージ：物語 200 ＋ ミニゲーム 12（1 年に 1 つ）', area: '版', status: 'doing', asked: '2026-11-13' },
   { id: 'mente-nudge', title: '乱れたときだけ、Mente 式にそっと「アリミノボーイに聞く」（迷い・急ぎ・やり直し・つまずき）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year1' },
   { id: 'finale-22', title: '最後の面の研究：Luna の飛行機 × エーリアル達の 22 アングル（メタ視点のデバイス、自動と手動）', area: '版', status: 'doing', asked: '2026-11-13', route: '/mente/game/finale-lab' },
+  { id: 'year9-dice', title: '9 年目を遊べる形に：クレーターのサイコロ（歩数と色を両者が決める、同じ形のクレーターはない、十字を横切って次の螺旋へ）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/year9' },
   { id: 'fib-panel', title: 'フィボナッチのマグネット操縦パネル：乱れたら Luna が一緒に操縦する', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'banner-22', title: 'バナー：{22 のエーリアルを、タロットの切り札 22 枚に対応させるか。}（中身は空けておく）', area: '版', status: 'decide', asked: '2026-11-13', route: '/mente/game/finale-lab' },
   { id: 'screensaver', title: '記念：塔と飛行機のスクリーンセーバーをダウンロード（MENTE の幾何学ロゴ、HTML 一枚）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game/finale-lab' },
@@ -100,7 +101,7 @@ export const SCREENS: { group: string; routes: [string, string][] }[] = [
   { group: '図書館', routes: [['/lab/library', '図書館'], ['/lab/library/entrance', '入口'], ['/lab/library/reading-order', 'どちらを先に読む？']] },
   { group: '対戦・ゲーム', routes: [['/lab/crystal-baby', 'クリスタルベイビー'], ['/lab/prompt-chess', 'プロンプトチェス'], ['/lab/activist', 'アクティビスト双六'], ['/oracle-api/race', 'ORACLE レース中継'], ['/lab/honeycomb-punish', 'ハニカムパニッシュ'], ['/famidance', 'ファミダンス'], ['/architect/tetra', 'テトラアルカナ'], ['/relay-flight', 'リレーすごろく']] },
   { group: '結び目・ガラス', routes: [['/lab/glass-knot', 'ガラスの紐'], ['/lab/knot-ladder', '立方体のはしご'], ['/lab/card-slots', 'カードスロット'], ['/lab/candle-smoke', '蝋燭と煙']] },
-  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/year1', '1〜2 年目（港）'], ['/mente/game/years', '12 年の進行と最後の塔'], ['/mente/game/finale-lab', '最後の面の研究（22 アングル）']] },
+  { group: '研究', routes: [['/lab/fourier', 'フーリエ'], ['/lab/spin', 'スピン'], ['/lab/dual-slot', 'Dual・パチスロ'], ['/lab/mesh', 'メッシュ'], ['/lab/silicon', 'シリコン'], ['/retro-grid', 'レトログリッド'], ['/mente', 'Mente'], ['/mente/aviator', '紙飛行機 aviator'], ['/mente/game', '〜を探せ（イベント）'], ['/mente/game/swarm', '瓶を拾う者たち（BA・PE）'], ['/mente/game/year1', '1〜2 年目（港）'], ['/mente/game/year9', '9 年目（クレーターのサイコロ）'], ['/mente/game/years', '12 年の進行と最後の塔'], ['/mente/game/finale-lab', '最後の面の研究（22 アングル）']] },
 ];
 
 export const STATUS_LABEL: Record<Status, string> = { done: '済', doing: '進行中', todo: 'まだ', decide: '決めてほしい' };
