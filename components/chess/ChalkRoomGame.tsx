@@ -12,10 +12,13 @@ const DWELLING_MATCH: Record<string, string> = { 定住指数: 'B3', 近所の�
 const enc = new TextEncoder();
 const hex4 = (s: string) => Array.from(keccak256(enc.encode(s)).slice(0, 2), (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 type KeyFragment = { hex: string; prev: string; ticker: string; who: string; turn: number };
+/** The mirage room: a corner of the lobby that can be seen but not entered (Stoic hides there). */
+const MIRAGE: Sq[] = [{ x: 4, y: 4, f: 0 }, { x: 3, y: 4, f: 0 }];
+const inMirage = (s: Sq) => MIRAGE.some((m) => same(m, s));
 
 const FILTER_COLOR: Record<Filter, string> = { 事実: '#1f1f1f', 噂: '#2b3a67', 感情: '#c8001a' };
 const CELL = 40; const PAD = 22; const FLOOR_W = SIZE * CELL + PAD * 2;
-const THEME_ROOM: Record<Theme, string> = { ホテル: '窓（港）', 港: '受付', 準備の金庫: '金庫室', 温室: '温室の入口', 動画: '動画の壁', 鉄道: '帳簿の部屋', 住まい: '庭' };
+const THEME_ROOM: Record<Theme, string> = { ホテル: '窓（港）', 港: '受付', 準備の金庫: '金庫室', 温室: '温室の入口', 動画: '動画の壁', 鉄道: '帳簿の部屋', 住まい: '庭', ミーム: '動画の壁' };
 type LogEntry = { turn: number; lines: { side: string; device: string; prompt: string; why: string }[]; events: TurnEvent[]; acts: string[]; harmony: number; notes: string[] };
 
 /** A stiff mannequin figure (head, torso, arms at fixed angles) — original, simple shapes. */
@@ -96,10 +99,10 @@ function SymbolStrip({ prefer, held, onHold, extra }: { prefer?: Theme; held: Sy
   );
 }
 
-export type ChalkRoomProps = { gameNo: number; title: string; news: News[]; prefer?: Theme; allowArchitect?: boolean; intro?: string };
+export type ChalkRoomProps = { gameNo: number; title: string; news: News[]; prefer?: Theme; allowArchitect?: boolean; intro?: string; attention?: boolean };
 
 /** The chalk-room chess game, shared by game 1 (hotels) and game 3 (SNS). Every move comes from a device or a meta view. */
-export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allowArchitect, intro }: ChalkRoomProps) {
+export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allowArchitect, intro, attention: showAttention }: ChalkRoomProps) {
   const TURNS = NEWS.length;
   const [side, setSide] = useState<Color>('white');
   const [pieces, setPieces] = useState<Piece[]>(() => initialPieces());
@@ -115,12 +118,13 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const [badges, setBadges] = useState<Record<string, Sym>>({});
   const [focus, setFocus] = useState<Partial<Record<Color, Sym>>>({});
   const [keys, setKeys] = useState<KeyFragment[]>([]);
+  const [attention, setAttention] = useState(0);
   const [aligned, setAligned] = useState(0);
   const rnd = useRef(() => Math.random());
   const done = turn >= TURNS;
   const news = NEWS[Math.min(turn, TURNS - 1)];
   const foe: Color = side === 'white' ? 'black' : 'white';
-  const targets = useMemo(() => { const p = pieces.find((q) => q.id === picked); return p ? legalMoves(p, pieces) : []; }, [picked, pieces]);
+  const targets = useMemo(() => { const p = pieces.find((q) => q.id === picked); return p ? legalMoves(p, pieces).filter((t) => !inMirage(t)) : []; }, [picked, pieces]);
   const postSyms = useMemo(() => (done ? [] : news.posts.map((p) => symbolFromPost(p.handle, p.kind, news.theme ?? '住まい'))), [news, done]);
   const lookup = (i: number) => postSyms.find((s) => s.i === i) ?? symbolAt(i, prefer);
 
@@ -145,7 +149,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     for (const sym of pool) {
       const room = ROOMS.find((r) => r.name === THEME_ROOM[sym.theme]); if (!room) continue;
       let best: { id: string; to: Sq; d: number } | null = null;
-      for (const p of mine) for (const to of legalMoves(p, pieces)) { const d = Math.abs(to.x - room.x) + Math.abs(to.y - room.y) + Math.abs(to.f - room.f); if (!best || d < best.d) best = { id: p.id, to, d }; }
+      for (const p of mine) for (const to of legalMoves(p, pieces).filter((t) => !inMirage(t))) { const d = Math.abs(to.x - room.x) + Math.abs(to.y - room.y) + Math.abs(to.f - room.f); if (!best || d < best.d) best = { id: p.id, to, d }; }
       if (best && !out.some((o) => o.id === best!.id && same(o.to, best!.to))) out.push({ sym, id: best.id, to: best.to, room: room.name });
       if (out.length === 3) break;
     }
@@ -158,7 +162,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     if (!prompt.trim()) { setWarn('プロンプトが空です。駒を押して行き先を押すと、プロンプトの下書きが入ります。'); return; }
     setWarn('');
     const dev = DEVICES.find((d) => d.id === device)!; const cpuDev = DEVICES[Math.floor(rnd.current() * DEVICES.length)];
-    const mineR = parsePrompt(prompt, side, pieces); const foeText = cpuPrompt(foe, pieces, rnd.current); const foeR = parsePrompt(foeText, foe, pieces);
+    const guard = (r: ReturnType<typeof parsePrompt>) => (r.move && inMirage(r.move.to) ? { move: null, why: `${r.move.id} は蜃気楼の部屋に入れない（見えるが、鍵がない） — 駐車のまま` } : r);
+    const mineR = guard(parsePrompt(prompt, side, pieces)); const foeText = cpuPrompt(foe, pieces, rnd.current); const foeR = guard(parsePrompt(foeText, foe, pieces));
     const white = side === 'white' ? mineR : foeR; const black = side === 'white' ? foeR : mineR;
     const { pieces: next, events } = resolveTurn(pieces, white.move, black.move);
     const crashed = events.some((e) => e.kind === 'crash');
@@ -186,10 +191,11 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     setBadges((b) => { const n = { ...b }; used.forEach((id) => delete n[id]); return n; });
     setFocus((f) => { const n = { ...f }; usedFocus.forEach((c) => delete n[c]); return n; });
     if (delta > 0) alignedNow = true;
+    setAttention((a) => a + news.parts.filter((x) => x.filter === '噂').length + news.posts.filter((x) => x.kind === '噂').length * 2);
     setKeys((k) => [...k, ...forged]); setAligned((a) => a + (alignedNow ? 1 : 0));
     setHarmony((h) => h + delta); setPieces(next); setTurn((t) => t + 1); setPrompt(''); setPicked(null);
   };
-  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); };
+  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); setAttention(0); };
   const clickCell = (s: Sq) => {
     if (done) return;
     const here = pieces.find((p) => p.alive && same(p.at, s));
@@ -227,10 +233,13 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
               <div className="grid gap-1 sm:grid-cols-3">{news.posts.map((p) => <div key={p.handle} className="border border-stone-200 bg-[#fafaf9] p-2 text-[11px]"><p className="text-stone-500">▶ {p.handle} · {p.views}</p><p>{p.text}</p><p className="text-[10px]" style={{ color: FILTER_COLOR[p.kind] }}>［{p.kind}］</p></div>)}</div>
             </>}
             <svg viewBox={`0 0 ${FLOOR_W * FLOORS} ${SIZE * CELL + PAD * 2 + 14}`} className="w-full rounded bg-[#2f2f2f]" aria-label="チョークで描いた 3 つの階" data-testid="board">
+              <defs><linearGradient id="mirage-grad" x1="0" x2="1"><stop offset="0" stopColor="#fde68a" stopOpacity="0.05" /><stop offset="0.5" stopColor="#fde68a" stopOpacity="0.22" /><stop offset="1" stopColor="#fde68a" stopOpacity="0.05" /></linearGradient></defs>
+              <style>{'.mirage{animation:mirage 4s ease-in-out infinite}@keyframes mirage{0%,100%{opacity:.55}50%{opacity:1}}@media (prefers-reduced-motion: reduce){.mirage{animation:none}}'}</style>
               {Array.from({ length: FLOORS }, (_, f) => (
                 <g key={f} transform={`translate(${f * FLOOR_W + PAD} ${PAD})`}>
                   <text x={0} y={-8} fontSize={11} fill="#f5f5f4" opacity={0.8}>{['1 階 ロビー', '2 階 トレーディングフロア', '3 階 屋上'][f]}</text>
                   {Array.from({ length: SIZE + 1 }, (_, k) => <g key={k}><line x1={k * CELL} x2={k * CELL} y1={0} y2={SIZE * CELL} stroke="#f5f5f4" strokeOpacity={0.35} strokeDasharray="5 2 1 2" /><line y1={k * CELL} y2={k * CELL} x1={0} x2={SIZE * CELL} stroke="#f5f5f4" strokeOpacity={0.35} strokeDasharray="5 2 1 2" /></g>)}
+                  {f === 0 && <g data-testid="mirage" aria-label="蜃気楼の部屋（入れない）"><rect className="mirage" x={3 * CELL} y={0} width={2 * CELL} height={CELL} fill="url(#mirage-grad)" /><text x={3 * CELL + 4} y={CELL - 6} fontSize={8} fill="#fde68a">蜃気楼の部屋（入れない）</text>{keys.length >= 3 && <text x={3 * CELL + 4} y={12} fontSize={7} fill="#fde68a">鍵：{keys.slice(-3).map((k) => k.hex).join('')}</text>}</g>}
                   {ROOMS.filter((r) => r.f === f).map((r) => <text key={r.name} x={r.x * CELL + 3} y={(SIZE - 1 - r.y) * CELL + CELL - 4} fontSize={8} fill="#f5f5f4" opacity={0.65}>{r.name}</text>)}
                   {Array.from({ length: SIZE * SIZE }, (_, k) => { const s = { x: k % SIZE, y: Math.floor(k / SIZE), f }; const tgt = targets.some((t) => same(t, s)); return <rect key={k} x={s.x * CELL} y={(SIZE - 1 - s.y) * CELL} width={CELL} height={CELL} fill={tgt ? '#f5f5f41a' : 'transparent'} stroke={tgt ? '#fde68a' : 'none'} strokeDasharray="3 3" onClick={() => clickCell(s)} style={{ cursor: 'pointer' }} />; })}
                   {pieces.filter((p) => p.alive && p.at.f === f).map((p) => (
@@ -267,6 +276,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {warn && <p className="text-[11px] text-[#c8001a]" role="alert" data-testid="warn">{warn}</p>}
             {held && <p className="text-[11px] text-[#c8001a]" data-testid="held">持っている銘柄：{held.ticker}（駒かチームを押すと渡す）</p>}
             <p className="text-sm" data-testid="harmony">調和：{harmony}</p>
+            {showAttention && <div className="border border-[#2f6b1a] p-2 text-[11px]" data-testid="attention"><p>📣 PE 群の注目：{attention}</p><div className="mt-1 h-2 bg-stone-200"><div className="h-2 bg-[#2f6b1a]" style={{ width: `${Math.min(100, attention * 4)}%` }} /></div><p className="mt-1 text-[10px] text-stone-600">注目は値段ではない。噂が増えると注目は増えるが、駒の強さも、銘柄の値打ちも変わらない。</p></div>}
             <div className="space-y-1 border border-[#2b3a67] p-2 text-[11px]" data-testid="crypto">
               <p className="font-semibold">🔐 サンクチュアリの暗号</p>
               <p data-testid="harmony-rate">調和率：{turn ? Math.round((aligned / turn) * 100) : 0}%（{aligned} / {turn} ターン）</p>

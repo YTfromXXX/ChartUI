@@ -99,6 +99,7 @@ export default function MenteGame() {
             <p className="text-xs"><Link href="/mente/game/swarm" className="underline" data-testid="to-swarm">6〜7 年目のイベント：瓶を拾う者たち（BA と PE）</Link></p>
             <p className="text-xs"><Link href="/mente/game/chess1" className="underline" data-testid="to-chess1">フィジカルプロンプトチェス 1 ゲーム目「ホテルの銘柄を探せ」（チョークの部屋）</Link></p>
             <p className="text-xs"><Link href="/mente/game/chess3" className="underline" data-testid="to-chess3">フィジカルプロンプトチェス 3 ゲーム目「チョークの部屋」</Link></p>
+            <p className="text-xs"><Link href="/mente/game/chess4" className="underline" data-testid="to-chess4">フィジカルプロンプトチェス 4 ゲーム目「ミームコインの野」</Link></p>
             <p className="text-xs"><Link href="/mente/game/story" className="underline" data-testid="to-story">物語 200 を遊ぶ（プロローグ：ガレージアイランド → 1 年目）</Link></p>
             <p className="text-xs"><Link href="/mente/game/year1" className="underline" data-testid="to-year1">1〜2 年目から遊ぶ（港・アリミノボーイに聞く・指紋の書き写し）</Link></p>
             <p className="text-xs"><Link href="/mente/game/year9" className="underline" data-testid="to-year9">9 年目：クレーターのサイコロ（フォン（仮）を操縦する Luna）</Link></p>

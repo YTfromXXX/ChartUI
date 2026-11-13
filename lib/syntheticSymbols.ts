@@ -4,7 +4,7 @@
 // team nudges the game a little; it never sets a price and it is not advice. Everything is synthetic.
 import type { Filter } from '@/lib/chessGame3';
 
-export type Theme = 'ホテル' | '港' | '準備の金庫' | '温室' | '動画' | '鉄道' | '住まい';
+export type Theme = 'ホテル' | '港' | '準備の金庫' | '温室' | '動画' | '鉄道' | '住まい' | 'ミーム';
 export type Signal = '上向きの交差' | '下向きの交差' | '横ばい';
 export type Sym = { i: number; ticker: string; name: string; theme: Theme; filter: Filter; series: number[]; signal: Signal; team: 'white' | 'black' | 'both' };
 
@@ -15,6 +15,8 @@ const THEMES: { theme: Theme; filter: Filter; team: Sym['team']; names: string[]
   { theme: '温室', filter: '感情', team: 'black', names: ['六角温室', 'ハンモック住宅', '庭師組合', '島の畑'] },
   { theme: '動画', filter: '噂', team: 'both', names: ['朝食チャンネル', '短尺スタジオ', '再生回数研究所'] },
   { theme: '鉄道', filter: '噂', team: 'white', names: ['始発鉄道', '工場駅前', '三駅ぶんの空席'] },
+  // Game 4: fictional meme coins (original names only; no real coin's name or mascot)
+  { theme: 'ミーム', filter: '噂', team: 'both', names: ['くしゃみ猫コイン', 'まばたき金魚コイン', 'PE 群コイン', 'ドン・ぱコイン', '四つ打ちコイン', 'ブレイクコイン'] },
   // Sanctuary × SNS: composite signals of "are people still living there?" (aggregate, fictional, never one person)
   { theme: '住まい', filter: '感情', team: 'black', names: ['定住指数', '庭の手入れ指数', '窓の灯り指数', '近所の返信率', '朝と夜の投稿の幅', '同じ景色の写真の数'] },
 ];
