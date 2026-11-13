@@ -6,6 +6,7 @@ import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, ty
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
 import { keccak256 } from '@/lib/meshMetaV2';
 import { BRAIN_RULE, drift, faultChance, floorSlip, interceptor, newsPrint, parseFree, randomMove } from '@/lib/chessWild';
+import { MENTE_CARDS } from '@/lib/menteCards';
 import { curated, sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
 
 /** 住まい symbols and the Sanctuary resident each one suits: together they count double and forge a key fragment. */
@@ -131,6 +132,12 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const [left, setLeft] = useState(20);
   // Long-press on Ariel's meta view: Ariel advises hiding the architect banner behind a short LINK device.
   const [arielHint, setArielHint] = useState(false);
+  // The drone's question from the sky: answer it right to earn one right to intervene (fix one news part without the audit).
+  const [right, setRight] = useState(false);
+  const [approved, setApproved] = useState<number | null>(null);
+  const [skyTried, setSkyTried] = useState(-1);
+  const [skyMsg, setSkyMsg] = useState('');
+  const [cards, setCards] = useState(0);
   const press = useRef<number | null>(null);
   const longPress = { onPointerDown: () => { press.current = window.setTimeout(() => setArielHint(true), 600); }, onPointerUp: () => { if (press.current) window.clearTimeout(press.current); }, onPointerLeave: () => { if (press.current) window.clearTimeout(press.current); }, onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setArielHint(true); } };
   const [aligned, setAligned] = useState(0);
@@ -183,7 +190,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
 
   const shownNews = { ...news, parts: news.parts.map((x, k) => (tamper[k] ? { ...x, filter: tamper[k] } : x)) };
   const printOrig = newsPrint(news.parts); const printNow = newsPrint(shownNews.parts);
-  const cycle = (k: number) => { const order: Filter[] = ['事実', '噂', '感情']; const cur = tamper[k] ?? news.parts[k].filter; const nx = order[(order.indexOf(cur) + 1) % 3]; setTamper((t) => { const n = { ...t }; if (nx === news.parts[k].filter) delete n[k]; else n[k] = nx; return n; }); };
+  const cycle = (k: number) => {
+    if (right && approved === null) setApproved(k); const order: Filter[] = ['事実', '噂', '感情']; const cur = tamper[k] ?? news.parts[k].filter; const nx = order[(order.indexOf(cur) + 1) % 3]; setTamper((t) => { const n = { ...t }; if (nx === news.parts[k].filter) delete n[k]; else n[k] = nx; return n; }); };
 
   const send = (timeout = false) => {
     if (done) return;
@@ -214,7 +222,9 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     notes.unshift(crashed ? '同じマスでぶつかった。読み方が衝突して、調和が一つ減った。' : delta > 0 ? `違うデバイスから、同じニュースを読んだ。${news.harmony}` : '調和は増えも減りもしない。');
     if (devId === 'phone' && notes.some((n) => n.startsWith('⚠ スプーフィング')) && mineR.move && PEOPLE[mineR.move.id].filter === '噂') { delta -= 1; notes.push(`${PEOPLE[mineR.move.id].name}は噂に強いぶん、なりすましの速報を信じてしまった。調和 −1。`); }
     // --- the audit: tampering and insider-like moves ---
-    if (Object.keys(tamper).length) { penalty += 2; notes.push(`🔎 監査：ニュースの指紋が一致しない（元 ${printOrig} ／ 今 ${printNow}）。介入（改ざん）は、指紋で見つかる。調和 −2。`); }
+    const unapproved = Object.keys(tamper).filter((k) => Number(k) !== approved);
+    if (approved !== null && tamper[approved]) { notes.push(`🛸 介入の権利：空からの問いに答えたので、「${news.parts[approved].label}」の読み方を、監査に見つからずに直した。MENTE のカードが一枚、公開された。`); }
+    if (unapproved.length) { penalty += 2; notes.push(`🔎 監査：ニュースの指紋が一致しない（元 ${printOrig} ／ 今 ${printNow}）。介入（改ざん）は、指紋で見つかる。調和 −2。`); }
     if (peeked && mineR.move) { penalty += 2; notes.push(`🔎 監査：公開前のニュースをのぞいてから動いた（先回り）。鎖のタイムスタンプが、公開より前の手を記録している。${PEOPLE[mineR.move.id].name}は次のターン、取り調べで動けない。調和 −2。（現実の市場では、公開前の重要な情報で売り買いすることはインサイダー取引で、法律で禁じられている）`); }
     delta -= penalty;
     const acts: string[] = []; const used: string[] = []; const usedFocus: Color[] = []; const forged: KeyFragment[] = []; let alignedNow = false;
@@ -244,6 +254,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     setKeys((k) => [...k, ...forged]); setAligned((a) => a + (alignedNow ? 1 : 0));
     setNoise((n) => n + (devId === 'brain' ? 2 : 0));
     setFrozen(peeked && mineR.move ? [mineR.move.id] : []);
+    if (approved !== null && tamper[approved]) { setCards((c) => Math.min(MENTE_CARDS.length, c + 1)); setRight(false); }
+    setApproved(null); setSkyMsg('');
     setTamper({}); setPeeked(false); setLeft(20);
     setHarmony((h) => h + delta); setPieces(next); setTurn((t) => t + 1); setPrompt(''); setPicked(null);
   };
@@ -254,7 +266,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
     return () => window.clearInterval(t);
   }, [fast, done]);
   useEffect(() => { if (fast && !done && left === 0) sendRef.current(true); }, [fast, done, left]); // time's up: send once
-  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); setAttention(0); setNoise(0); setTamper({}); setPeeked(false); setFrozen([]); setLeft(20); };
+  const reset = (s: Color = side) => { setSide(s); setPieces(initialPieces()); setTurn(0); setLog([]); setHarmony(0); setPrompt(''); setPicked(null); setDevice(null); setWarn(''); setBadges({}); setFocus({}); setHeld(null); setKeys([]); setAligned(0); setAttention(0); setNoise(0); setTamper({}); setPeeked(false); setFrozen([]); setLeft(20); setRight(false); setApproved(null); setSkyTried(-1); setSkyMsg(''); setCards(0); };
   const clickCell = (s: Sq) => {
     if (done) return;
     const here = pieces.find((p) => p.alive && same(p.at, s));
@@ -291,7 +303,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
               <p className="text-base font-semibold" data-testid="headline">「{news.headline}」{news.theme && <span className="ml-2 text-[11px] font-normal text-stone-500">テーマ：{news.theme}</span>}</p>
               {news.scene && <ScenePanel key={turn} scene={news.scene} />}
               <div className="flex flex-wrap gap-2">{shownNews.parts.map((p, k) => <button type="button" key={p.label} data-testid={`part-${k}`} onClick={() => wild && cycle(k)} title={wild ? '押すと、この部品のフィルターを書き換える（介入）' : undefined} className="border px-2 py-0.5 text-left text-xs" style={{ borderColor: FILTER_COLOR[p.filter], color: FILTER_COLOR[p.filter], background: tamper[k] ? '#fff1f2' : 'white' }}>{p.label}：{p.text}<span className="ml-1 text-[10px]">［{p.filter}］{tamper[k] ? '（介入）' : ''}</span></button>)}</div>
-              {wild && <p className="text-[11px]" data-testid="news-print">ニュースの指紋：<span className="font-semibold">{printOrig}</span>{printNow !== printOrig && <span className="text-[#c8001a]"> → {printNow}（一致しない：介入の跡）</span>} <span className="text-stone-500">· 部品を押すと、フィルターを書き換えられる（介入）。</span></p>}
+              {wild && <p className="text-[11px]" data-testid="news-print">ニュースの指紋：<span className="font-semibold">{printOrig}</span>{printNow !== printOrig && <span className="text-[#c8001a]"> → {printNow}（一致しない：{approved !== null && Object.keys(tamper).every((k) => Number(k) === approved) ? '権利による訂正' : '介入の跡'}）</span>} <span className="text-stone-500">· 部品を押すと、フィルターを書き換えられる（介入）。</span></p>}
               <div className="grid gap-1 sm:grid-cols-3">{news.posts.map((p) => <div key={p.handle} className="border border-stone-200 bg-[#fafaf9] p-2 text-[11px]"><p className="text-stone-500">▶ {p.handle} · {p.views}</p><p>{p.text}</p><p className="text-[10px]" style={{ color: FILTER_COLOR[p.kind] }}>［{p.kind}］</p></div>)}</div>
             </>}
             <svg viewBox={`0 0 ${FLOOR_W * FLOORS} ${SIZE * CELL + PAD * 2 + 14}`} className="w-full rounded bg-[#2f2f2f]" aria-label="チョークで描いた 3 つの階" data-testid="board">
@@ -341,6 +353,14 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             <p className="text-xs font-semibold">プロンプトを送るデバイス</p>
             <div className="grid grid-cols-2 gap-1 text-xs">{DEVICES.map((d) => <button key={d.id} type="button" data-testid={`dev-${d.id}`} onClick={() => setDevice(d.id)} {...(d.id === 'ariel' ? longPress : {})} title={d.id === 'ariel' ? '長押しで、エーリアルの助言' : undefined} className="border px-2 py-1 text-left" style={{ borderColor: device === d.id ? '#c8001a' : '#d6d3d1', background: device === d.id ? '#fff1f2' : 'white' }}>{d.icon} {d.name}</button>)}</div>
             {arielHint && side === 'white' && <div className="border border-[#2b3a67] bg-[#f5f7fb] p-2 text-[11px]" role="note" data-testid="ariel-hint"><p className="font-semibold">👁 エーリアルの助言</p><p>「建築家オスバルド（製図板）としてのサンクチュアリ（黒）」は、バナー（ただの看板）になってしまう可能性がある。誰か一人の名前か、具体的な商いのかたちを短くまとめた、効くリンク装置に変えて、隠しておくといい。</p><p className="mt-1 text-stone-600">→ 参加のしかたの欄に、🔗 のリンク装置を置いた。押すと、建築家として参加できる。</p></div>}
+            {wild && device === 'drone' && !done && (() => { const k = turn % news.parts.length; const part = news.parts[k]; return (
+              <div className="space-y-1 border border-[#2b3a67] bg-[#f5f7fb] p-2 text-[11px]" data-testid="sky">
+                <p className="font-semibold">🛸 空からの問い</p>
+                {right ? <p className="text-[#2f6b1a]" data-testid="sky-right">介入の権利あり：ニュースの部品を一つ押して、読み方を直す（監査に見つからない）。{approved !== null ? `→「${news.parts[approved].label}」を直す` : ''}</p> : skyTried === turn ? <p className="text-stone-600">{skyMsg}</p> : <>
+                  <p>「{part.label}：{part.text}」は、事実・噂・感情のどれ？</p>
+                  <div className="flex gap-1">{(['事実', '噂', '感情'] as Filter[]).map((f) => <button key={f} type="button" data-testid={`sky-${f}`} onClick={() => { setSkyTried(turn); if (f === part.filter) { setRight(true); setSkyMsg('正解。介入の権利を一つ得た。'); } else setSkyMsg(`ちがう（正しくは［${part.filter}］）。このターンは権利なし。`); }} className="border border-stone-400 px-2">{f}</button>)}</div>
+                </>}
+              </div>); })()}
             {device === 'ariel' && <label className="block text-xs">エーリアル <input type="number" min={1} max={22} value={camera} onChange={(e) => setCamera(Math.max(1, Math.min(22, Number(e.target.value) || 1)))} className="w-14 border border-stone-400 bg-white px-1" /> / 22 から見る</label>}
             <textarea data-testid="prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} placeholder={side === 'white' ? '例：W1 を c3@2F へ' : '例：B2 を c3@2F へ'} className="w-full border border-stone-400 bg-white px-2 py-1 text-sm text-[#1f1f1f]" disabled={done} />
             <button type="button" data-testid="send" onClick={() => send()} disabled={done} className="w-full border border-[#1f1f1f] bg-[#1f1f1f] py-1.5 text-sm text-white disabled:opacity-40">送る</button>
@@ -349,6 +369,12 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             <p className="text-sm" data-testid="harmony">調和：{harmony}</p>
             {showAttention && <div className="border border-[#2f6b1a] p-2 text-[11px]" data-testid="attention"><p>📣 PE 群の注目：{attention}</p><div className="mt-1 h-2 bg-stone-200"><div className="h-2 bg-[#2f6b1a]" style={{ width: `${Math.min(100, attention * 4)}%` }} /></div><p className="mt-1 text-[10px] text-stone-600">注目は値段ではない。噂が増えると注目は増えるが、駒の強さも、銘柄の値打ちも変わらない。</p></div>}
             {beats.length > 0 && <div className="max-h-40 space-y-0.5 overflow-y-auto border border-stone-300 p-2 text-[11px]" data-testid="beats" aria-live="off"><p className="font-semibold">🥁 実況（BA 🐵 と PE 🫛）</p>{beats.map((b) => <p key={b.k}><span className="font-semibold" style={{ color: b.who.includes('BA') ? '#7a5c12' : b.who.includes('PE') ? '#2f6b1a' : '#57534e' }}>{b.who}</span>　{b.text}</p>)}</div>}
+            {cards > 0 && <div className="space-y-2" data-testid="mente-cards">{MENTE_CARDS.slice(0, cards).reverse().map((c) => (
+              <div key={c.title} className="space-y-1 border-2 border-black bg-white p-2 text-[11px] shadow-[4px_4px_0_#0003]">
+                <p className="inline-block bg-black px-1.5 text-[10px] font-bold italic text-white">MENTE · 公開 · {c.tag}</p>
+                <p className="font-semibold">{c.title}</p>
+                {c.body.map((b) => <p key={b}>{b}</p>)}
+              </div>))}<p className="text-[10px] text-stone-500">2026 年後半の公開情報の大筋。ゲームの外で使う前に出典を確かめる。投資の助言ではない。</p></div>}
             <div className="space-y-1 border border-[#2b3a67] p-2 text-[11px]" data-testid="crypto">
               <p className="font-semibold">🔐 サンクチュアリの暗号</p>
               <p data-testid="harmony-rate">調和率：{turn ? Math.round((aligned / turn) * 100) : 0}%（{aligned} / {turn} ターン）</p>
