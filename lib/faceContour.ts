@@ -1,0 +1,104 @@
+// Face-shape difference device: a base face as a height map z(x, y), three faces made by changing
+// it step by step from coarse to fine, their contour lines, and the difference Δz = z_face − z_base.
+//
+// Order of personality (coarse → fine, i.e. from wide contour spacing to narrow):
+//   1 輪郭       outline of the face (the outermost contour)
+//   2 量感       forehead, cheeks and jaw (how tightly the contours crowd)
+//   3 鼻と眉     nose and brow ridge (where the peaks sit)
+//   4 口とあご先  mouth and chin tip (small valleys and hills, seen only at fine spacing)
+//   5 髪の生え際  hairline, drawn as a plateau above the forehead (not a cap on top)
+// At step s, each face uses its own values for the features of steps ≤ s and the base values for
+// the rest, so you can watch the personality arrive one layer at a time.
+// The heights are a drawing model (sums of smooth bumps), not anatomy.
+
+export type Bump = { x: number; y: number; sx: number; sy: number; a: number };
+export type FaceParams = {
+  rx: number; ry: number;                 // 1 outline: half-width and half-height of the face dome
+  forehead: number; cheek: number; jaw: number; // 2 masses (bump heights)
+  nose: number; noseY: number; brow: number;    // 3 nose height and position, brow ridge
+  mouth: number; chin: number;                  // 4 mouth valley depth, chin-tip bump
+  hairline: number; hairRise: number;           // 5 where the hair plateau starts (y), and its height
+};
+export const STEPS = [
+  { step: 1, name: '輪郭', keys: ['rx', 'ry'] },
+  { step: 2, name: '量感（額・頬・あご）', keys: ['forehead', 'cheek', 'jaw'] },
+  { step: 3, name: '鼻と眉', keys: ['nose', 'noseY', 'brow'] },
+  { step: 4, name: '口とあご先', keys: ['mouth', 'chin'] },
+  { step: 5, name: '髪の生え際', keys: ['hairline', 'hairRise'] },
+] as const;
+
+export const BASE: FaceParams = { rx: 0.78, ry: 1.02, forehead: 0.15, cheek: 0.1, jaw: 0.06, nose: 0.24, noseY: -0.1, brow: 0.08, mouth: 0.06, chin: 0.07, hairline: 0.62, hairRise: 0.1 };
+/** Three faces: 1 stays close to the base; 2 differs most in the jaw; 3 in the forehead and brow. */
+export const FACES: FaceParams[] = [
+  { ...BASE, rx: 0.8, ry: 1.0, cheek: 0.12, nose: 0.22, mouth: 0.05, hairline: 0.58, hairRise: 0.12 },
+  { ...BASE, rx: 0.72, ry: 1.14, jaw: 0.16, cheek: 0.07, nose: 0.27, noseY: -0.14, chin: 0.13, mouth: 0.08, hairline: 0.7, hairRise: 0.06 },
+  { ...BASE, rx: 0.84, ry: 0.98, forehead: 0.26, brow: 0.15, nose: 0.2, noseY: -0.06, chin: 0.04, hairline: 0.5, hairRise: 0.16 },
+];
+
+/** Use the face's own values up to step s, the base's beyond it. */
+export function atStep(face: FaceParams, s: number): FaceParams {
+  const out = { ...BASE };
+  for (const st of STEPS) if (st.step <= s) for (const k of st.keys) (out as Record<string, number>)[k] = face[k as keyof FaceParams];
+  return out;
+}
+
+const gauss = (x: number, y: number, b: Bump) => b.a * Math.exp(-(((x - b.x) / b.sx) ** 2 + ((y - b.y) / b.sy) ** 2) / 2);
+export function height(p: FaceParams, x: number, y: number): number {
+  const e = 1 - (x / p.rx) ** 2 - (y / p.ry) ** 2; if (e <= 0) return 0;
+  let z = 0.9 * Math.sqrt(e);
+  const bumps: Bump[] = [
+    { x: 0, y: 0.55, sx: 0.4, sy: 0.18, a: p.forehead },
+    { x: -0.42, y: -0.2, sx: 0.16, sy: 0.18, a: p.cheek }, { x: 0.42, y: -0.2, sx: 0.16, sy: 0.18, a: p.cheek },
+    { x: -0.4, y: -0.72, sx: 0.16, sy: 0.12, a: p.jaw }, { x: 0.4, y: -0.72, sx: 0.16, sy: 0.12, a: p.jaw },
+    { x: -0.3, y: 0.26, sx: 0.16, sy: 0.05, a: p.brow }, { x: 0.3, y: 0.26, sx: 0.16, sy: 0.05, a: p.brow },
+    { x: -0.3, y: 0.12, sx: 0.12, sy: 0.07, a: -0.12 }, { x: 0.3, y: 0.12, sx: 0.12, sy: 0.07, a: -0.12 },
+    { x: 0, y: p.noseY, sx: 0.06, sy: 0.22, a: p.nose }, { x: 0, y: p.noseY - 0.22, sx: 0.09, sy: 0.07, a: p.nose * 0.4 },
+    { x: 0, y: -0.52, sx: 0.18, sy: 0.035, a: -p.mouth }, { x: 0, y: -0.82, sx: 0.15, sy: 0.08, a: p.chin },
+  ];
+  for (const b of bumps) z += gauss(x, y, b);
+  // Hair: a soft plateau that starts at the hairline and rises above the forehead (part of the same map).
+  if (y > p.hairline) z += p.hairRise * Math.min(1, (y - p.hairline) / 0.12);
+  return z;
+}
+
+export type Grid = { nx: number; ny: number; x0: number; x1: number; y0: number; y1: number; z: Float64Array };
+export function sample(f: (x: number, y: number) => number, nx = 80, ny = 100, x0 = -1, x1 = 1, y0 = -1.25, y1 = 1.25): Grid {
+  const z = new Float64Array(nx * ny);
+  for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) z[j * nx + i] = f(x0 + ((x1 - x0) * i) / (nx - 1), y1 - ((y1 - y0) * j) / (ny - 1));
+  return { nx, ny, x0, x1, y0, y1, z };
+}
+export const faceGrid = (p: FaceParams, nx?: number, ny?: number) => sample((x, y) => height(p, x, y), nx, ny);
+export function diffGrid(a: Grid, b: Grid): Grid { const z = new Float64Array(a.z.length); for (let k = 0; k < z.length; k += 1) z[k] = a.z[k] - b.z[k]; return { ...a, z }; }
+export const extent = (g: Grid) => { let lo = Infinity; let hi = -Infinity; for (const v of g.z) { if (v < lo) lo = v; if (v > hi) hi = v; } return { lo, hi }; };
+
+/**
+ * Marching squares: line segments of the contour z = level, in grid coordinates (i, j).
+ * The two saddle cases are split by the cell's centre value.
+ */
+export function contour(g: Grid, level: number): [number, number, number, number][] {
+  const out: [number, number, number, number][] = []; const { nx, ny, z } = g;
+  const at = (i: number, j: number) => z[j * nx + i];
+  const lerp = (a: number, b: number) => (level - a) / (b - a);
+  for (let j = 0; j < ny - 1; j += 1) for (let i = 0; i < nx - 1; i += 1) {
+    const a = at(i, j); const b = at(i + 1, j); const c = at(i + 1, j + 1); const d = at(i, j + 1);
+    const idx = (a > level ? 8 : 0) | (b > level ? 4 : 0) | (c > level ? 2 : 0) | (d > level ? 1 : 0);
+    if (idx === 0 || idx === 15) continue;
+    const top: [number, number] = [i + lerp(a, b), j]; const right: [number, number] = [i + 1, j + lerp(b, c)];
+    const bottom: [number, number] = [i + lerp(d, c), j + 1]; const left: [number, number] = [i, j + lerp(a, d)];
+    const seg = (p: [number, number], q: [number, number]) => out.push([p[0], p[1], q[0], q[1]]);
+    switch (idx) {
+      case 1: case 14: seg(left, bottom); break;
+      case 2: case 13: seg(bottom, right); break;
+      case 3: case 12: seg(left, right); break;
+      case 4: case 11: seg(top, right); break;
+      case 6: case 9: seg(top, bottom); break;
+      case 7: case 8: seg(left, top); break;
+      case 5: case 10: { const centre = (a + b + c + d) / 4 > level; if ((idx === 5) === centre) { seg(left, top); seg(bottom, right); } else { seg(left, bottom); seg(top, right); } break; }
+      default: break;
+    }
+  }
+  return out;
+}
+
+/** Ethereum, for this project: the text glyph Ξ (U+039E, the customary ether sign — there is no Ethereum code point like ₿ U+20BF). */
+export const ETH = 'Ξ';
