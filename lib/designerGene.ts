@@ -23,6 +23,9 @@ export type Genome = {
   role: CourtRole | 'BABY';
   loci: [Locus, Locus, Locus, Locus, Locus, Locus, Locus];
   parents: [CourtRole, CourtRole] | null;
+  /** Baby only: the d6 rolled for each locus (1–3 → parent A, 4–6 → parent B), in LOCI order. */
+  dice?: number[];
+  inherit?: ('A' | 'B')[];
   mutations: LocusName[];
   name: string; // the alleles hashed into four emoji-20 digits
 };
@@ -52,13 +55,14 @@ export function genomeOfRole(role: CourtRole, p: RoleParams): Genome {
 
 /** Cross two genomes: each locus from one parent; with probability `mutation` it steps one allele over. */
 export function cross(a: Genome, b: Genome, rnd: () => number, mutation = 0.08): Genome {
-  const mutations: LocusName[] = [];
+  const mutations: LocusName[] = []; const dice: number[] = []; const inherit: ('A' | 'B')[] = [];
   const loci = LOCI.map((name, i) => {
-    const from = rnd() < 0.5 ? a.loci[i] : b.loci[i]; let value = from.value;
+    const face = 1 + Math.floor(rnd() * 6); dice.push(face); inherit.push(face <= 3 ? 'A' : 'B');
+    const from = face <= 3 ? a.loci[i] : b.loci[i]; let value = from.value;
     if (rnd() < mutation) { const [lo, hi] = RANGE[name]; value = Math.max(lo, Math.min(hi, value + (rnd() < 0.5 ? -1 : 1) * (hi - lo) / 4)); mutations.push(name); }
     return { name, value, allele: alleleOf(name, value) };
   });
-  return { kind: 'baby', role: 'BABY', loci: pack(loci), parents: [a.role as CourtRole, b.role as CourtRole], mutations, name: nameOf(loci) };
+  return { kind: 'baby', role: 'BABY', loci: pack(loci), parents: [a.role as CourtRole, b.role as CourtRole], mutations, name: nameOf(loci), dice, inherit };
 }
 
 /** Birth at EX = 0: two different parents drawn in proportion to their cell counts (kings and queens are rare parents). */
@@ -76,4 +80,9 @@ export function portraitOf(g: Genome): Portrait {
     hairCurl: v.swirl, freckles: Math.round((v.jitter / 0.2) * 6), crown: Math.max(0, Math.min(3, Math.floor(v.crown))) as Portrait['crown'], size: 0.85 + 0.6 * (v.weight / 0.4),
   };
 }
+/** The two dice the birth shows: 色サイコロ (the hue locus) and アイコンサイコロ (the crown locus). */
+export const COLOUR_DIE = LOCI.indexOf('hue'); export const ICON_DIE = LOCI.indexOf('crown');
+export const DIE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+/** The name's emoji digits as numbers (base 20): 🎲 is the digit 18, 🌑 is 0. */
+export const nameDigits = (name: string) => Array.from(name).map((c) => EMOJI20.indexOf(c));
 export const alleleString = (g: Genome) => g.loci.map((l) => l.allele).join('');

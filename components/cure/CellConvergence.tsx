@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GLOBAL, ROLES, type CourtRole } from '@/app/cure-api/params';
 import MenteNotifySettings from '@/components/mente/MenteNotifySettings';
 import { useCureAPIStore, type PlaceholderState } from '@/lib/cureApiStore';
-import { alleleString, birth, genomeOfRole, portraitOf, type Genome } from '@/lib/designerGene';
+import { COLOUR_DIE, DIE_FACES, ICON_DIE, LOCI, alleleString, birth, genomeOfRole, nameDigits, portraitOf, type Genome } from '@/lib/designerGene';
 import { mulberry32 } from '@/lib/retroGrid';
 
 type Cell = { role: CourtRole; x: number; y: number; z: number; a: number; b: number };
@@ -255,13 +255,30 @@ export default function CellConvergence({ compact = false }: { compact?: boolean
             <p className="mt-0.5 text-slate-500">tail {tail === null ? '—' : `${tail.toFixed(1)} s`} · expected ≈ {Number.isFinite(expectedTail) ? `${expectedTail.toFixed(0)} s` : '∞ (cure 0)'} · inside {stats.inside}/{total}</p>
           </div>
           {baby && (
-            <div className="flex items-center gap-2 rounded border border-pink-300/40 bg-pink-300/5 p-2 text-[10px]" data-testid="baby">
-              <GenePortrait genome={baby} size={44} />
-              <div>
-                <p className="text-pink-200">誕生 {baby.name}</p>
-                <p>遺伝子 {alleleString(baby)} · 親 {baby.parents?.map((r) => ROLES[r].glyph).join(' × ')}</p>
-                {baby.mutations.length > 0 && <p className="text-slate-400">変異：{baby.mutations.join(', ')}</p>}
+            <div className="space-y-1.5 rounded border border-pink-300/40 bg-pink-300/5 p-2 text-[10px]" data-testid="baby">
+              <div className="flex items-center gap-2">
+                <GenePortrait genome={baby} size={44} />
+                <div>
+                  <p className="text-pink-200">誕生 {'{I}'} = {baby.name} <span className="text-slate-400">（20 進数 {nameDigits(baby.name).join('·')}、🎲 は数字の 18）</span></p>
+                  <p data-testid="parents">親：A({baby.parents ? ROLES[baby.parents[0]].glyph : ''}) : B({baby.parents ? ROLES[baby.parents[1]].glyph : ''}) · 遺伝子 {alleleString(baby)}</p>
+                  {baby.mutations.length > 0 && <p className="text-slate-400">変異：{baby.mutations.join(', ')}</p>}
+                </div>
               </div>
+              {baby.dice && baby.inherit && baby.parents && (
+                <div className="grid grid-cols-7 gap-0.5" data-testid="dice" title="座ごとのサイコロ：1〜3 は A、4〜6 は B から受け継ぐ">
+                  {LOCI.map((name, i) => {
+                    const from = baby.inherit![i]; const parent = baby.parents![from === 'A' ? 0 : 1];
+                    const special = i === COLOUR_DIE ? '色' : i === ICON_DIE ? 'アイコン' : '';
+                    return (
+                      <div key={name} className="flex flex-col items-center rounded border px-0.5 py-0.5" style={{ borderColor: special ? '#f9a8d4' : '#ffffff1a', background: i === COLOUR_DIE ? `hsl(${baby.loci[i].value} 60% 30%)` : undefined }} data-die={special || undefined}>
+                        <span className="text-base leading-none">{DIE_FACES[baby.dice![i] - 1]}</span>
+                        <span className="text-[8px] text-slate-400">{special ? `${special}` : name}</span>
+                        <span>{from}{i === ICON_DIE ? ROLES[parent].glyph : ''}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
           <div className="rounded border border-white/10 p-2 text-[10px]" data-testid="paradox">
