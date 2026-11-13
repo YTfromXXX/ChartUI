@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import MenteNudge from '@/components/story/MenteNudge';
 import SatoshiParam from '@/components/story/SatoshiParam';
 import { shouldNudge, type NudgeEvent, type NudgeReason } from '@/lib/menteNudge';
@@ -117,7 +117,7 @@ export default function StoryPlayer() {
             <Link href="/mente/game" className="underline">タイトルへ</Link>
           </div>
         </header>
-        <p className="text-[11px] text-stone-500">書けた本編：{WRITTEN_MAIN} / {TOTAL_BEATS}（いまはプロローグと 1〜2 年目）。続きは順に書き足します。</p>
+        <p className="text-[11px] text-stone-500">書けた本編：{WRITTEN_MAIN} / {TOTAL_BEATS}（いまはプロローグと 1〜3 年目）。続きは順に書き足します。</p>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <section className="space-y-3" aria-live="polite" data-testid="beat">
@@ -137,8 +137,9 @@ export default function StoryPlayer() {
               <div className="space-y-2 border border-stone-200 bg-[#fafaf9] p-3" data-testid="reply">
                 {beat.choices[picked].reply.map((r) => <p key={r} className="text-sm leading-7">{r}</p>)}
                 {beat.fact && <p className="border-t border-stone-200 pt-2 text-[12px] text-stone-600">💡 豆知識：{beat.fact}</p>}
+                {beat.terms && <div className="border-t border-stone-200 pt-2 text-[12px] text-stone-600" data-testid="terms"><p>📘 用語メモ</p><dl className="grid grid-cols-[auto_1fr] gap-x-3">{beat.terms.map(([w, m]) => <Fragment key={w}><dt className="font-semibold text-[#1f1f1f]">{w}</dt><dd>{m}</dd></Fragment>)}</dl></div>}
                 {!end && <button type="button" data-testid="next" onClick={next} className="border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1 text-sm text-white">次へ ▶</button>}
-                {end && <p className="text-sm">ここまでが第 2 弾。<Link href="/mente/game/year1" className="underline">2 年目のミニゲーム「指紋の書き写し」へ</Link></p>}
+                {end && <p className="text-sm">ここまでが第 3 弾（本編 47 まで）。3 年目のミニゲーム「瓶の順番」は準備中です。<Link href="/mente/game/years" className="underline">12 年の進行で、結果を仮に決めて最後の面を下見する</Link> · <Link href="/mente/game/year1" className="underline">2 年目の「指紋の書き写し」</Link></p>}
               </div>
             )}
           </section>

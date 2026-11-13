@@ -3,6 +3,7 @@
 // After each answer, BA-xxxx and PE-xxxx react in a stream-style chat (the presentation for gamers).
 // Batch 1: the Garage Island prologue (P1–P8, not counted in the 200) and year 1 (beats 1–14).
 // Batch 2: year 2 (beats 15–30), with the Alan Sillitoe game (a muted-TV dubbing scene with a text box).
+// Batch 3: year 3 (beats 31–47), decoded: engineering words and Thousand-Plateaus concepts, with a glossary.
 // Rules: no real person speaks or appears; nothing here has a price; Stoic never smokes.
 
 export type ChatLine = { who: string; text: string };
@@ -10,8 +11,10 @@ export type Choice = { label: string; reply: string[]; correct?: boolean; chat?:
 /** The Alan Sillitoe game: a muted TV mouths words; the player types their own line to fit the mouth. */
 export type Dub = { tv: string; beats: number; hint: string; after: string };
 export type Beat = {
-  id: string; part: 'prologue' | 'y1' | 'y2'; no: number | null; place: string; speaker: string;
+  id: string; part: 'prologue' | 'y1' | 'y2' | 'y3'; no: number | null; place: string; speaker: string;
   text: string[]; q: string; choices: Choice[]; code?: string[]; fact?: string; dub?: Dub;
+  /** Engineering / Thousand-Plateaus words used in the beat, with a one-line meaning (shown as a glossary). */
+  terms?: [string, string][];
 };
 
 const BA = 'BA-80BF'; const BA2 = 'BA-52FF'; const PE = 'PE-05F0'; const PE2 = 'PE-4970';
@@ -330,6 +333,158 @@ export const SCRIPT: Beat[] = [
     choices: [
       { label: '指紋の書き写しへ', reply: ['ミニゲーム「指紋の書き写し」へ。書き写せた文字の数が、最後の面の高度計の正直さになる。'], chat: [{ who: BA, text: 'がんばれ' }, { who: PE, text: 'はちと びー！' }, { who: BA2, text: 'ゆっくりでいい' }] },
       { label: 'もう少し、ストイックのテレビを見ていく', reply: ['音のないテレビの中で、誰かの口が動いている。あなたなら、何と言わせる？', 'それから、ミニゲーム「指紋の書き写し」へ。'], chat: [{ who: PE2, text: 'くちぱく したい' }] },
+    ] },
+  // ---------- year 3: the timestamp, decoded (beats 31–47) ----------
+  // Tone: Arimino Boy, Luna and their friends speak in engineering words mixed with ideas borrowed
+  // from Deleuze & Guattari's A Thousand Plateaus (plateau, strata, rhizome, smooth/striated space,
+  // decoding). Only the concepts are borrowed, never the book's text. Every beat carries a glossary.
+  { id: 'Y3-01', part: 'y3', no: 31, place: '本土の港・倉庫のラボ', speaker: 'アリミノボーイ',
+    text: ['三年目。アリミノボーイは、倉庫の奥を「ラボ」と呼ぶようになった。', '「手紙の鎖を、一回ぜんぶ脱コード化してみたいんだ。紙とインクと潮の匂いを外して、何が残るか」'],
+    q: '脱コード化したら、何が残ると思う？',
+    terms: [['脱コード化', '決まった読み方（コード）をいったん外して、ものをばらばらの流れとして見ること'], ['ラボ', '試して壊して直す場所']],
+    choices: [
+      { label: '順番だけ', correct: true, reply: ['「そう。誰が書いたかも、何が書いてあるかも外すと、残るのは『どれのあとに書かれたか』だけ。それが鎖の骨格なんだ」'], chat: [{ who: BA, text: '骨格だけ残る' }, { who: PE, text: 'じゅんばん！' }] },
+      { label: '何も残らない', correct: false, reply: ['「ううん、順番が残る。指紋が、前の手紙を指さしているから」'], chat: [{ who: BA2, text: '順番は残る' }] },
+    ] },
+  { id: 'Y3-02', part: 'y3', no: 32, place: '倉庫のラボ', speaker: 'アリミノボーイ',
+    text: ['「三年目の章は『タイムスタンプサーバー』。手紙の束に時刻の印を押して、その印ごと指紋にする」'],
+    q: '時刻の印ごと指紋にすると？',
+    fact: 'ホワイトペーパー 3 章：いくつかの項目をまとめてハッシュにし、時刻とともに公開する。それぞれの印は前の印を含むので、鎖になる。',
+    terms: [['タイムスタンプ', '「この時刻にはもうあった」という印'], ['レイヤー', '重ねられた層。上の層は下の層を前提にする']],
+    choices: [
+      { label: '「その時刻には、その手紙がもうあった」と言える', correct: true, reply: ['「正解。しかも印は前の印を含むから、時刻のレイヤーが一枚ずつ積み重なっていく」'], chat: [{ who: BA, text: 'レイヤー積み' }, { who: PE, text: 'せいかい！' }] },
+      { label: '手紙が速く届く', correct: false, reply: ['「速さは変わらない。変わるのは、後から『なかった』と言えなくなること」'], chat: [{ who: BA2, text: '速さじゃない' }] },
+      { label: '差出人が分かる', correct: false, reply: ['「差出人は、まだ分からない。分かるのは時刻と順番」'], chat: [{ who: PE2, text: 'だれかは ひみつ' }] },
+      { label: '手紙が消せる', correct: false, reply: ['「逆。消したら、上に積んだレイヤーが全部崩れる。だから消せない」'], chat: [{ who: BA, text: '逆ｗ' }] },
+    ] },
+  { id: 'Y3-03', part: 'y3', no: 33, place: '島（語り）', speaker: 'Luna（四つ）',
+    text: ['島では、四つになった Luna が、浜の石を一列に並べていた。', '「これ、プラトー。こっちも、プラトー。ぜんぶ、たかさがちがう」'],
+    q: 'Luna の言う「プラトー」とは？',
+    terms: [['プラトー', '高原。この物語では、時刻の印が積み重なってできた、平らな一段のこと'], ['ストラタ（地層）', '時間が積み重なってできた層']],
+    choices: [
+      { label: '石を積んでできた、平らな段', reply: ['Luna は、一年ごとに一段ずつ石を積んでいた。三段目のプラトーの上で、彼女はうれしそうに跳ねた。'], chat: [{ who: BA, text: '3年＝3段' }, { who: PE, text: 'ぴょん' }] },
+      { label: '眠る場所', reply: ['「ちがう。ねるのは、ハンモック」。Luna は石の段を指さした。「これは、とき」'], chat: [{ who: PE2, text: 'これは とき' }] },
+      { label: '海の高さ', reply: ['「うみは、まいにち たかさが かわる。プラトーは、かわらない」'], chat: [{ who: BA2, text: '変わらない層' }] },
+      { label: '分からない', reply: ['ネフェリムにも、すぐには分からなかった。四つの子の言葉は、ときどき大人の言葉より正確だった。'], chat: [{ who: BA, text: '子どもの方が正確' }] },
+    ] },
+  { id: 'Y3-04', part: 'y3', no: 34, place: '倉庫のラボ', speaker: 'アリミノボーイと仲間たち',
+    text: ['ラボには、港の子どもたちが集まるようになった。帆の修理屋の娘、灯台守の息子、そして BA-52FF。', '「鎖のための UI を作ろう。誰が見ても、どの手紙がどの手紙を指さしているか分かるやつ」'],
+    q: 'UI の最初の形は？',
+    terms: [['UI', 'ユーザーインターフェース。人と仕組みが出会う面'], ['リゾーム', '根茎。中心のない、横へ横へ広がるつながり']],
+    choices: [
+      { label: '一本の線（古い順に左から右）', reply: ['「わかりやすい。でも、手紙が増えたら港の壁が足りなくなる」'], chat: [{ who: BA2, text: '壁が足りない' }] },
+      { label: '六角の巣（ハニカム）', reply: ['「六角なら、どこまでも広げられる。島の名前とも同じ」。帆の修理屋の娘が、六角の紙を切り始めた。'], chat: [{ who: PE, text: 'はにかむ！' }, { who: BA, text: '島と同じ' }] },
+      { label: '根っこみたいに横へ広がる図（リゾーム）', reply: ['「中心のない図。どこから読み始めてもいい。……でも、手紙の鎖には始まりがある。そこは違う」', 'アリミノボーイは、リゾームの図の上に、細い一本の矢印を引いた。'], chat: [{ who: BA, text: 'リゾーム＋一本の矢印' }, { who: PE2, text: 'むずい けど すき' }] },
+      { label: '螺旋', reply: ['「螺旋なら、一年で一周。十二年で十二周」。灯台守の息子は、旋回する飛行機を見上げた。'], chat: [{ who: BA2, text: '螺旋は旋回と同じ形' }] },
+    ] },
+  { id: 'Y3-05', part: 'y3', no: 35, place: '倉庫のラボ', speaker: 'アリミノボーイ',
+    text: ['「鍵の素材を決めたい。手紙の鎖を、何に結びつける？」', '「たぶん、どれも正解で、どれも少しずつ間違い。でも一つ選ばないと、ビルドが通らない」'],
+    q: '鎖の鍵は、何で作る？',
+    terms: [['ビルド', '部品を組み立てて、動く形にすること'], ['生体認証', '体の特徴（指紋・眼・心拍など）で本人を確かめること。この物語では架空の鍵の話']],
+    choices: [
+      { label: 'A. 指紋', reply: ['「指紋は、外から見える形。中身を脱コード化しても、形は残る」', '「手紙の指紋と同じ名前だ。……鍵と手紙が、同じ言葉で呼ばれるのは、たぶん偶然じゃない」'], chat: [{ who: BA, text: '形は残る' }, { who: PE, text: 'ゆびのもよう' }] },
+      { label: 'B. DNA 螺旋', reply: ['「DNA は、コードそのものをコード化したもの。読み方を外しても、また別の読み方で組み直せる。再コード化」', '「それに、螺旋だ。島の上の飛行機も、ストイックさんの階段も」'], chat: [{ who: BA2, text: '再コード化きた' }, { who: PE2, text: 'らせん らせん' }] },
+      { label: 'C. 眼球', reply: ['「眼は、見る者の鍵。何を見たかで、世界のレンダリングが変わる」', '「……見る者がいるかぎり、回り続ける決まりがある、って誰かが言ってた」'], chat: [{ who: BA, text: '観測の切れ目の伏線' }, { who: PE, text: 'めだま こわい' }] },
+      { label: 'D. 心拍数', reply: ['「心拍は、体の中の時計。タイムスタンプの章にいちばん合う」', '「印を押すたびに、押した人の鼓動が一つずつ刻まれる。……詩みたいだって、父さんなら言う」'], chat: [{ who: BA2, text: '体の中の時計' }, { who: PE2, text: 'どきどき' }] },
+    ] },
+  { id: 'Y3-06', part: 'y3', no: 36, place: '倉庫のラボ', speaker: '帆の修理屋の娘',
+    text: ['「選んだ鍵、本当に大丈夫？ 体の情報は、一度漏れたら取り替えられないよ」'],
+    q: 'どう答える？',
+    terms: [['取り消し（リボーク）', '漏れた鍵を使えなくして、新しい鍵に替えること']],
+    fact: '本物の世界でも、パスワードは替えられるが、指紋や顔は替えられない。だから生体の情報は、そのまま保存せず、扱いに気をつける。',
+    choices: [
+      { label: '「体の情報そのものは保存しない。指紋（ハッシュ）だけにする」', correct: true, reply: ['「中身は捨てて、形だけ残す。それなら漏れても、元の体には戻せない」。娘はうなずいた。'], chat: [{ who: BA, text: 'ハッシュだけ保存' }, { who: PE, text: 'かしこい' }] },
+      { label: '「大丈夫、誰も盗まない」', correct: false, reply: ['「盗む人は、いつも『誰も盗まない』と思われている場所に来る」。娘は、ラボの鍵を二重にした。'], chat: [{ who: BA2, text: 'フラグ' }, { who: PE2, text: 'あぶない' }] },
+    ] },
+  { id: 'Y3-07', part: 'y3', no: 37, place: '島（語り）', speaker: 'アリミノガール（語り）',
+    text: ['島の浜に、十二本の瓶が打ち上げられた。底の指紋だけが、潮で光っていた。', 'ネフェリムと Luna は、それを古い順に並べ直すことにした。'],
+    q: '何を手がかりに並べる？',
+    terms: [['パース', '並んだ記号を読んで、意味のある形に組み立てること']],
+    choices: [
+      { label: '底の指紋（前の瓶を指しているか）', correct: true, reply: ['「この瓶の指紋は、どの瓶の写しを持っている？」。Luna は、瓶の底を一本ずつパースしていった。'], chat: [{ who: BA, text: 'パースしてる' }, { who: PE, text: 'るな すごい' }] },
+      { label: '瓶の色', correct: false, reply: ['色はどれも同じ緑だった。手がかりは、底の指紋だけ。'], chat: [{ who: BA2, text: '全部緑' }] },
+      { label: '流れ着いた順', correct: false, reply: ['潮は順番を守らない。流れ着いた順は、書かれた順とは違った。'], chat: [{ who: PE2, text: 'しおは きまぐれ' }] },
+      { label: '瓶の重さ', correct: false, reply: ['重さはばらばら。中身の量は、順番とは関係がない。'], chat: [{ who: BA, text: '関係ない' }] },
+    ] },
+  { id: 'Y3-08', part: 'y3', no: 38, place: '島の浜', speaker: 'Luna（四つ）',
+    text: ['「この びん、まえの びんを ゆびさしてない」', 'Luna が、一本の瓶を列から外した。'],
+    q: 'その瓶は？',
+    choices: [
+      { label: '鎖の最初の瓶（一通目）', correct: true, reply: ['一通目には、前の手紙がない。だから誰も指さしていない。Luna はそれを、列のいちばん左に置いた。「これが はじまり」'], chat: [{ who: BA, text: 'ジェネシス' }, { who: PE, text: 'はじまり！' }] },
+      { label: '偽物の瓶', correct: false, reply: ['偽物ではなかった。前を指さしていないのは、一通目だけ。'], chat: [{ who: BA2, text: '一通目でした' }] },
+    ] },
+  { id: 'Y3-09', part: 'y3', no: 39, place: '倉庫のラボ', speaker: 'アリミノボーイ',
+    text: ['「UI をレンダリングしたら、鎖が港の壁いっぱいに広がった」', '「でも、見る人によって、どこから読むかが違うんだ」'],
+    q: '読み始める場所を、どう決める？',
+    terms: [['レンダリング', '仕組みの中の情報を、目に見える絵にすること'], ['平滑空間／条里空間', '線の引かれていない広がり／升目で区切られた広がり（ドゥルーズとガタリの言葉）']],
+    choices: [
+      { label: '升目を引いて、左上から（条里空間）', reply: ['「迷わない。でも、升目の外にある手紙が見えなくなる」'], chat: [{ who: BA2, text: '升目の外' }] },
+      { label: '升目を引かず、好きな所から（平滑空間）', reply: ['「自由。でも、初めての人は迷子になる」。灯台守の息子が、壁の真ん中に小さな灯りの印を描いた。「迷ったら、ここ」'], chat: [{ who: PE, text: 'とうだい' }, { who: BA, text: 'UI に灯台' }] },
+    ] },
+  { id: 'Y3-10', part: 'y3', no: 40, place: 'ストイックの部屋', speaker: 'ストイック',
+    text: ['アリミノボーイが、ラボの話をした。ストイックは黙って聞いて、最後に一つだけ言った。'],
+    q: 'ストイックは、何と言った？',
+    choices: [
+      { label: '「脱コード化した後で、何をまたコード化するかが、学問だ」', reply: ['「外すのは誰にでもできる。組み直すときに、その人が出る」'], chat: [{ who: BA, text: '再コード化こそ' }] },
+      { label: '「UI に、私の旋回を入れてはいけない」', reply: ['「あれは、止められない決まりだ。見る者の画面にまで回ってほしくない」', 'アリミノボーイは、その言葉を帳面に書き留めた。'], chat: [{ who: PE2, text: 'せんかい いれない' }, { who: BA2, text: 'ラスボスの伏線' }] },
+      { label: '「テレビの音は、消しておけ」', reply: ['「考えるときは、音を消す。口の形だけ見れば、余計なコードが入ってこない」'], chat: [{ who: PE, text: 'シリトーゲーム' }] },
+      { label: '何も言わなかった', reply: ['ストイックは、布のかかった壁を見ていた。三年目の布の端は、少しだけ色が褪せていた。'], chat: [{ who: BA, text: '布…' }] },
+    ] },
+  { id: 'Y3-11', part: 'y3', no: 41, place: '港', speaker: 'アリミノボーイ',
+    text: ['「UI の変更を、ちゃんとコミットしておこう。誰がいつ何を変えたか、残るように」'],
+    q: 'コミットに添える言葉は？',
+    terms: [['コミット', '変更を、記録として確定させること。手紙を瓶に入れて流すのに似ている'], ['ロールバック', '前の記録まで戻すこと']],
+    choices: [
+      { label: '「六角の UI を足した」', reply: ['短く、何をしたかだけ。あとで読む人のための言葉だった。'], chat: [{ who: BA, text: '良いコミットメッセージ' }] },
+      { label: '「すごいのできた！！！」', reply: ['三日後、アリミノボーイは自分のコミットを読み返して、何を変えたのか分からなかった。'], chat: [{ who: PE, text: 'あとで こまる' }, { who: BA2, text: 'あるある' }] },
+    ] },
+  { id: 'Y3-12', part: 'y3', no: 42, place: '倉庫のラボ', speaker: '灯台守の息子',
+    text: ['「ねえ、鎖を二つに分けたらどうなる？ こっちの手紙と、あっちの手紙で、別々に続けたら」'],
+    q: '鎖が二つに分かれることを、何と呼ぶ？',
+    terms: [['フォーク', '一本の鎖（や作りかけのもの）が、二つに枝分かれすること'], ['マージ', '分かれた枝を、一本にまとめ直すこと']],
+    choices: [
+      { label: 'フォーク', correct: true, reply: ['「フォーク。分かれた先で、どっちが本物かを決めるのが、いちばん難しい」'], chat: [{ who: BA, text: 'フォーク' }, { who: PE, text: 'えだわかれ' }] },
+      { label: 'マージ', correct: false, reply: ['「それは逆。分かれたものを、まとめ直すのがマージ」'], chat: [{ who: BA2, text: '逆だった' }] },
+      { label: 'ロールバック', correct: false, reply: ['「それは、前に戻ること。分かれるのはフォーク」'], chat: [{ who: PE2, text: 'もどる じゃない' }] },
+      { label: 'ビルド', correct: false, reply: ['「ビルドは組み立て。分かれるのはフォーク」'], chat: [{ who: BA, text: 'ちがう' }] },
+    ] },
+  { id: 'Y3-13', part: 'y3', no: 43, place: '島（語り）', speaker: 'アリミノガール（語り）',
+    text: ['島で、ネフェリムは三年目の手紙を書いた。Luna が石の段から呼んだ。「おとうさん、きょうの プラトー、なんだん め？」'],
+    q: 'ネフェリムの答えは？',
+    choices: [
+      { label: '「三段目」', reply: ['「三段目。来年は四段目になる」。Luna は、まだ見ない四段目のために、小さな石を一つ取っておいた。'], chat: [{ who: PE, text: 'いしを とっておく' }] },
+      { label: '「数えなくていい」', reply: ['「数えなくても、段は積み上がる」。それは、本土にいる誰かとは正反対の考え方だった。'], chat: [{ who: BA2, text: 'ストイックと逆' }, { who: BA, text: '対比' }] },
+    ] },
+  { id: 'Y3-14', part: 'y3', no: 44, place: '港の空', speaker: 'アリミノボーイ',
+    text: ['「リトルの飛行機の旋回を、UI の上に重ねてみた」', '港の壁の六角の鎖の上を、細い輪が回っていた。'],
+    q: 'それを見て、何に気づく？',
+    choices: [
+      { label: '旋回の輪は、鎖の外側を回っていて、中には入らない', reply: ['「外を回るだけ。中には降りてこない。……降りてきたら、どうなるんだろう」'], chat: [{ who: BA, text: '降りたら？' }, { who: PE2, text: 'ちゃくりく？' }] },
+      { label: '旋回の輪は、鎖の時刻とは関係なく回っている', reply: ['「手紙が増えても減っても、同じ速さ。鎖の時間と、旋回の時間は、別のレイヤーなんだ」'], chat: [{ who: BA2, text: 'レイヤーが違う' }] },
+    ] },
+  { id: 'Y3-15', part: 'y3', no: 45, place: '倉庫のラボ', speaker: 'アリミノボーイと仲間たち',
+    text: ['夜。ラボの灯りの下で、仲間たちは今年の UI をデプロイすることにした。港の掲示板に、六角の鎖の図を貼り出す。'],
+    q: '貼り出す前に、何を確かめる？',
+    terms: [['デプロイ', '作ったものを、みんなが使える場所に出すこと']],
+    choices: [
+      { label: '一通目から最新まで、指紋がつながっているか', correct: true, reply: ['一本ずつ、指で鎖をたどった。どこも切れていなかった。「デプロイ」'], chat: [{ who: BA, text: 'テスト大事' }, { who: PE, text: 'でぷろい！' }] },
+      { label: '図がきれいか', correct: false, reply: ['きれいだった。でも、二十三通目と二十四通目のあいだで、指紋が一文字ずれていた。貼る前に気づいてよかった。'], chat: [{ who: BA2, text: '見た目より中身' }] },
+    ] },
+  { id: 'Y3-16', part: 'y3', no: 46, place: '港の掲示板', speaker: 'アリミノガール（語り）',
+    text: ['朝、港の人たちが掲示板の前に集まった。六角の鎖を、指でたどる人、首をかしげる人。', 'PE-05F0 たちは、図の前で踊っていた。'],
+    q: '港の人たちの反応は？',
+    choices: [
+      { label: '「どこから読めばいい？」', reply: ['灯台の印を指さす子どもがいた。「まよったら、ここ」。UI が、初めて人に使われた瞬間だった。'], chat: [{ who: BA, text: 'UI が使われた' }] },
+      { label: '「これで何が分かる？」', reply: ['「どの手紙が、どの手紙のあとに書かれたか。それだけ。でも、それだけで、嘘がつけなくなる」'], chat: [{ who: PE2, text: 'うそ つけない' }] },
+      { label: '「きれいな模様だ」', reply: ['模様として見る人もいた。それでいい、とアリミノボーイは思った。読み方は、一つじゃなくていい。'], chat: [{ who: BA2, text: '読み方は自由' }] },
+      { label: '何も言わずに通り過ぎる', reply: ['ほとんどの人は、通り過ぎた。それでも、鎖は一日ぶん長くなった。'], chat: [{ who: PE, text: 'それでも のびる' }] },
+    ] },
+  { id: 'Y3-17', part: 'y3', no: 47, place: '島の浜・三年目の終わり', speaker: 'アリミノガール（語り）',
+    text: ['三年目が終わる。島の浜には、また十二本の瓶。並べ直すのは、ネフェリムと Luna。', '並べた正確さが、ずっと先の空で、塔の輪の大きさになる。'],
+    q: '準備はいい？',
+    choices: [
+      { label: '瓶の順番へ（ミニゲーム）', reply: ['ミニゲーム「瓶の順番」へ。正しく並べた数が、最後の面の輪の大きさ（Luna のハックの正確さ）になる。'], chat: [{ who: BA, text: 'がんばれルナ' }, { who: PE, text: 'ゆびさしを みて！' }, { who: BA2, text: 'はじまりは左' }] },
+      { label: '先に、ラボの UI をもう一度見る', reply: ['港の壁の六角の鎖。いちばん左に、誰も指さしていない一通目。そこから、ミニゲーム「瓶の順番」へ。'], chat: [{ who: PE2, text: 'みなおし だいじ' }] },
     ] },
 ];
 
