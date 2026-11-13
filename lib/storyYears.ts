@@ -35,7 +35,7 @@ export const YEARS: Year[] = [
   { year: 10, chapter: '10 プライバシー', event: '差出人を書かなくなる（鍵の印だけ）',
     mini: { id: 'key-marks', name: '鍵の印あわせ', who: 'アリミノガール（本土）', how: '差出人の名のない手紙を、鍵の印（16 進の記号）だけで同じ書き手ごとに組にする。めくって合わせる神経衰弱の形', leaves: 'unseen', changes: '最終面：自動操縦に気づかれずに近づける距離。組を多く作るほど、旋回の見張りの輪が少ない' } },
   { year: 11, chapter: '11 計算', event: 'リトルグリーンの偽の手紙を見破る（山場の操作）' },
-  { year: 12, chapter: '12 結論', event: '最後の手紙。嵐。二冊目が船で届く' },
+  { year: 12, chapter: '12 結論', event: '最後の手紙。嵐。二冊目が船で届く。最後の塔（Luna の飛行機 × エーリアル達の 22 アングル）', route: '/mente/game/finale-lab' },
 ];
 
 /** The final stage's settings, from the four outcomes. */

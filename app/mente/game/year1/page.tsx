@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MenteNudge from '@/components/story/MenteNudge';
+import { shouldNudge, type NudgeEvent, type NudgeReason } from '@/lib/menteNudge';
 import { keccak256 } from '@/lib/meshMetaV2';
 import { CRASH } from '@/lib/storyYears';
-import { ASK_LINES, flagEffects, sceneById, type Flag, type Scene } from '@/lib/storyYear1';
+import { ASK_LINES, NUDGE_FALLBACK, NUDGE_HINTS, flagEffects, sceneById, type Flag, type Scene } from '@/lib/storyYear1';
 
 const RUN_KEY = 'chartui-golden-run-v1';
 type Run = { flags: Flag[]; copy?: number };
@@ -34,7 +36,7 @@ const fp = (s: string) => Array.from(keccak256(enc.encode(s)).slice(0, 2), (b) =
 const LETTERS = ['一通目：追放から一年。島の名はハニカム。', '二通目：島に春が来た。', '三通目：Luna が貝を数えている。'];
 
 /** Year 2 mini-game: copy the previous letter's fingerprint into the next, one character at a time, 4 look-alike options each. */
-function CopyGame({ onDone }: { onDone: (copy: number) => void }) {
+function CopyGame({ onDone, onPick }: { onDone: (copy: number) => void; onPick?: (ok: boolean) => void }) {
   const rounds = useMemo(() => {
     const out: { from: string; fp: string }[] = []; let prev = LETTERS[0];
     for (let k = 0; k < 3; k += 1) { const f = fp(prev); out.push({ from: prev, fp: f }); prev = `${LETTERS[k + 1] ?? '四通目：'}${f}`; }
@@ -62,7 +64,7 @@ function CopyGame({ onDone }: { onDone: (copy: number) => void }) {
             <p>指紋：<span className="text-base font-semibold tracking-[0.3em]" data-testid="copy-target">{rounds[r].fp}</span></p>
           </div>
           <p>書き写し：<span className="tracking-[0.3em]">{picks.slice(r * 4).join('')}<span className="text-stone-400">{'＿＿＿＿'.slice(c)}</span></span>（{c + 1} 文字目）</p>
-          <div className="flex gap-2">{options.map((o) => <button key={o} type="button" data-testid={`copy-opt-${o}`} onClick={() => setPicks((p) => [...p, o])} className="h-9 w-9 border border-[#1f1f1f] bg-white text-base">{o}</button>)}</div>
+          <div className="flex gap-2">{options.map((o) => <button key={o} type="button" data-testid={`copy-opt-${o}`} onClick={() => { onPick?.(o === rounds[r].fp[c]); setPicks((p) => [...p, o]); }} className="h-9 w-9 border border-[#1f1f1f] bg-white text-base">{o}</button>)}</div>
         </div>
       )}
       {done && <p data-testid="copy-result">書き写せた文字：{correct} / 12</p>}
@@ -83,13 +85,22 @@ export default function Year1() {
   const [gameDone, setGameDone] = useState<number | null>(null);
   useEffect(() => { setRun(loadRun()); }, []);
   const scene = sceneById(id)!;
+  // Mente nudge: watch only this page's own events; offer "アリミノボーイに聞く" softly.
+  const events = useRef<NudgeEvent[]>([{ t: Date.now(), type: 'shown' }]);
+  const beatsSince = useRef(99);
+  const [nudge, setNudge] = useState<NudgeReason | null>(null);
+  const check = useCallback(() => { if (nudge) return; const r = shouldNudge(events.current, Date.now(), beatsSince.current); if (r) { setNudge(r); beatsSince.current = 0; } }, [nudge]);
+  const log = useCallback((type: NudgeEvent['type']) => { events.current = [...events.current.slice(-40), { t: Date.now(), type }]; check(); }, [check]);
+  useEffect(() => { const t = window.setInterval(check, 5000); return () => window.clearInterval(t); }, [check]);
+  const hint = NUDGE_HINTS[id] ?? NUDGE_FALLBACK;
 
   const go = (to: string, set?: Flag) => {
     if (to === 'years') { router.push('/mente/game/years'); return; }
+    log('picked'); beatsSince.current += 1; events.current.push({ t: Date.now(), type: 'shown' });
     if (set) setRun((r) => { const next = { ...r, flags: r.flags.includes(set) ? r.flags : [...r.flags, set] }; saveRun(next); return next; });
     setAsked(false); setId(to);
   };
-  const restart = () => { const r = { flags: [] }; saveRun(r); setRun(r); setGameDone(null); setAsked(false); setId('y1-open'); };
+  const restart = () => { log('restart'); const r = { flags: [] }; saveRun(r); setRun(r); setGameDone(null); setAsked(false); setId('y1-open'); };
 
   return (
     <main className="min-h-screen bg-white px-4 py-4 font-mono text-[#1f1f1f]">
@@ -109,7 +120,7 @@ export default function Year1() {
           {scene.text.map((t) => <p key={t} className="text-sm leading-7">{t}</p>)}
         </section>
 
-        {scene.kind === 'game' && <CopyGame onDone={(n) => { if (gameDone !== null) return; setGameDone(n); setRun((r) => { const next = { ...r, copy: n }; saveRun(next); return next; }); }} />}
+        {scene.kind === 'game' && <CopyGame onPick={(ok) => log(ok ? 'hit' : 'miss')} onDone={(n) => { if (gameDone !== null) return; setGameDone(n); setRun((r) => { const next = { ...r, copy: n }; saveRun(next); return next; }); }} />}
 
         <section className="space-y-2" aria-label="選ぶ" data-testid="choices">
           {scene.kind === 'four' && !asked && <button type="button" data-testid="ask-boy" onClick={() => setAsked(true)} className="border border-[#22b8c8] px-3 py-1 text-sm">アリミノボーイに聞く</button>}
@@ -132,6 +143,7 @@ export default function Year1() {
         )}
 
         <p className="text-[11px] text-stone-500">背景の 4 つ（{ASK_LINES.map((l) => l.key).join('・')}）は、1 回の 1 年目で一つしか聞けません。ほかを聞くには「最初から」。</p>
+        {nudge && <MenteNudge reason={nudge} between={hint.between} after={hint.after} onClose={() => setNudge(null)} />}
         <footer className="border-t border-stone-200 pt-2 text-[11px] text-stone-600">
           架空の物語です。チャートは作りもので、実在の銘柄ではありません。<br />
           取引や暮らしのことでつらいときは、ひとりで抱えずに：よりそいホットライン 0120-279-338（24 時間・無料）／いのちの電話 0570-783-556

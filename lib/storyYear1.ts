@@ -63,3 +63,12 @@ export function flagEffects(flags: Flag[]): string[] {
   if (flags.includes('left-quietly')) out.push('部屋を出た：暴落のチャートは 12 年目まで布の下のまま。最後の面で初めて全部が見える');
   return out;
 }
+
+/** Hints for the nudge popup, per scene: "たぶん {between} のあいだ。正確には分からないが——{after}". */
+export const NUDGE_HINTS: Record<string, { between: string; after: string }> = {
+  'y1-open': { between: '壁の紙と、窓の港', after: 'どちらを見ても、ぼくには会える。' },
+  'y1-ask': { between: 'a と d', after: 'どれを選んでも、物語は続く。ほかのは、また今度聞けばいい。' },
+  'y1-night': { between: '布をめくるのと、部屋を出るの', after: '父さんは、どっちでも怒らない。たぶん。' },
+  'y2-game': { between: '8 と B', after: '似ている字は、上の丸が閉じているかどうかを見るといい。' },
+};
+export const NUDGE_FALLBACK = { between: 'さっきの選択肢と、次の選択肢', after: 'ゆっくりでいい。' };
