@@ -50,7 +50,7 @@ export const TASKS: Task[] = [
   { id: 'whiteout-small-text', title: 'ホワイトアウト版の小さな補助の文字（stone-400、9px）を読みやすくする', area: '総合メニュー', status: 'todo', asked: '2026-11-13', note: 'stone-400 は白に対して 2.5:1 で、規則の 4.5:1 に届かない' },
   { id: 'edition-repo', title: '〜〜版：新しいリポジトリにこれまでの記録を保存（コード・docs・遊びの記録・量子の結果）', area: '版', status: 'decide', asked: '2026-11-13', note: '空のリポジトリを GitHub で作るのはオーナー（手順は docs/editions.md）。版の名前も決める' },
   { id: 'edition-readme', title: '〜〜版の README：void 的な個性（ファミコン演出の怖さなど）をコンセプチャルなレイアウトで', area: '版', status: 'decide', asked: '2026-11-13', note: '次回ディスカッション' },
-  { id: 'gender-colour', title: '型と色（男女の色規則）を決める：チャートの色は日本式のままか、型は 2 つか 3 つか', area: 'VR/MR', status: 'decide', asked: '2026-11-13', note: 'Mente のあとで確定。docs/design-rules.md 9 章にメモ' },
+  { id: 'gender-colour', title: '型と色（男女の色規則）を決める：型は 3 つ（暖色・寒色・色なし）、チャートはアプリと同じ（上げ緑・下げ赤）、ボブはピンク', area: 'VR/MR', status: 'done', asked: '2026-11-13', note: 'Mente のあとで確定。docs/design-rules.md 9 章にメモ' },
   { id: 'hair-flower-chart', title: '量子の結果とろうそく足 10 本を同じ「髪と花」で並べる画面', area: 'VR/MR', status: 'todo', asked: '2026-11-13', note: '型と色が決まってから' },
   { id: 'white-ab', title: 'ホワイトアウト版 AB（サトシを探せ版）v0.1：クローンしてすぐ遊べる 3 場面（OP・回想 LAB・デッキ）', area: '版', status: 'done', asked: '2026-11-13', note: 'editions/white-ab/' },
   { id: 'black-ab', title: 'ブラックアウト版 AB（PowerPoint B 版）：仮面のデザインを議論してから', area: '版', status: 'decide', asked: '2026-11-13' },

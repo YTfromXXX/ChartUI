@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import EthGlyph from '@/components/EthGlyph';
 import DiceColourRewind from '@/components/faceContour/DiceColourRewind';
-import { DETAILS, FRINGES, ratioText, type HairDetail, ACCENT_COLORS, ACCENT_SLOTS, BASE, BOB_VARIANTS, DICE_FIGURES, FACES, FIGURE_NAMES, HAIR_STYLES, PONY, PONY_FIGURE, type FaceParams, isBob, type AccentSlot, STEPS, atStep, contour, diffGrid, extent, faceGrid, headGrid, iou, silhouette, type Grid, type HairStyle } from '@/lib/faceContour';
+import { FAMILY_NAME, inFamily, type FigureType } from '@/lib/colourRule';
+import { DETAILS, FRINGES, ratioText, type HairDetail, ACCENT_COLORS, ACCENT_SLOTS, BASE, BOB_VARIANTS, COLOUR_DICE, DICE_FIGURES, FACES, FIGURE_NAMES, FIGURE_TYPES, HAIR_STYLES, PONY, PONY_FIGURE, type FaceParams, isBob, type AccentSlot, STEPS, atStep, contour, diffGrid, extent, faceGrid, headGrid, iou, silhouette, type Grid, type HairStyle } from '@/lib/faceContour';
 
 const NX = 80; const NY = 100; const PX = 2.2;
 const HX = 90; const HY = 110;
@@ -159,12 +160,18 @@ export default function FaceContour() {
               </div>
             ))}
           </div>
+          <table className="text-xs" data-testid="colour-rule"><tbody>
+            <tr className="text-stone-500"><td className="pr-4">色の規則（統一）</td><td className="pr-4">型</td><td className="pr-4">主色（左）</td><td>族に入るか</td></tr>
+            {FACES.map((_, i) => { const t = FIGURE_TYPES[i] as FigureType; const isDice = (DICE_FIGURES as readonly number[]).includes(i); const hexes = isDice ? COLOUR_DICE[i].faces.filter((f) => inFamily(f.hex, t)).map((f) => f.hex) : [ACCENT_COLORS[details[i].colorL]]; const ok = hexes.length > 0 && hexes.every((h) => inFamily(h, t)); return (
+              <tr key={i}><td className="pr-4">{FIGURE_NAMES[i]}</td><td className="pr-4">{FAMILY_NAME[t]}</td><td className="pr-4">{hexes.map((h) => <span key={h} className="mr-1 inline-block h-3 w-3 align-middle" style={{ background: h }} />)}{isDice ? '（サイコロの左はこの中から）' : ''}</td><td style={{ color: ok ? '#1f1f1f' : '#c8001a' }} data-testid={`rule-${i + 1}`}>{ok ? '入る' : '外れている'}</td></tr>
+            ); })}
+          </tbody></table>
           <table className="text-xs" data-testid="iou"><tbody>
             <tr className="text-stone-500"><td className="pr-4">組</td><td className="pr-4">顔だけ</td><td>髪型あり</td></tr>
             {pairs.map(([a, b]) => { const v = iou(sils[a], sils[b]); return <tr key={`${a}${b}`}><td className="pr-4">{FIGURE_NAMES[a]} と {FIGURE_NAMES[b]}</td><td className="pr-4">{iou(bare[a], bare[b]).toFixed(2)}</td><td style={{ color: v < 0.75 ? '#1f1f1f' : '#c8001a' }}>{v.toFixed(2)}{v < 0.75 ? '' : '（似ている）'}</td></tr>; })}
           </tbody></table>
           <p className="text-[11px] text-stone-500">ボブの 4 つの型（ボブを押すと開く）：左右非対称・内巻き・切りそろえ・段。主役のシルエットはボブのまま、質感と輪郭の端で個性を足す。</p>
-          <p className="text-[11px] text-stone-500">4 体の並び（左から）：ポニーテール（流し 7:3・右へ流れる束）／ボブ（ぱっつん 5:5・左右 2 色）／アリミノガール（二つの輪・片目隠し 2:8・右だけ長いサイド）／アリミノボーイ（雲・シースルー・小さな花の冠）。動くところは前髪の比、サイドの左右の長さ、左右の色。</p>
+          <p className="text-[11px] text-stone-500">4 体の並び（左から）：ポニーテール（流し 7:3・右へ流れる束）／ボブ（ぱっつん 5:5・ピンク）／アリミノガール（二つの輪・片目隠し 2:8・右だけ長いサイド）／アリミノボーイ（雲・シースルー・小さな花の冠）。動くところは前髪の比、サイドの左右の長さ、左右の色。</p>
           <p className="text-[11px] text-stone-500">4 体にしたとき：顔を可愛く（丸く、額を広く、鼻とあごを小さく）すると、顔だけの重なりは 0.87〜0.95 に上がる。可愛い顔は似てくるので、見分けは髪の主役の大きさに任せる（ポニーテール・ボブ・二つの輪・雲で 0.62〜0.73）。</p>
           <p className="text-[11px] text-stone-500">これまで（3 体のとき）に分かったこと：顔の形だけでは重なりが 0.82〜0.95 で、小さく見ると見分けにくい。主役のシルエットを 3 体で変える（縦の塔・翼・ボブ）と 0.69〜0.72 まで下がる。編み込みは質感なので、シルエットはほとんど変えない（主役ではなく 2 番目に使う）。</p>
         </section>

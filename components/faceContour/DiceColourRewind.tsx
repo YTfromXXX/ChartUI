@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { COLOUR_DICE } from '@/lib/faceContour';
+import { inFamily, type FigureType } from '@/lib/colourRule';
+import { COLOUR_DICE, FIGURE_TYPES } from '@/lib/faceContour';
 
 type Pair = [number, number];
 type Phase = 'idle' | 'rew' | 'play';
@@ -28,7 +29,9 @@ export default function DiceColourRewind({ figure, name, sil, nx, ny }: { figure
 
   const roll = () => {
     if (phase !== 'idle') return;
-    const next: Pair = [Math.floor(Math.random() * 6), Math.floor(Math.random() * 6)];
+    // Colour rule: the left (main) die rolls only faces in the figure's family; the right die is free.
+    const main = die.faces.map((f, i) => (inFamily(f.hex, FIGURE_TYPES[figure] as FigureType) ? i : -1)).filter((i) => i >= 0);
+    const next: Pair = [main[Math.floor(Math.random() * main.length)], Math.floor(Math.random() * 6)];
     const back = [pair, ...history].slice(0, MAX_BACK + 1); // what the tape rewinds through: now, then older
     setHistory((h) => [pair, ...h].slice(0, 8)); setPair(next);
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;

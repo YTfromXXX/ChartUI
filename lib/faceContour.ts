@@ -39,6 +39,8 @@ export const BASE: FaceParams = { rx: 0.78, ry: 1.02, forehead: 0.15, cheek: 0.1
  *   アリミノボーイ（1 体目）  heart-shaped: wide cheekbones, tiny jaw, pointed chin
  */
 export const FIGURE_NAMES = ['ポニーテール（仮）', 'ボブ（仮）', 'アリミノガール（仮）', 'アリミノボーイ（仮）'] as const;
+/** Types for the colour rule (lib/colourRule.ts): the ponytail stays neutral (ink). */
+export const FIGURE_TYPES = ['neutral', 'girl', 'girl', 'boy'] as const;
 export const PONY_FIGURE = 0;
 export const FACES: FaceParams[] = [
   { ...BASE, rx: 0.84, ry: 0.98, forehead: 0.2, cheek: 0.15, jaw: 0.03, nose: 0.14, noseY: -0.18, brow: 0.05, mouth: 0.04, chin: 0.04, hairline: 0.52, hairRise: 0.14 },
@@ -184,9 +186,9 @@ export const FRINGES: { id: Fringe; name: string }[] = [
 ];
 export const DETAILS: HairDetail[] = [
   { fringe: 'swept', split: 0.7, sideL: 0.25, sideR: 0.0, colorL: 'ink', colorR: 'ink', accent: '根元にリボン、毛先へ向かって赤' },
-  { fringe: 'blunt', split: 0.5, sideL: 0.75, sideR: 0.75, colorL: 'ink', colorR: 'red', accent: '左右で墨と赤の 2 色、左の耳上に花' },
-  { fringe: 'cover', split: 0.2, sideL: 0.35, sideR: 0.85, colorL: 'indigo', colorR: 'indigo', accent: '輪に赤の差し毛、右だけ長いサイド' },
-  { fringe: 'thin', split: 0.45, sideL: 0.6, sideR: 0.45, colorL: 'bronze', colorR: 'bronze', accent: '雲の上に小さな花の冠' },
+  { fringe: 'blunt', split: 0.5, sideL: 0.75, sideR: 0.75, colorL: 'pink', colorR: 'pink', accent: 'ピンクのボブ、左の耳上に花' },
+  { fringe: 'cover', split: 0.2, sideL: 0.35, sideR: 0.85, colorL: 'red', colorR: 'indigo', accent: '輪に赤の差し毛、右だけ長いサイド' },
+  { fringe: 'thin', split: 0.45, sideL: 0.6, sideR: 0.45, colorL: 'indigo', colorR: 'bronze', accent: '雲の上に小さな花の冠' },
 ];
 /** Split as the left : right ratio people say ("7:3"). */
 export const ratioText = (split: number) => `${Math.round(split * 10)}:${10 - Math.round(split * 10)}`;
@@ -217,7 +219,7 @@ export function iou(a: boolean[], b: boolean[]) { let i = 0; let u = 0; for (let
 // Each slot is one accent idea: where the accessory sits (head coordinates), and the colour of the
 // left and right halves of the hair. Slot 7 is left empty on purpose (◻︎ = still open).
 // Colours are the page's ink / red / indigo / bronze, all ≥ 3:1 against white (lines and fills).
-export const ACCENT_COLORS = { ink: '#1f1f1f', red: '#c8001a', indigo: '#2b3a67', bronze: '#7a5c12' } as const;
+export const ACCENT_COLORS = { ink: '#1f1f1f', red: '#c8001a', indigo: '#2b3a67', bronze: '#7a5c12', pink: '#d63384' } as const;
 export type AccentShape = 'flower' | 'ribbon' | 'comb' | 'pins' | 'feather' | 'beads' | 'open';
 export type AccentSlot = { id: number; name: string; shape: AccentShape; at: [number, number][]; left: keyof typeof ACCENT_COLORS; right: keyof typeof ACCENT_COLORS; note: string };
 export const ACCENT_SLOTS: AccentSlot[] = [
