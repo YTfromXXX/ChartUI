@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import PixelSprite from '@/components/fami/PixelSprite';
 import FibonacciMirror from '@/components/stoic/FibonacciMirror';
+import YDeskPopup from '@/components/stoic/YDeskPopup';
 import { useSyntheticBtc } from '@/hooks/useSyntheticBtc';
 import { SPRITES } from '@/lib/famiSprites';
 import { CARTRIDGES, aaGrid, chakraName, initRoom, insert, settle, synthesize, taskOff, taskOn, thesesFor, tick, type RoomState } from '@/lib/stoicRoom';
@@ -15,6 +16,7 @@ const SPIN_TICKS = 5;
 export default function StoicRoomPage() {
   const btc = useSyntheticBtc();
   const [room, setRoom] = useState<RoomState>(initRoom);
+  const [yDesk, setYDesk] = useState(false);
   const price = useRef(btc.price);
   price.current = btc.price;
 
@@ -43,11 +45,13 @@ export default function StoicRoomPage() {
   const c = room.cartridge;
   return (
     <main className="min-h-screen bg-[#0b0b10] px-3 py-5 font-mono text-slate-100 sm:px-8">
+      {yDesk && <YDeskPopup onClose={() => setYDesk(false)} />}
       <div className="mx-auto max-w-6xl space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-white/15 pb-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300">Cybernetics-API · 仮想 METADOGG-ORACLE-API · Famiポート 10</p>
             <h1 className="text-2xl font-bold tracking-[0.2em]">THE STOIC ROOM</h1>
+            <button type="button" data-testid="y-open" onClick={() => setYDesk(true)} className="mt-1 border border-amber-300/50 px-2 py-0.5 text-[11px] text-amber-200">Y の姿（エラー表示・つうしんぼ）</button>
           </div>
           <div className="text-right text-[11px]" aria-label="BTCUSD synthetic price">
             <p>BTCUSD 合成価格 <span className="text-lg text-amber-200">{btc.price.toFixed(5)}</span></p>

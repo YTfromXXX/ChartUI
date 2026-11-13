@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import QuantumDiceInitial from '@/components/spin/QuantumDiceInitial';
 import QuantumWish from '@/components/spin/QuantumWish';
 import flowerFake from '@/quantum/results/flower-fake-fake_torino.json';
 import flowerLocal from '@/quantum/results/flower-local-statevector.json';
@@ -20,6 +21,7 @@ export default function IbmChallenge({ problem }: { problem: 'flower' | 'hair' |
   const [mine, setMine] = useState<Result[]>([]);
   const [err, setErr] = useState('');
   const [hidden, setHidden] = useState(false);
+  const [dice, setDice] = useState(false);
   const sources = [...BUNDLED, ...mine].filter((r) => r.probabilities).map((r) => ({ id: `${r.problem}-${r.mode}-${r.backend}`, label: `${r.problem === 'hair' ? '髪' : '花'} · ${MODE[r.mode] ?? r.mode} · ${r.backend}`, probabilities: r.probabilities as number[] }));
   const rows = [...BUNDLED, ...mine].filter((r) => problem === 'factor' || r.problem === problem);
   const load = async (files: FileList | null) => {
@@ -32,9 +34,11 @@ export default function IbmChallenge({ problem }: { problem: 'flower' | 'hair' |
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">IBM Quantum チャレンジ（無料枠）</h2>
         {/* The hidden game: a meta view on the challenge itself — wish on the result you just measured. */}
+        <button type="button" data-testid="qdice-next" onClick={() => setDice(true)} className="ml-auto mr-2 rounded border border-violet-300/50 px-2 py-0.5 font-mono text-[11px] text-violet-200">NEXT ▶ クオンタムダイス</button>
         <button type="button" data-testid="hidden-door" onClick={() => setHidden((h) => !h)} title="?" className="font-mono text-[11px] text-violet-300/40 hover:text-violet-200">{'{:}'}</button>
       </div>
       {hidden && <QuantumWish sources={sources} />}
+      {dice && <QuantumDiceInitial sources={sources} onClose={() => setDice(false)} />}
       {problem === 'factor' ? <p className="text-slate-400">因数分解のエネルギーは 4 次なので、このチャレンジでは扱いません（髪か花を選んでください）。</p> : (
         <>
           <p className="text-slate-300">見本のメッシュから作った、ブラウザと同じ問い（QAOA 1 層、γ・β も同じ）を Qiskit の回路にして、理想・雑音つきリハーサル・実機で比べます。回路の理想の確率は、ブラウザの計算と 10⁻¹⁰ の桁まで一致することを確かめてあります。{problem === 'hair' ? '髪は隣どうしの結合だけなので、IBM のチップの配線に素直に乗ります（2 量子ビットゲート 18 個）。本命です。' : '花は全部の組（45 組）の結合があり、配線の都合で 2 量子ビットゲートが約 180 個に増えます。雑音で崩れやすい、上級の挑戦です。'}</p>

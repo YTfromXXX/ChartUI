@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import Die3D from '@/components/relay/Die3D';
 import CubeClock from '@/components/tetra/CubeClock';
+import TableGaze from '@/components/tetra/TableGaze';
 import SevenSpheres from '@/components/tetra/SevenSpheres';
 import WaveDie from '@/components/tetra/WaveDie';
 import { DEFAULT_RULES, ROLES, RULE_LABEL, canEdit, describe, type Role, type RonRules } from '@/lib/tableAuthority';
@@ -289,6 +290,13 @@ export default function TetraArcanaRoom() {
             </div>
           </Panel>
         </div>
+
+        <Panel title="SEATS_GAZE · 複素平面" accent={NEON.cyan} aria-label="Seats and gaze">
+          <div className="flex flex-wrap items-center gap-4">
+            <TableGaze hands={g.seats.map((x) => x.hand.length)} rivers={g.seats.map((x) => x.river.length)} turn={g.turn} playing={g.phase === 'play'} />
+            <p className="max-w-md text-[10px] text-slate-400">本物の卓の値：点の大きさ ＝ 河の枚数 + 1（表面積）、濃さ ＝ 手牌の枚数（質量）。値は約 3 秒かけてゆっくり届く。手番の席は卓を見て、ほかの席は手番の席を見る。8 人卓とデッキ 2 つは <Link href="/lab/seat-gaze" className="underline">席と目線 LAB</Link>。</p>
+          </div>
+        </Panel>
 
         <Panel title="FLOOR_POINTCLOUD · 7 SPHERES" accent={NEON.lime} aria-label="Floor">
           <div className="text-lime-100"><SevenSpheres throws={throws} icon={icon} /></div>
