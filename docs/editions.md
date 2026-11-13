@@ -26,6 +26,18 @@ git push <新しいリポジトリの URL> origin/claude/ytfromxxx-spiral-candy-
 - 公開リポジトリにする場合は、先に `records/` の JSON の中身（ニックネームなど）を確かめる。
 - 作ったら、このセッション（または次のセッション）にリポジトリを追加すれば、そこで続きを作れる。
 
+## 版ごとのミニゲーム（クローンしてすぐ遊べる形）
+
+- 置き場所：`editions/<版>/`。中身は `index.html`・`game.js`・`README.md` だけ（依存なし、`index.html` を開けば動く）。
+- 最初の 1 本：`editions/white-ab/`（ホワイトアウト版 AB — サトシを探せ版 v0.1）。`file://` で開いて、3 つの場面を最後まで遊べることを確かめた（エラー 0）。
+- 次：`editions/black-ab/`（ブラックアウト版 AB）。仮面のデザインを議論してから。
+- 単独のリポジトリに切り出す（オーナーの作業。空のリポジトリを作ってから）：
+
+```bash
+git subtree split --prefix editions/white-ab -b white-ab
+git push <新しいリポジトリの URL> white-ab:main
+```
+
 ## レビュー（2026-11-13）
 
 確かめたこと：本番ビルド（`next build`）成功・警告なし、バックエンドのテスト 101 件成功、`.meshmeta` の Python ⇄ TS 一致 9/9、型チェック成功。

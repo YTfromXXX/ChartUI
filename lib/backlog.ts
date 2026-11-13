@@ -52,6 +52,8 @@ export const TASKS: Task[] = [
   { id: 'edition-readme', title: '〜〜版の README：void 的な個性（ファミコン演出の怖さなど）をコンセプチャルなレイアウトで', area: '版', status: 'decide', asked: '2026-11-13', note: '次回ディスカッション' },
   { id: 'gender-colour', title: '型と色（男女の色規則）を決める：チャートの色は日本式のままか、型は 2 つか 3 つか', area: 'VR/MR', status: 'decide', asked: '2026-11-13', note: 'Mente のあとで確定。docs/design-rules.md 9 章にメモ' },
   { id: 'hair-flower-chart', title: '量子の結果とろうそく足 10 本を同じ「髪と花」で並べる画面', area: 'VR/MR', status: 'todo', asked: '2026-11-13', note: '型と色が決まってから' },
+  { id: 'white-ab', title: 'ホワイトアウト版 AB（サトシを探せ版）v0.1：クローンしてすぐ遊べる 3 場面（OP・回想 LAB・デッキ）', area: '版', status: 'done', asked: '2026-11-13', note: 'editions/white-ab/' },
+  { id: 'black-ab', title: 'ブラックアウト版 AB（PowerPoint B 版）：仮面のデザインを議論してから', area: '版', status: 'decide', asked: '2026-11-13' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
   { id: 'reading-order', title: '「どちらを先に読む？」投票とインタビュー（ナンシー・グレース・ローマン）', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/reading-order' },
