@@ -59,6 +59,7 @@ export const TASKS: Task[] = [
   { id: 'bob-variants', title: 'ボブを押すと開く新しい 4 つの型（左右非対称・内巻き・切りそろえ・段）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'accent-strip', title: '下部の 7 マスをポニーテールと定める（根元 1 → 毛先 7、3 体目＝ポニーテール（仮））', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'rough-outlines', title: 'ポニーテールの顔を基準に、3 体の大まかなデフォルトの輪郭（段階 1〜2）を研究する', area: '版', status: 'doing', asked: '2026-11-13', route: '/lab/face-contour' },
+  { id: 'four-figures', title: '4 体（ポニーテール・ボブ・2 体目・1 体目）の顔を可愛く、髪の動く部分（前髪の比・サイドの左右・2 色）で個性をならべる', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library
   { id: 'library-entrance', title: '望遠鏡の入場・VR / MR ログイン・しおりのリレー', area: '図書館', status: 'done', asked: '2026-11-12', route: '/lab/library/entrance' },
