@@ -27,7 +27,20 @@ function rng(seed: number) { let a = seed >>> 0; return () => { a = (a + 0x6d2b7
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 /** The i-th synthetic symbol (stable for the same i). `prefer` biases the theme for a game (e.g. hotels in game 1). */
+/** A fixed lineup of 四つ打ち coins (fictional) with fixed tickers; RWAK is 四つ打ちコイン. Indexes from 200000. */
+export const FOUR_ON_FLOOR: [string, string][] = [
+  ['RWAK', '四つ打ちコイン'], ['GNUS', '四つ打ち天才コイン'], ['DSKT', '四つ打ちディスコキットコイン'], ['CHWY', '四つ打ちチューイングキャンディコイン'],
+  ['TNDO', '即天童市裏打ちハイハットコイン'], ['SNKD', 'スネアキックドラムコイン'], ['ILVI', 'I Love I 天才コイン'], ['SKBB', 'スネアキックブレイクビーツコイン'],
+  ['MCHN', '四つ打ち即天童市スネアハイハットメカニカルコイン'],
+];
+export const CURATED_BASE = 200000;
+export const curated = () => FOUR_ON_FLOOR.map((_, k) => symbolAt(CURATED_BASE + k));
+
 export function symbolAt(i: number, prefer?: Theme): Sym {
+  if (i >= CURATED_BASE && i < CURATED_BASE + FOUR_ON_FLOOR.length) {
+    const [ticker, name] = FOUR_ON_FLOOR[i - CURATED_BASE]; const base = symbolAt(i - CURATED_BASE + 300000);
+    return { ...base, i, ticker, name: `${name}（合成）`, theme: 'ミーム', filter: '噂', team: 'both' };
+  }
   // i ≥ 100000 is reserved for symbols born from posts (see symbolFromPost); they rebuild from the same seed.
   const r = rng(1000 + i * 7919);
   const pool = prefer && r() < 0.5 ? THEMES.filter((t) => t.theme === prefer) : THEMES;

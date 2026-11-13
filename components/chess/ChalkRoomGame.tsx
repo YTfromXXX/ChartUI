@@ -6,7 +6,7 @@ import { DEVICES, PEOPLE, ROOMS, sideName, type Filter, type Look, type News, ty
 import { FLOORS, SIZE, cpuPrompt, initialPieces, legalMoves, parsePrompt, resolveTurn, same, sqName, type Color, type Piece, type Sq, type TurnEvent } from '@/lib/promptChess';
 import { keccak256 } from '@/lib/meshMetaV2';
 import { BRAIN_RULE, drift, faultChance, floorSlip, interceptor, newsPrint, parseFree, randomMove } from '@/lib/chessWild';
-import { sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
+import { curated, sparkPath, symbolAt, symbolFromPost, type Sym, type Theme } from '@/lib/syntheticSymbols';
 
 /** 住まい symbols and the Sanctuary resident each one suits: together they count double and forge a key fragment. */
 const DWELLING_MATCH: Record<string, string> = { 定住指数: 'B3', 近所の返信率: 'B3', 庭の手入れ指数: 'B1', 窓の灯り指数: 'B4', 朝と夜の投稿の幅: 'B2', 同じ景色の写真の数: 'B2' };
@@ -70,7 +70,8 @@ function ScenePanel({ scene }: { scene: Scene }) {
 }
 
 /** Endless strip of synthetic symbols (loads 12 more whenever its end scrolls into view). */
-function SymbolStrip({ prefer, held, onHold, extra }: { prefer?: Theme; held: Sym | null; onHold: (s: Sym | null) => void; extra: Sym[] }) {
+function SymbolStrip({ prefer, held, onHold, groups }: { prefer?: Theme; held: Sym | null; onHold: (s: Sym | null) => void; groups: { label: string; syms: Sym[] }[] }) {
+  const extra = groups.flatMap((g) => g.syms); const starts = new Map<number, string>(); let at = 0; for (const g of groups) { if (g.syms.length) starts.set(at, g.label); at += g.syms.length; }
   const [count, setCount] = useState(12);
   const box = useRef<HTMLDivElement>(null); const end = useRef<HTMLDivElement>(null);
   const syms = useMemo(() => Array.from({ length: count }, (_, i) => symbolAt(i, prefer)), [count, prefer]);
@@ -84,8 +85,8 @@ function SymbolStrip({ prefer, held, onHold, extra }: { prefer?: Theme; held: Sy
       <p className="text-xs font-semibold">合成の銘柄（無限スクロール）</p>
       <p className="text-[10px] text-stone-500">駒かチームへドラッグ＆ドロップ。押して持ってから、駒やチームを押しても渡せる。</p>
       <div ref={box} className="h-[26rem] space-y-1 overflow-y-auto border border-stone-200 p-1" data-testid="symbols" aria-label="合成の銘柄の列">
-        {extra.length > 0 && <p className="px-1 text-[10px] font-semibold text-[#2b3a67]" data-testid="post-symbols">このニュースの投稿から生まれた銘柄</p>}
         {[...extra, ...syms].map((s, n) => (<Fragment key={`${s.i}-${n}`}>
+          {starts.has(n) && <p className="px-1 pt-1 text-[10px] font-semibold text-[#2b3a67]" data-testid={n === 0 ? 'post-symbols' : undefined}>{starts.get(n)}</p>}
           {n === extra.length && extra.length > 0 && <p className="px-1 pt-1 text-[10px] font-semibold text-stone-500">ほかの合成の銘柄</p>}
           <button type="button" draggable data-testid={`sym-${s.i}`} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(s.i)); onHold(s); }} onClick={() => onHold(held?.i === s.i ? null : s)}
             className="flex w-full items-center gap-2 border px-1.5 py-1 text-left text-[11px]" style={{ borderColor: held?.i === s.i ? '#c8001a' : '#e7e5e4', background: held?.i === s.i ? '#fff1f2' : 'white' }}>
@@ -140,10 +141,21 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
   const targets = useMemo(() => { const p = pieces.find((q) => q.id === picked); return p ? legalMoves(p, pieces).filter((t) => !inMirage(t)) : []; }, [picked, pieces]);
   const postSyms = useMemo(() => (done ? [] : news.posts.map((p) => symbolFromPost(p.handle, p.kind, news.theme ?? '住まい'))), [news, done]);
   const lookup = (i: number) => postSyms.find((s) => s.i === i) ?? symbolAt(i, prefer);
+  // BA 🐵 and PE 🫛 drum in the live feed when a 四つ打ち / meme coin is dropped or its holder moves (one beat every 0.5 s).
+  const [beats, setBeats] = useState<{ who: string; text: string; k: number }[]>([]);
+  const beatTimers = useRef<number[]>([]);
+  useEffect(() => () => beatTimers.current.forEach((t) => window.clearTimeout(t)), []);
+  const drum = (s: Sym, why: string) => {
+    if (s.theme !== 'ミーム') return;
+    const line = [{ who: '🐵 BA-80BF', text: 'ドン' }, { who: '🫛 PE-05F0', text: 'ぱ' }, { who: '🐵 BA-52FF', text: 'ドン' }, { who: '🫛 PE-4970', text: 'ぱっ' }, { who: '🐵 BA-80BF', text: 'ドン、ドン' }, { who: '🫛 PE-05F0', text: 'ぱ ぱ' }, { who: '🐵 BA-52FF', text: `（${s.ticker} で四つ打ち）` }, { who: '🫛 PE-4970', text: '✨' }];
+    setBeats((b) => [...b.slice(-40), { who: '🥁', text: `${s.ticker} ${s.name.replace('（合成）', '')} — ${why}`, k: Date.now() }]);
+    line.forEach((l, n) => beatTimers.current.push(window.setTimeout(() => setBeats((b) => [...b.slice(-40), { ...l, k: Date.now() + n }]), 500 * (n + 1))));
+  };
 
   const give = (target: string, s: Sym | null) => {
     if (!s) return;
     if (target === 'white' || target === 'black') setFocus((f) => ({ ...f, [target]: s })); else setBadges((b) => ({ ...b, [target]: s }));
+    drum(s, `${target === 'white' || target === 'black' ? sideName(target as Color) : PEOPLE[target].name}に渡した`);
     setHeld(null);
   };
   const dropProps = (target: string) => ({
@@ -210,6 +222,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
       if (!m) continue; const who = PEOPLE[m.id]; const color: Color = m.id.startsWith('W') ? 'white' : 'black';
       let act = `${who.name}（${who.role}）は、${who.act[turn % 3]}`;
       const b = badges[m.id];
+      if (b) drum(b, `${who.name}が動いた`);
       const base = b ? b.name.replace('（合成）', '') : '';
       if (b && b.theme === '住まい' && DWELLING_MATCH[base] === m.id) {
         used.push(m.id); delta += 2; alignedNow = true;
@@ -264,8 +277,8 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
           {allowArchitect && (
             <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="side">参加のしかた：
               <button type="button" onClick={() => reset('white')} className="border px-2 py-0.5" style={{ borderColor: side === 'white' ? '#c8001a' : '#d6d3d1' }}>アクティブギャング（白）</button>
-              {side === 'black' ? <span className="border border-[#2b3a67] px-2 py-0.5 text-[#2b3a67]">🔗 SNCT として参加中（製図板）</span>
-                : arielHint ? <button type="button" data-testid="link-sanctuary" onClick={() => reset('black')} className="border border-dashed border-[#2b3a67] px-2 py-0.5 text-left text-[#2b3a67] underline decoration-dotted">🔗 SNCT · 住まいの協同組合（六角温室の共同住宅を運営）</button>
+              {side === 'black' ? <span className="border border-[#2b3a67] px-2 py-0.5 text-[#2b3a67]">🔗 SNCT として参加中 — 建築家としての私（製図板）：暗号を交換しながらチャートを競う XR サンクチュアリ</span>
+                : arielHint ? <button type="button" data-testid="link-sanctuary" onClick={() => reset('black')} className="border border-dashed border-[#2b3a67] px-2 py-0.5 text-left text-[#2b3a67] underline decoration-dotted">🔗 SNCT · 住まいの協同組合（六角温室の共同住宅を運営）<br /><span className="text-[10px] no-underline">建築家としての私（製図板）：暗号を交換しながらチャートを競う XR サンクチュアリ</span></button>
                 : <span className="px-1 text-stone-400" aria-hidden>（……）</span>}
             </div>
           )}
@@ -335,6 +348,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {held && <p className="text-[11px] text-[#c8001a]" data-testid="held">持っている銘柄：{held.ticker}（駒かチームを押すと渡す）</p>}
             <p className="text-sm" data-testid="harmony">調和：{harmony}</p>
             {showAttention && <div className="border border-[#2f6b1a] p-2 text-[11px]" data-testid="attention"><p>📣 PE 群の注目：{attention}</p><div className="mt-1 h-2 bg-stone-200"><div className="h-2 bg-[#2f6b1a]" style={{ width: `${Math.min(100, attention * 4)}%` }} /></div><p className="mt-1 text-[10px] text-stone-600">注目は値段ではない。噂が増えると注目は増えるが、駒の強さも、銘柄の値打ちも変わらない。</p></div>}
+            {beats.length > 0 && <div className="max-h-40 space-y-0.5 overflow-y-auto border border-stone-300 p-2 text-[11px]" data-testid="beats" aria-live="off"><p className="font-semibold">🥁 実況（BA 🐵 と PE 🫛）</p>{beats.map((b) => <p key={b.k}><span className="font-semibold" style={{ color: b.who.includes('BA') ? '#7a5c12' : b.who.includes('PE') ? '#2f6b1a' : '#57534e' }}>{b.who}</span>　{b.text}</p>)}</div>}
             <div className="space-y-1 border border-[#2b3a67] p-2 text-[11px]" data-testid="crypto">
               <p className="font-semibold">🔐 サンクチュアリの暗号</p>
               <p data-testid="harmony-rate">調和率：{turn ? Math.round((aligned / turn) * 100) : 0}%（{aligned} / {turn} ターン）</p>
@@ -346,7 +360,7 @@ export default function ChalkRoomGame({ gameNo, title, news: NEWS, prefer, allow
             {done && <p className="border border-stone-200 bg-[#fafaf9] p-2 text-xs" data-testid="end">{TURNS} つのニュースを解体した。調和は {harmony}。同じ出来事を、違うデバイスで読むほど、ぶつからずに並べる。</p>}
           </aside>
 
-          <aside><SymbolStrip prefer={prefer} held={held} onHold={setHeld} extra={postSyms} /></aside>
+          <aside><SymbolStrip prefer={prefer} held={held} onHold={setHeld} groups={[{ label: 'このニュースの投稿から生まれた銘柄', syms: postSyms }, { label: '四つ打ち系（略号は固定）', syms: prefer === 'ミーム' ? curated() : [] }]} /></aside>
         </div>
 
         <section className="space-y-2" aria-label="記録" data-testid="log">
