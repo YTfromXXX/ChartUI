@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { SCREENS, STATUS_LABEL, TASKS, counts, type Status } from '@/lib/backlog';
+import { NEVER, RECORD_KEYS, collect } from '@/lib/recordExport';
 
 const COLOUR: Record<Status, string> = { done: '#86efac', doing: '#fde68a', todo: '#93c5fd', decide: '#f9a8d4' };
 const ORDER: Status[] = ['decide', 'doing', 'todo', 'done'];
@@ -41,6 +42,17 @@ export default function Backlog() {
             </section>
           ))}
         </div>
+        <section className="space-y-2 rounded border border-white/10 p-3 text-xs" aria-label="遊びの記録" data-testid="records">
+          <h2 className="font-semibold">遊びの記録を書き出す（版に残すため）</h2>
+          <p className="text-slate-400">このブラウザにだけある記録を JSON にして保存します。書き出すのは下の一覧のものだけで、{NEVER.join('・')} は書き出しません。公開のリポジトリに入れる前に、中身（紙飛行機のニックネームなど）を確かめてください。</p>
+          <ul className="grid gap-0.5 sm:grid-cols-2">{RECORD_KEYS.map((r) => <li key={r.key}><span className="font-mono text-slate-500">{r.key}</span> — {r.what}</li>)}</ul>
+          <button type="button" data-testid="export-records" onClick={() => {
+            const file = collect('次の版', window.localStorage);
+            const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
+            const a = document.createElement('a'); a.href = url; a.download = `chartui-records-${file.exported.slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+          }} className="rounded border border-amber-300/60 px-3 py-1 text-amber-200">記録を書き出す（{RECORD_KEYS.length} 種類まで）</button>
+        </section>
+
         <section className="space-y-2" aria-label="画面の地図">
           <h2 className="font-semibold">画面の地図（メタ視点）</h2>
           <p className="text-xs text-slate-400">カーナビの切替スイッチや npm / pip の前に、画面のつながりを一望するための地図です。</p>
