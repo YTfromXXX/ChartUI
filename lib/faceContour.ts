@@ -229,3 +229,18 @@ export const ACCENT_SLOTS: AccentSlot[] = [
   { id: 6, name: '玉の連なり（両側）', shape: 'beads', at: [[-0.9, 0.2], [-0.92, 0.0], [-0.9, -0.2], [0.9, 0.2], [0.92, 0.0]], left: 'red', right: 'indigo', note: '左 3 個・右 2 個、色も左右で違う' },
   { id: 7, name: '空き', shape: 'open', at: [], left: 'ink', right: 'ink', note: 'まだ決めていないマス（◻︎）' },
 ];
+
+// ---------- dice colours: only アリミノガール and アリミノボーイ ----------
+// Each has a colour die of 6 faces in its own family; two rolls give the left and right colours.
+// The starting pair is the one picked on the screenshot (girl: orange + yellow-green, boy: cyan + yellow).
+// These are light colours, so they are always shown on an ink tile (contrast ≥ 3:1 for every face).
+export const DICE_FIGURES = [2, 3] as const;
+export const COLOUR_DICE: Record<number, { faces: { hex: string; name: string }[]; start: [number, number] }> = {
+  2: { faces: [{ hex: '#f29b30', name: 'オレンジ' }, { hex: '#a9c62a', name: '黄緑' }, { hex: '#f7b267', name: 'ピーチ' }, { hex: '#c5d93a', name: 'ライム' }, { hex: '#e8772e', name: 'タンジェリン' }, { hex: '#8fb339', name: 'オリーブ' }], start: [0, 1] },
+  3: { faces: [{ hex: '#22b8c8', name: 'シアン' }, { hex: '#ece055', name: '黄' }, { hex: '#5ccbe0', name: 'スカイ' }, { hex: '#f2e86d', name: 'レモン' }, { hex: '#1c9fae', name: 'ティール' }, { hex: '#d9c13c', name: 'マスタード' }], start: [0, 1] },
+};
+/** Relative luminance contrast (WCAG) between two #rrggbb colours. */
+export function contrastHex(a: string, b: string) {
+  const lum = (h: string) => { const c = [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05);
+}

@@ -63,6 +63,8 @@ export const TASKS: Task[] = [
   { id: 'hair-four-resume', title: '髪型 3 体 → 4 体の続き（予習と復習は docs/mente/memo.md）：残り 3 体の小物棚・2 色と性別の色の規則・仮面・「アリミノ」の名前の確認', area: '版', status: 'todo', asked: '2026-11-13', route: '/lab/face-contour' },
   { id: 'mente-switch', title: 'Mente の 🔄（切り替え）：「いったん Mente での作業を切り替えてゲームをする？」YES / NO', area: 'Mente', status: 'done', asked: '2026-11-13', route: '/mente' },
   { id: 'find-vitalik-header', title: 'イベント：タイトルの名前をクリック → 吹き出し（placeholder「ヴィタリックを探せ」）→ 「〜を探せ版」に書き換え（header まで）', area: '版', status: 'done', asked: '2026-11-13', route: '/mente/game' },
+  { id: 'dice-colour-rewind', title: 'アリミノガール・アリミノボーイの色だけをサイコロで：Mente 式の逆再生（◀◀ REW → ▶ PLAY、毎秒 3 回以下）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
+  { id: 'find-vitalik-story', title: '物語の下書き：タロットの伝承と、ヴィタリックにとってのサトシ（不在の書き手と後から来た読み手）— docs/story/find-vitalik.md', area: '版', status: 'decide', asked: '2026-11-13' },
   { id: 'find-vitalik-body', title: '「ヴィタリックを探せ」の本編（アリミノボーイ・アリミノガールの登場）— 姿は描かず、名前はタイトルの言葉だけ', area: '版', status: 'todo', asked: '2026-11-13', route: '/mente/game' },
   { id: 'hair-types', title: '髪型の型（縦の塔・翼・ボブ・編み込み）で 3 体のシルエットを見分けやすく（IoU で測る）', area: '版', status: 'done', asked: '2026-11-13', route: '/lab/face-contour' },
   // Library

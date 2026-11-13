@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import EthGlyph from '@/components/EthGlyph';
-import { DETAILS, FRINGES, ratioText, type HairDetail, ACCENT_COLORS, ACCENT_SLOTS, BASE, BOB_VARIANTS, FACES, FIGURE_NAMES, HAIR_STYLES, PONY, PONY_FIGURE, type FaceParams, isBob, type AccentSlot, STEPS, atStep, contour, diffGrid, extent, faceGrid, headGrid, iou, silhouette, type Grid, type HairStyle } from '@/lib/faceContour';
+import DiceColourRewind from '@/components/faceContour/DiceColourRewind';
+import { DETAILS, FRINGES, ratioText, type HairDetail, ACCENT_COLORS, ACCENT_SLOTS, BASE, BOB_VARIANTS, DICE_FIGURES, FACES, FIGURE_NAMES, HAIR_STYLES, PONY, PONY_FIGURE, type FaceParams, isBob, type AccentSlot, STEPS, atStep, contour, diffGrid, extent, faceGrid, headGrid, iou, silhouette, type Grid, type HairStyle } from '@/lib/faceContour';
 
 const NX = 80; const NY = 100; const PX = 2.2;
 const HX = 90; const HY = 110;
@@ -154,7 +155,7 @@ export default function FaceContour() {
                   <div className="flex flex-wrap items-center gap-1">色 左 {(Object.keys(ACCENT_COLORS) as (keyof typeof ACCENT_COLORS)[]).map((c) => <button key={`l${c}`} type="button" aria-label={`左を${c}`} onClick={() => setDetail(i, { colorL: c })} className="h-3 w-3 border" style={{ background: ACCENT_COLORS[c], borderColor: details[i].colorL === c ? '#c8001a' : 'white', outline: details[i].colorL === c ? '1px solid #c8001a' : 'none' }} />)} 右 {(Object.keys(ACCENT_COLORS) as (keyof typeof ACCENT_COLORS)[]).map((c) => <button key={`r${c}`} type="button" aria-label={`右を${c}`} onClick={() => setDetail(i, { colorR: c })} className="h-3 w-3 border" style={{ background: ACCENT_COLORS[c], borderColor: details[i].colorR === c ? '#c8001a' : 'white', outline: details[i].colorR === c ? '1px solid #c8001a' : 'none' }} />)}</div>
                   <p className="text-[10px] text-stone-600">飾り：{details[i].accent}</p>
                 </div>
-                <div className="flex items-end gap-2"><div className="flex-1"><Contours g={h} levels={headLevels} colorOf={() => '#1f1f1f'} label={`${FIGURE_NAMES[i]} · ${[...HAIR_STYLES, ...BOB_VARIANTS].find((x) => x.id === styles[i])?.name ?? ''}${isBob(styles[i]) && styles[i] !== 'bob' ? '（ボブ）' : ''}${accents[i] ? ` · ${ACCENT_SLOTS[accents[i]! - 1].name}` : ''}`} nx={HX} ny={HY} /></div><Thumb sil={sils[i]} nx={HX} ny={HY} left={ACCENT_COLORS[details[i].colorL]} right={ACCENT_COLORS[details[i].colorR]} /></div>
+                <div className="flex items-end gap-2"><div className="flex-1"><Contours g={h} levels={headLevels} colorOf={() => '#1f1f1f'} label={`${FIGURE_NAMES[i]} · ${[...HAIR_STYLES, ...BOB_VARIANTS].find((x) => x.id === styles[i])?.name ?? ''}${isBob(styles[i]) && styles[i] !== 'bob' ? '（ボブ）' : ''}${accents[i] ? ` · ${ACCENT_SLOTS[accents[i]! - 1].name}` : ''}`} nx={HX} ny={HY} /></div>{(DICE_FIGURES as readonly number[]).includes(i) ? <DiceColourRewind figure={i} name={FIGURE_NAMES[i]} sil={sils[i]} nx={HX} ny={HY} /> : <Thumb sil={sils[i]} nx={HX} ny={HY} left={ACCENT_COLORS[details[i].colorL]} right={ACCENT_COLORS[details[i].colorR]} />}</div>
               </div>
             ))}
           </div>
