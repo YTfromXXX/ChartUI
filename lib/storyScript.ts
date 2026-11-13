@@ -2,13 +2,16 @@
 // has its own answer. Some beats are quizzes that teach one true thing (correct answers build a combo).
 // After each answer, BA-xxxx and PE-xxxx react in a stream-style chat (the presentation for gamers).
 // Batch 1: the Garage Island prologue (P1–P8, not counted in the 200) and year 1 (beats 1–14).
+// Batch 2: year 2 (beats 15–30), with the Alan Sillitoe game (a muted-TV dubbing scene with a text box).
 // Rules: no real person speaks or appears; nothing here has a price; Stoic never smokes.
 
 export type ChatLine = { who: string; text: string };
 export type Choice = { label: string; reply: string[]; correct?: boolean; chat?: ChatLine[] };
+/** The Alan Sillitoe game: a muted TV mouths words; the player types their own line to fit the mouth. */
+export type Dub = { tv: string; beats: number; hint: string; after: string };
 export type Beat = {
-  id: string; part: 'prologue' | 'y1'; no: number | null; place: string; speaker: string;
-  text: string[]; q: string; choices: Choice[]; code?: string[]; fact?: string;
+  id: string; part: 'prologue' | 'y1' | 'y2'; no: number | null; place: string; speaker: string;
+  text: string[]; q: string; choices: Choice[]; code?: string[]; fact?: string; dub?: Dub;
 };
 
 const BA = 'BA-80BF'; const BA2 = 'BA-52FF'; const PE = 'PE-05F0'; const PE2 = 'PE-4970';
@@ -194,6 +197,139 @@ export const SCRIPT: Beat[] = [
     choices: [
       { label: '一通目の指紋を写した紙', reply: ['四文字の、短い指紋。8 と B、0 と D。似た字に気をつけて。', '二年目のミニゲーム「指紋の書き写し」へ。'], chat: [{ who: BA, text: '次ミニゲームだ' }, { who: PE, text: 'がんばれ！' }] },
       { label: '新しいペン', reply: ['よく書けるペンは、書き写しの味方。', '二年目のミニゲーム「指紋の書き写し」へ。'], chat: [{ who: BA2, text: 'ペン大事' }] },
+    ] },
+  // ---------- year 2: the second letter (beats 15–30) ----------
+  { id: 'Y2-01', part: 'y2', no: 15, place: '本土の港・春', speaker: 'アリミノガール（語り）',
+    text: ['二年目の春。島から、二通目の手紙が届くはずの季節だった。', 'でも、手紙は島から来るだけじゃない。本土からも、島へ書く。'],
+    q: '二年目の書の章は？',
+    fact: 'ビットコインのホワイトペーパー 2 章「取引」は、コインを「デジタル署名の連なり」として定義している。',
+    choices: [
+      { label: '取引', correct: true, reply: ['正解。第二章「取引」。コインは、署名が次の署名へ渡っていく連なりだと書いてある。'], chat: [{ who: BA, text: '署名のリレー' }, { who: PE, text: 'せいかい！' }] },
+      { label: 'ネットワーク', correct: false, reply: ['ネットワークは第五章。瓶が本土に届き始める年。'], chat: [{ who: BA2, text: 'まだ3年早い' }] },
+      { label: 'プライバシー', correct: false, reply: ['プライバシーは第十章。ずっと先。'], chat: [{ who: PE2, text: 'とおい' }] },
+      { label: 'はじめに', correct: false, reply: ['それは去年。二年目は第二章「取引」。'], chat: [{ who: BA, text: '去年な' }] },
+    ] },
+  { id: 'Y2-02', part: 'y2', no: 16, place: '港', speaker: 'アリミノボーイ',
+    text: ['「二通目には、一通目の指紋を書き写すんだ。そうすると、二通目は一通目を指さすことになる」'],
+    q: '指紋を書き写すと、何がうれしい？',
+    choices: [
+      { label: '手紙の順番を、後から入れ替えられなくなる', correct: true, reply: ['「そう。一通目を書き換えたら指紋が変わって、二通目の写しと合わなくなる」'], chat: [{ who: BA, text: 'それな' }, { who: PE, text: 'いれかえ できない' }] },
+      { label: '手紙が早く届く', correct: false, reply: ['「早くはならないよ。潮は潮のまま」'], chat: [{ who: BA2, text: '速さは変わらんｗ' }] },
+      { label: '差出人が分かる', correct: false, reply: ['「差出人は分からない。分かるのは、どの手紙のあとに書かれたか、だけ」'], chat: [{ who: PE2, text: 'だれかは わからない' }] },
+      { label: '紙が節約できる', correct: false, reply: ['「むしろ四文字ぶん、紙が減る」'], chat: [{ who: BA, text: '逆に使ってる' }] },
+    ] },
+  { id: 'Y2-03', part: 'y2', no: 17, place: '港の倉庫', speaker: 'アリミノボーイ',
+    text: ['「一通目の、たった一文字を変えてみるね」', '紙の上で、指紋が計算し直された。'],
+    q: '指紋は、どれくらい変わった？',
+    fact: 'ハッシュ（指紋）は、元の文が一文字変わるだけで、ほぼ全部の文字が変わる（雪崩効果）。',
+    choices: [
+      { label: 'ほぼ全部の文字が変わった', correct: true, reply: ['「ね。一文字でも、まるで別の指紋になる。だからごまかせない」'], chat: [{ who: BA, text: '雪崩効果' }, { who: PE, text: 'ぜんぶ かわった' }] },
+      { label: '一文字だけ変わった', correct: false, reply: ['「それだと、似た指紋を作ってごまかせちゃう。実際は、ほぼ全部が変わる」'], chat: [{ who: BA2, text: 'そんな甘くない' }] },
+    ] },
+  { id: 'Y2-04', part: 'y2', no: 18, place: '港の露店', speaker: 'アリミノガール',
+    text: ['わたしの露店には、オレンジの小瓶が並んでいる。自分で作ったヘアスタイリング剤。'],
+    q: 'オレンジの瓶の力は？',
+    choices: [
+      { label: 'まとめる力', correct: true, reply: ['そう。二つの輪も、巻きも、形のまま残せる。アリミノボーイのシアンは固める力。二つで一組。'], chat: [{ who: PE, text: 'おれんじ かう' }] },
+      { label: '色を変える力', correct: false, reply: ['色は変えない。まとめる力。色の決まりは、もう決まってるから。'], chat: [{ who: BA, text: '色の規則守ってる' }] },
+    ] },
+  { id: 'Y2-05', part: 'y2', no: 19, place: '島（語り）', speaker: 'アリミノガール（語り）',
+    text: ['島では、Luna が三つになった。浜で貝を数えるのが好きだった。'],
+    q: 'Luna は、貝をどう数える？',
+    choices: [
+      { label: '一つずつ、声に出して', reply: ['いち、に、さん。島の誰かに似て、数えるのが好きな子だった。'], chat: [{ who: BA2, text: '数える家系' }] },
+      { label: '並べて、形で覚える', reply: ['貝を六角に並べて、形で数を覚えた。のちに彼女が指紋の鎖を「形」で見分けるようになる、その最初だった。'], chat: [{ who: PE2, text: 'ろっかく！' }, { who: BA, text: '伏線' }] },
+      { label: '数えずに、海に返す', reply: ['数えずに、一つずつ海に返した。ネフェリムは、それを長いあいだ見ていた。'], chat: [{ who: PE, text: 'かえした' }] },
+      { label: 'お父さんに数えてもらう', reply: ['ネフェリムは数えるふりをして、物語を一つ話した。Luna は途中で眠った。'], chat: [{ who: BA, text: '寝落ち' }] },
+    ] },
+  { id: 'Y2-06', part: 'y2', no: 20, place: '港の空', speaker: 'アリミノガール（語り）',
+    text: ['空の高いところを、リトルの aviator が回っていった。去年と同じ輪で。'],
+    q: '一周の長さは、去年と比べて？',
+    choices: [
+      { label: 'まったく同じ', correct: true, reply: ['まったく同じだった。誰も止め方を知らない決まりで、回っている。'], chat: [{ who: BA, text: '旋回の決まり' }] },
+      { label: '少し長い', correct: false, reply: ['同じだった。アリミノボーイが砂時計で測って、首を振った。'], chat: [{ who: PE, text: 'すなどけい' }] },
+    ] },
+  { id: 'Y2-07', part: 'y2', no: 21, place: 'ストイックの部屋', speaker: 'アリミノガール（語り）',
+    text: ['ストイックの部屋には、古いテレビがある。いつも音を消して、つけっぱなしだ。'],
+    q: 'どうして音を消しているんだと思う？',
+    choices: [
+      { label: 'うるさいから', reply: ['「うるさいからではない」と、ストイックは言った。「音があると、自分の言葉が入る場所がない」'], chat: [{ who: BA2, text: '意味深' }] },
+      { label: '眠れないから', reply: ['眠れない夜が多いのは本当だった。でも音を消すのは、それよりずっと前から、子どものころからの癖だった。'], chat: [{ who: PE2, text: 'こどものころ から' }] },
+      { label: '誰かの声を聞きたくないから', reply: ['ストイックは少し黙った。「聞きたくない声もある。だが、それだけではない」'], chat: [{ who: BA, text: '核心近い' }] },
+      { label: '分からない', reply: ['分からないまま、次の夜、その理由を見ることになる。'], chat: [{ who: PE, text: 'つぎ みる' }] },
+    ] },
+  { id: 'Y2-08', part: 'y2', no: 22, place: 'ストイックの部屋・夜', speaker: 'ストイック',
+    text: ['「アラン・シリトー・ゲームと、私は呼んでいる」', '「子どものころからの遊びだ。音を消したテレビの口の動きに合わせて、自分の台詞をつぶやく。やってみたまえ」'],
+    dub: { tv: '音のないテレビ：知らない誰かが、何かを熱心に話している', beats: 8, hint: '口の動きは 8 拍。ぴったり合わなくていい。', after: 'ストイックは小さく笑った。「悪くない。口の形は同じでも、入る言葉は人の数だけある」' },
+    q: 'ストイックが、この遊びをやめない理由は？',
+    fact: '名前は、作家アラン・シリトーの短編で、少年がテレビの音を消して口の動きを眺める場面にちなむ（ストイックがそう呼んでいるだけ）。',
+    choices: [
+      { label: '他人の言葉を、自分の言葉に置き換えられるから', reply: ['「そうだ。音を消せば、誰の口からでも、私の詩が出てくる」'], chat: [{ who: BA, text: '詩人の名残' }, { who: PE, text: 'くちぱく' }] },
+      { label: '中身がなくても、動きだけで分かることがあるから', reply: ['ストイックは、はじめて驚いた顔をした。「……君は、いい読者になる」', 'この答えは、何年もあとに意味を持つことになる。'], chat: [{ who: BA2, text: 'これ伏線だろ' }, { who: PE2, text: 'ふくせん！' }] },
+    ] },
+  { id: 'Y2-09', part: 'y2', no: 23, place: '港', speaker: 'アリミノボーイ',
+    text: ['「父さんのテレビの遊び、ぼくもやったことある。でも、すぐ笑っちゃうんだ」'],
+    q: 'アリミノボーイの台詞は、どんなだった？',
+    choices: [
+      { label: '「ぼくのワックス、最高です」', reply: ['「真面目な顔のおじさんの口に合わせたら、父さんまで笑った」'], chat: [{ who: BA, text: '宣伝ｗ' }] },
+      { label: '「今日の潮は、満ち潮です」', reply: ['「天気予報の人の口に、ぴったりだった」'], chat: [{ who: PE, text: 'ぴったり' }] },
+      { label: '「指紋を、書き写しなさい」', reply: ['「先生みたいな口の人に合わせたら、父さんは笑わなかった。ちょっと遠い目をしてた」'], chat: [{ who: BA2, text: 'なんで遠い目' }] },
+      { label: '何も言わなかった', reply: ['「口だけ動かして、ぼくも何も言わなかった。父さんは、それがいちばん難しいって言った」'], chat: [{ who: PE2, text: 'むごん' }] },
+    ] },
+  { id: 'Y2-10', part: 'y2', no: 24, place: '浜', speaker: 'アリミノガール（語り）',
+    text: ['浜で、PE-05F0 たちが、流れ着いた瓶のまわりで踊っていた。'],
+    q: '瓶の中身は？',
+    choices: [
+      { label: '空っぽ', reply: ['空っぽだった。PE たちは、それでも楽しそうに踊り続けた。'], chat: [{ who: PE, text: 'からでも おどる' }] },
+      { label: '砂だけ', reply: ['砂だけ。でも、瓶の底に、小さく四文字の記号が刻んであった。'], chat: [{ who: BA, text: '指紋！？' }] },
+    ] },
+  { id: 'Y2-11', part: 'y2', no: 25, place: '港の倉庫', speaker: 'アリミノボーイ',
+    text: ['「指紋は、何文字にしようか」'],
+    q: 'この物語の指紋は、何文字？',
+    choices: [
+      { label: '4 文字（16 進）', correct: true, reply: ['「4 文字。本物の世界ではもっとずっと長いけど、手で書き写すには、これくらいがいい」'], chat: [{ who: BA, text: '本物は64文字' }, { who: PE, text: 'よんもじ' }] },
+      { label: '1 文字', correct: false, reply: ['「1 文字だと、すぐ同じ指紋が出ちゃう。4 文字にしよう」'], chat: [{ who: BA2, text: '衝突する' }] },
+      { label: '100 文字', correct: false, reply: ['「100 文字は、書き写すあいだに日が暮れる」'], chat: [{ who: PE2, text: 'ひが くれる' }] },
+      { label: '指紋はいらない', correct: false, reply: ['「指紋がないと、手紙の順番が守れないよ」'], chat: [{ who: BA, text: 'いるいる' }] },
+    ] },
+  { id: 'Y2-12', part: 'y2', no: 26, place: '港の倉庫', speaker: 'アリミノボーイ',
+    text: ['「いちばん間違えやすいのは、似た字なんだ」'],
+    q: 'いちばん見間違えやすい組は？',
+    choices: [
+      { label: '8 と B', correct: true, reply: ['「8 と B。上の丸が閉じているかどうかを見るといい」'], chat: [{ who: BA, text: 'あるある' }] },
+      { label: '1 と A', correct: false, reply: ['「1 と A は、さすがに間違えない。8 と B、0 と D のほうが危ない」'], chat: [{ who: PE, text: 'まちがえない' }] },
+      { label: '0 と D', correct: true, reply: ['「0 と D もそう。D の左は、まっすぐ」'], chat: [{ who: BA2, text: 'Dの左' }] },
+      { label: 'F と 3', correct: false, reply: ['「F と 3 は形が違うよ。E と F なら、ちょっと危ない」'], chat: [{ who: PE2, text: 'EとF' }] },
+    ] },
+  { id: 'Y2-13', part: 'y2', no: 27, place: 'ストイックの部屋', speaker: 'ストイック',
+    text: ['「書き写しは、詩の朗読に似ている。一字でも違えば、別の詩だ」'],
+    q: 'ストイックに、何を聞く？',
+    choices: [
+      { label: '「先生も、書き写したことがある？」', reply: ['「若いころ、自分のコードを帳面に書き写した。一字だけ、間違えたまま」', '彼は、それ以上は話さなかった。'], chat: [{ who: BA, text: 'その一字が穴？' }] },
+      { label: '「テレビの遊び、また見せて」', reply: ['「今夜は、やめておこう」。テレビは音のないまま、誰かの口だけが動いていた。'], chat: [{ who: PE, text: 'こんやは なし' }] },
+    ] },
+  { id: 'Y2-14', part: 'y2', no: 28, place: '島（語り）', speaker: 'アリミノガール（語り）',
+    text: ['島では、ネフェリムが二通目を書いていた。一通目の指紋を、慎重に書き写して。'],
+    q: 'ネフェリムは、書き写したあと何をした？',
+    choices: [
+      { label: 'もう一度、一文字ずつ確かめた', reply: ['一文字ずつ、指でなぞって確かめた。島には、間違いを直してくれる人がいないから。'], chat: [{ who: BA2, text: '慎重' }] },
+      { label: 'Luna に読み上げてもらった', reply: ['三つの Luna は、四文字を歌うように読んだ。合っていた。'], chat: [{ who: PE2, text: 'うたう ルナ' }] },
+      { label: 'すぐに瓶に入れた', reply: ['すぐ瓶に入れた。……と思ったら、もう一度取り出して確かめた。'], chat: [{ who: BA, text: '結局確かめるｗ' }] },
+      { label: '指紋の横に、小さな花を描いた', reply: ['指紋の横に、六枚の花びらを描いた。指紋は変わらない。花は、手紙の中身ではないから。'], chat: [{ who: PE, text: 'はな かわいい' }] },
+    ] },
+  { id: 'Y2-15', part: 'y2', no: 29, place: '港・夏の終わり', speaker: 'アリミノガール（語り）',
+    text: ['夏の終わり。アリミノボーイは、桟橋で指紋の書き写しを始めた。揺れる板の上で、一文字ずつ。'],
+    q: '揺れる桟橋で、どう書く？',
+    choices: [
+      { label: '紙は揺れても、手は止めずに', reply: ['紙が揺れても、選ぶ指は止めなかった。（ミニゲームでも、選ぶボタンは揺れない）'], chat: [{ who: BA, text: 'ボタンは揺れない仕様' }] },
+      { label: '揺れが止まるのを待つ', reply: ['揺れは止まらなかった。海の上では、待つより、慣れるほうが早い。'], chat: [{ who: PE, text: 'なれる' }] },
+    ] },
+  { id: 'Y2-16', part: 'y2', no: 30, place: '港・二年目の終わり', speaker: 'アリミノガール（語り）',
+    text: ['二年目が終わる。書き写した指紋が、どれだけ正確だったかは、ずっとあとの空の上で分かる。'],
+    q: '準備はいい？',
+    choices: [
+      { label: '指紋の書き写しへ', reply: ['ミニゲーム「指紋の書き写し」へ。書き写せた文字の数が、最後の面の高度計の正直さになる。'], chat: [{ who: BA, text: 'がんばれ' }, { who: PE, text: 'はちと びー！' }, { who: BA2, text: 'ゆっくりでいい' }] },
+      { label: 'もう少し、ストイックのテレビを見ていく', reply: ['音のないテレビの中で、誰かの口が動いている。あなたなら、何と言わせる？', 'それから、ミニゲーム「指紋の書き写し」へ。'], chat: [{ who: PE2, text: 'くちぱく したい' }] },
     ] },
 ];
 
