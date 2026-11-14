@@ -46,6 +46,10 @@ export default function TextBox() {
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   });
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  useEffect(() => { // symbols handed over from another page (e.g. the arcana parameters): ?A=…&B=…
+    const q = new URLSearchParams(window.location.search); const A = q.get('A'); const B = q.get('B');
+    if (A || B) setLeft((l) => ({ A: A ?? l.A, B: B ?? l.B }));
+  }, []);
 
   const hit = tones.map((g) => taps.some((x) => x >= g.start - TOL && x <= g.end + TOL));
   const stray = taps.filter((x) => !tones.some((g) => x >= g.start - TOL && x <= g.end + TOL)).length;
