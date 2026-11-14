@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { LAYERS, contrailLikely, deg, initialFlight, step, type Controls, type Flight } from '@/lib/flightModel';
+import { LAYERS, RWY, contrailLikely, deg, initialFlight, layerAt, papi, step, type Controls, type Flight } from '@/lib/flightModel';
 
 // The cockpit window. Units are metres; the camera stays at the origin and the world is drawn relative to
 // the aircraft, so far things stay steady. What you see:
@@ -59,6 +59,20 @@ export default function SkyFlight({ controls, onTelemetry, onDrop, reduced }: { 
     const gt = new THREE.CanvasTexture(gc); gt.wrapS = gt.wrapT = THREE.RepeatWrapping; gt.repeat.set(400, 400); gt.colorSpace = THREE.SRGBColorSpace;
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(400000, 400000), new THREE.MeshBasicMaterial({ map: gt })); ground.rotation.x = -Math.PI / 2; scene.add(ground);
     scene.fog = new THREE.Fog('#d4e8f5', 20000, 160000);
+    // the runway (36): asphalt, threshold "piano keys", the number, aiming-point bars, touchdown-zone bars, centre-line dashes
+    const rc = document.createElement('canvas'); rc.width = 128; rc.height = 2048; const rg = rc.getContext('2d')!; const my = (m: number) => 2048 - (m / RWY.length) * 2048; const mx = (m: number) => (m / RWY.width) * 128;
+    rg.fillStyle = '#3b3d40'; rg.fillRect(0, 0, 128, 2048); rg.fillStyle = '#f4f4f0';
+    for (let k = 0; k < 8; k += 1) { rg.fillRect(mx(3 + k * 5.2), my(36), mx(3), my(6) - my(36)); } // piano keys (6–36 m)
+    rg.font = 'bold 26px sans-serif'; rg.textAlign = 'center'; rg.save(); rg.translate(64, my(60)); rg.fillText('36', 0, 0); rg.restore();
+    for (const z of [150, 450, 600, 750]) { rg.fillRect(mx(6), my(z + 22), mx(4), my(z) - my(z + 22)); rg.fillRect(mx(35), my(z + 22), mx(4), my(z) - my(z + 22)); } // touchdown zone
+    rg.fillRect(mx(5), my(345), mx(9), my(300) - my(345)); rg.fillRect(mx(31), my(345), mx(9), my(300) - my(345)); // aiming point (300 m)
+    for (let z = 120; z < RWY.length - 60; z += 60) rg.fillRect(63, my(z + 30), 2, my(z) - my(z + 30)); // centre line
+    rg.fillRect(0, 0, 3, 2048); rg.fillRect(125, 0, 3, 2048); // edges
+    const rt = new THREE.CanvasTexture(rc); rt.colorSpace = THREE.SRGBColorSpace; rt.anisotropy = 8;
+    const runway = new THREE.Mesh(new THREE.PlaneGeometry(RWY.width, RWY.length), new THREE.MeshBasicMaterial({ map: rt })); runway.rotation.x = -Math.PI / 2; scene.add(runway);
+    // PAPI: four lights left of the aim point (nearest the runway first)
+    const papiGeo = new THREE.BufferGeometry(); papiGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3)); papiGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(12), 3));
+    const papiPts = new THREE.Points(papiGeo, new THREE.PointsMaterial({ size: 7, sizeAttenuation: false, vertexColors: true, fog: false })); scene.add(papiPts);
 
     // clouds: soft puffs on a 60 km tile that wraps around the aircraft
     const puff = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d')!; const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, '#ffffffee'); gr.addColorStop(0.5, '#ffffff88'); gr.addColorStop(1, '#ffffff00'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); return t; })();
@@ -133,10 +147,16 @@ export default function SkyFlight({ controls, onTelemetry, onDrop, reduced }: { 
     const zenLow = new THREE.Color('#4f8fd6'); const zenHigh = new THREE.Color('#1d4f9c');
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000); last = now; const sp = reduced ? 0.5 : 1; t += dt * sp;
+      if (controls.current.reset) { f = controls.current.reset; controls.current.reset = undefined; }
       f = step(f, controls.current, dt);
       camera.rotation.set(f.pitch, -f.heading, -f.roll); camera.updateMatrixWorld();
       (sky.material as THREE.ShaderMaterial).uniforms.zen.value.copy(zenLow).lerp(zenHigh, Math.min(1, f.alt / 12000));
-      ground.position.y = -f.alt; gt.offset.set((f.x / 1000) % 1, (-f.z / 1000) % 1);
+      const eye = 4; ground.position.y = -f.alt - eye - 0.2;
+      runway.position.set(-f.x, -f.alt - eye, -RWY.length / 2 - f.z);
+      { const pp = papi(f); const pa = papiGeo.attributes.position.array as Float32Array; const pc = papiGeo.attributes.color.array as Float32Array;
+        for (let i = 0; i < 4; i += 1) { pa[i * 3] = -RWY.width / 2 - 15 - i * 9 - f.x; pa[i * 3 + 1] = -f.alt - eye + 1; pa[i * 3 + 2] = RWY.aimZ - f.z; const white = pp ? i >= 4 - pp.white : false; pc[i * 3] = 1; pc[i * 3 + 1] = white ? 1 : 0.15; pc[i * 3 + 2] = white ? 1 : 0.1; }
+        papiGeo.attributes.position.needsUpdate = true; papiGeo.attributes.color.needsUpdate = true; }
+      icePts.visible = f.alt > 6000 || !!layerAt(f.alt); gt.offset.set((f.x / 1000) % 1, (-f.z / 1000) % 1);
       for (const s of cloudSets) { const a = s.geo.attributes.position.array as Float32Array; for (let k = 0; k < s.n; k += 1) { a[k * 3] = wrap(s.base[k * 3], f.x); a[k * 3 + 1] = s.base[k * 3 + 1] - f.alt; a[k * 3 + 2] = wrap(s.base[k * 3 + 2], f.z); } s.geo.attributes.position.needsUpdate = true; }
       for (const o of others) {
         o.x += Math.sin(o.hd) * 230 * dt; o.z -= Math.cos(o.hd) * 230 * dt;

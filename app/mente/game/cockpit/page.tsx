@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import FibWheel from '@/components/flight/FibWheel';
 import type { DropKind } from '@/components/flight/SkyFlight';
 import { PARTS } from '@/lib/cockpitParts';
-import { autopilot, contrailLikely, deg, initialFlight, isaTemp, layerAt, turnRate, type Controls, type Flight } from '@/lib/flightModel';
+import { RWY, VR, approachStart, autopilot, contrailLikely, deg, initialFlight, isaTemp, layerAt, papi, stallSpeed, takeoffStart, turnRate, type Controls, type Flight } from '@/lib/flightModel';
 import { COLOUR_DICE, contrastHex } from '@/lib/faceContour';
 import { PALETTES } from '@/lib/skyPalettes';
 
@@ -73,14 +73,33 @@ export default function Cockpit() {
   const onDrop = useCallback((k: DropKind) => { setLast(k); if (k === 'perfect') setChecks((c) => c + 1); }, []);
   const onWheel = useCallback((r: number, p: number) => { if (Math.abs(r) > 0.05 || Math.abs(p) > 0.05) setAp(false); controls.current.rollCmd = r; controls.current.pitchCmd = p; }, []); // a hand on the wheel disconnects the autopilot
   const setT = (v: number) => { const x = Math.max(0, Math.min(1, v)); controls.current.thrust = x; setThrust(x); };
+  const [gear, setGear] = useState(true); const [flaps, setFlaps] = useState(0); const [brake, setBrake] = useState(false);
+  const [scenario, setScenario] = useState<'cruise' | 'takeoff' | 'approach'>('cruise');
+  const [trim, setTrimS] = useState(0); const setTrim = (v: number) => { const x = Math.max(-6, Math.min(6, Math.round(v * 2) / 2)); controls.current.trim = x; setTrimS(x); };
+  const setG = (v: boolean) => { controls.current.gear = v; setGear(v); };
+  const setF = (v: number) => { controls.current.flaps = v; setFlaps(v); };
+  const setB = (v: boolean) => { controls.current.brake = v; setBrake(v); };
+  const begin = (k: 'cruise' | 'takeoff' | 'approach') => {
+    const f = k === 'takeoff' ? takeoffStart() : k === 'approach' ? approachStart() : { ...initialFlight(), gear: false, flaps: 0 };
+    setAp(false); setScenario(k); controls.current.reset = f; controls.current.pitchCmd = 0; controls.current.rollCmd = 0; setT(f.thrust); setG(f.gear ?? false); setF(f.flaps ?? 0); setB(false); setTrim(k === 'approach' ? -3 : 0);
+  };
+  useEffect(() => { if (tel.onGround && ap) setAp(false); }, [tel.onGround, ap]);
   useEffect(() => {
     if (!inside) return undefined;
     const held = new Set<string>();
     const apply = () => { controls.current.rollCmd = (held.has('ArrowRight') ? 1 : 0) - (held.has('ArrowLeft') ? 1 : 0); controls.current.pitchCmd = (held.has('ArrowDown') ? 1 : 0) - (held.has('ArrowUp') ? 1 : 0); };
-    const kd = (e: KeyboardEvent) => { if (e.key.startsWith('Arrow')) { e.preventDefault(); held.add(e.key); setAp(false); apply(); } if (e.key === 'w') setT(controls.current.thrust + 0.05); if (e.key === 's') setT(controls.current.thrust - 0.05); };
-    const ku = (e: KeyboardEvent) => { if (held.delete(e.key)) apply(); };
+    const kd = (e: KeyboardEvent) => {
+      const tg = e.target as HTMLInputElement; if (tg.tagName === 'TEXTAREA' || (tg.tagName === 'INPUT' && tg.type !== 'range')) return; // a focused slider still lets the keys fly
+      if (e.key.startsWith('Arrow')) { e.preventDefault(); held.add(e.key); setAp(false); apply(); }
+      if (e.key === 'w') setT(controls.current.thrust + 0.05); if (e.key === 's') setT(controls.current.thrust - 0.05);
+      if (e.key === 'g') setG(!(controls.current.gear ?? true)); if (e.key === 'f') setF(((controls.current.flaps ?? 0) + 0.5) % 1.5);
+      if (e.key === 'b') setB(true); if (e.key === 't') setTrim((controls.current.trim ?? 0) + 0.5); if (e.key === 'y') setTrim((controls.current.trim ?? 0) - 0.5); if (e.key === 'r') begin(scenarioRef.current);
+    };
+    const ku = (e: KeyboardEvent) => { if (held.delete(e.key)) apply(); if (e.key === 'b') setB(false); };
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); };
   }, [inside]);
+  const scenarioRef = useRef(scenario); scenarioRef.current = scenario;
+  const pp = papi(tel); const toRwy = tel.z - RWY.aimZ;
   const temp = isaTemp(tel.alt); const mach = tel.speed / (20.05 * Math.sqrt(temp + 273.15)); const layer = layerAt(tel.alt);
   const PARAMS: [string, string, string][] = [
     ['ピッチ', `${fmt(deg(tel.pitch), 1)}°`, '機首の上げ下げ'], ['ロール', `${fmt(deg(tel.roll), 1)}°`, `旋回 ${fmt(deg(turnRate(tel.roll, tel.speed)), 1)}°/秒`],
@@ -141,6 +160,16 @@ export default function Cockpit() {
             <button type="button" data-testid="ap" onClick={() => setAp((x) => !x)} className="min-h-[32px] rounded-sm border-2 px-2 font-semibold" style={{ borderColor: ap ? '#7fd36b' : '#555', color: ap ? '#7fd36b' : '#ccc' }}>A/P {ap ? 'ON' : 'OFF'}</button>
             <span className="text-[#888]">操縦輪かキーを動かすと外れる</span>
           </div>
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-[10px] text-white" style={{ background: '#2a2c30' }} data-testid="field">
+            <span className="font-mono tracking-widest text-[#aaa]">場面</span>
+            {([['takeoff', '🛫 滑走路から離陸'], ['approach', '🛬 最終進入から着陸'], ['cruise', '☁️ 巡航']] as const).map(([k, l]) => <button key={k} type="button" data-testid={`scn-${k}`} onClick={() => begin(k)} className="min-h-[32px] rounded-sm border px-2" style={{ borderColor: scenario === k ? '#fff27a' : '#555' }}>{l}</button>)}
+            <span className="mx-1 h-5 w-px bg-[#555]" />
+            <button type="button" data-testid="gear" onClick={() => setG(!gear)} className="min-h-[32px] rounded-sm border px-2" style={{ borderColor: gear ? '#7fd36b' : '#555' }}>車輪 {gear ? <b className="text-[#7fd36b]">● ● ● DOWN</b> : 'UP'}（G）</button>
+            <button type="button" data-testid="flaps" onClick={() => setF((flaps + 0.5) % 1.5)} className="min-h-[32px] rounded-sm border border-[#555] px-2">フラップ {flaps === 0 ? '0' : flaps === 0.5 ? '½' : 'いっぱい'}（F）</button>
+            <button type="button" data-testid="brake" onPointerDown={() => setB(true)} onPointerUp={() => setB(false)} onPointerLeave={() => setB(false)} className="min-h-[32px] rounded-sm border px-2" style={{ borderColor: brake ? WARN : '#555' }}>ブレーキ（B 押している間）</button>
+            <span className="flex items-center gap-1 rounded-sm border border-[#555] px-1">トリム<button type="button" onClick={() => setTrim(trim - 0.5)} className="h-6 w-6 bg-[#3a3d42]" aria-label="機首を下げるトリム">▼</button><b className="w-10 text-center font-mono" data-testid="trim">{trim > 0 ? '+' : ''}{trim}°</b><button type="button" onClick={() => setTrim(trim + 0.5)} className="h-6 w-6 bg-[#3a3d42]" aria-label="機首を上げるトリム">▲</button>（T・Y）</span>
+            <span className="text-[#888]">R：この場面をやり直す</span>
+          </div>
           {/* main panel */}
           <div className="grid gap-3 p-3 md:grid-cols-[1fr_2fr_1fr]" style={{ background: PANEL }}>
             <SidePlate who="アリミノガール（仮）" cols={GIRL} side="L" />
@@ -159,6 +188,13 @@ export default function Cockpit() {
           </div>
           {/* bottom: reserved for flight parameters */}
           <div className="space-y-1 p-3" style={{ background: INK }} data-testid="flight-params">
+            {tel.event && <p className="rounded-sm border border-[#fff27a] px-2 py-1 text-[11px] text-[#fff27a]" data-testid="event">{tel.event}</p>}
+            <div className="flex flex-wrap items-center gap-3 text-[10px] text-white" data-testid="status">
+              <span>{tel.onGround ? '地上' : '空中'}</span>
+              <span>VR {VR} m/s・失速 {Math.round(stallSpeed(flaps))} m/s</span>
+              {pp && toRwy < 20000 && <span className="flex items-center gap-1" data-testid="papi">PAPI {[0, 1, 2, 3].map((i) => <span key={i} className="inline-block h-3 w-3 rounded-full" style={{ background: i >= 4 - pp.white ? '#ffffff' : '#ff2a2a' }} />)} {pp.white === 2 ? '坂の上（ちょうど）' : pp.white > 2 ? '高すぎる' : '低すぎる'}・{pp.ang.toFixed(1)}°</span>}
+              {toRwy > 0 && toRwy < 20000 && <span>目標点まで {(toRwy / 1000).toFixed(1)} km・中心線から {Math.abs(tel.x).toFixed(0)} m {tel.x > 0 ? '右' : tel.x < 0 ? '左' : ''}</span>}
+            </div>
             <p className="text-[11px] font-semibold text-white">操縦パラメーター（下部）</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">{PARAMS.map(([name, v, sub], k) => (
               <div key={name} className="min-h-[56px] rounded-sm border p-1.5 text-white" style={{ borderColor: k < 4 ? GIRL[0].hex : BOY[0].hex }} data-testid={`param-${k + 1}`}>
