@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
 import FamicomTitle from '@/components/cloud/FamicomTitle';
 import { PALETTES, contrast } from '@/lib/skyPalettes';
-import type { SceneOpts } from '@/components/cloud/SkewerScene';
+import type { DropResult, SceneOpts } from '@/components/cloud/SkewerScene';
 
 const SkewerScene = dynamic(() => import('@/components/cloud/SkewerScene'), { ssr: false });
 
@@ -18,6 +18,9 @@ export default function CloudBattery() {
   const [dolly, setDolly] = useState(0.3);
   const [auto, setAuto] = useState(true);
   const [reduced, setReduced] = useState(false);
+  const [tally, setTally] = useState({ perfect: 0, near: 0, miss: 0 });
+  const [last, setLast] = useState<DropResult | null>(null);
+  const onDrop = useCallback((r: DropResult) => { setLast(r); setTally((t) => ({ ...t, [r.kind]: t[r.kind] + 1 })); }, []);
   useEffect(() => { const m = window.matchMedia('(prefers-reduced-motion: reduce)'); setReduced(m.matches); if (m.matches) setAuto(false); }, []);
   const palette = PALETTES.find((p) => p.id === pal)!;
   const start = useCallback(() => setStarted(true), []);
@@ -48,7 +51,12 @@ export default function CloudBattery() {
       {!started ? <p className="text-sm">タイトルを押すか Enter で、串の場面が始まる。</p> : (
         <section className="space-y-2" data-testid="skewer">
           <p className="text-sm font-semibold">-[]-[]-　串の上で回る、ふたつのサイコロ</p>
-          <SkewerScene opts={{ palette, mode, p: pq[0], q: pq[1], dolly, auto, reduced }} />
+          <SkewerScene opts={{ palette, mode, p: pq[0], q: pq[1], dolly, auto, reduced, onDrop }} />
+          <div className="flex flex-wrap items-center gap-3 text-xs" data-testid="drop-tally">
+            <span>背景の{mode === 'bubble' ? '泡' : '飛沫'}をつまんで、サイコロの目（○）へ運ぶ。つまんでいるあいだ、背景が指についてくる。</span>
+            <span className="font-semibold">パーフェクト {tally.perfect}・おしい {tally.near}・はずれ {tally.miss}</span>
+            {last && <span data-testid="drop-last" className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border border-stone-500" style={{ background: last.color }} />{last.kind === 'perfect' ? `パーフェクト！ ${last.face} の目が染まった` : last.kind === 'near' ? `おしい（${last.face} の面、目のすぐ外）` : 'はずれ（目に届かなかった）'}</span>}
+          </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {(['bubble', 'splash'] as const).map((m) => <button key={m} type="button" data-testid={`mode-${m}`} onClick={() => setMode(m)} className="border px-2 py-0.5" style={{ borderColor: mode === m ? '#1f1f1f' : '#d6d3d1', background: 'white' }}>{m === 'bubble' ? '🫧 シャボン玉' : '💦 飛沫'}</button>)}
             <label>結び目 <select value={pq.join(',')} onChange={(e) => setPq(e.target.value.split(',').map(Number) as [number, number])} className="border border-stone-400 bg-white px-1">{[[2, 3], [3, 5], [2, 5], [3, 7], [5, 8]].map(([p, q]) => <option key={`${p},${q}`} value={`${p},${q}`}>({p}, {q})</option>)}</select></label>
