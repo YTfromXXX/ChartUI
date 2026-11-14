@@ -27,3 +27,8 @@ export function beatAt(n: number): { year: number; inYear: number } {
   let left = n; for (let y = 0; y < 12; y += 1) { if (left <= BEATS_PER_YEAR[y]) return { year: y + 1, inYear: left }; left -= BEATS_PER_YEAR[y]; }
   return { year: 12, inYear: BEATS_PER_YEAR[11] };
 }
+
+/** Sub-events: every one sits inside the 200 beats (so its ABCD choices are beats of the package). */
+export const SUB_EVENTS: { id: string; name: string; beats: [number, number]; year: number; route: string; assistant: string; endings: number }[] = [
+  { id: 'last-loop', name: '空の最後の輪（オートパイロットと離着陸）', beats: [184, 200], year: 12, route: '/mente/game/autopilot', assistant: 'ルーペ（仮）', endings: 6 },
+];

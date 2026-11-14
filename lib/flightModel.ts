@@ -45,3 +45,12 @@ export function step(f: Flight, c: Controls, dt: number): Flight {
 export const layerAt = (alt: number) => LAYERS.find((l) => alt >= l.base && alt <= l.top) ?? null;
 /** Micro- or meso-scale label for a distance in metres. */
 export const scaleOf = (m: number) => (m < 2000 ? 'ミクロ層' : m <= 2_000_000 ? 'メソ層' : '大規模');
+
+/** Autopilot (MCP): hold a target altitude, heading and speed with gentle proportional commands.
+ *  Real autopilots are far richer (LNAV/VNAV, approach modes); this is the idea only. */
+export type ApTarget = { alt: number; hdg: number; spd: number };
+export function autopilot(f: Flight, t: ApTarget): Controls {
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+  let err = rad(t.hdg) - f.heading; while (err > Math.PI) err -= Math.PI * 2; while (err < -Math.PI) err += Math.PI * 2;
+  return { pitchCmd: clamp((t.alt - f.alt) / 800 - f.vs / 25), rollCmd: clamp(err / rad(25)) * 0.72, thrust: Math.max(0, Math.min(1, 0.62 + (t.spd - f.speed) / 30)) };
+}

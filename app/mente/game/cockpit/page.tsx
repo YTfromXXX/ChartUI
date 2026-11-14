@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import FibWheel from '@/components/flight/FibWheel';
 import type { DropKind } from '@/components/flight/SkyFlight';
 import { PARTS } from '@/lib/cockpitParts';
-import { contrailLikely, deg, initialFlight, isaTemp, layerAt, turnRate, type Controls, type Flight } from '@/lib/flightModel';
+import { autopilot, contrailLikely, deg, initialFlight, isaTemp, layerAt, turnRate, type Controls, type Flight } from '@/lib/flightModel';
 import { COLOUR_DICE, contrastHex } from '@/lib/faceContour';
 import { PALETTES } from '@/lib/skyPalettes';
 
@@ -61,15 +61,23 @@ export default function Cockpit() {
   const [tel, setTel] = useState<Flight>(initialFlight);
   const [thrust, setThrust] = useState(0.62);
   const controls = useRef<Controls>({ pitchCmd: 0, rollCmd: 0, thrust: 0.62 });
+  const [ap, setAp] = useState(false);
+  const [mcp, setMcp] = useState({ alt: 10600, hdg: 90, spd: 235 });
+  const telRef = useRef<Flight>(initialFlight()); telRef.current = tel;
+  useEffect(() => { // the autopilot flies by setting the same controls a hand would
+    if (!ap) return undefined;
+    const t = window.setInterval(() => { const c = autopilot(telRef.current, mcp); controls.current.pitchCmd = c.pitchCmd; controls.current.rollCmd = c.rollCmd; controls.current.thrust = c.thrust; setThrust(c.thrust); }, 50);
+    return () => window.clearInterval(t);
+  }, [ap, mcp]);
   useEffect(() => { setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches); }, []);
   const onDrop = useCallback((k: DropKind) => { setLast(k); if (k === 'perfect') setChecks((c) => c + 1); }, []);
-  const onWheel = useCallback((r: number, p: number) => { controls.current.rollCmd = r; controls.current.pitchCmd = p; }, []);
+  const onWheel = useCallback((r: number, p: number) => { if (Math.abs(r) > 0.05 || Math.abs(p) > 0.05) setAp(false); controls.current.rollCmd = r; controls.current.pitchCmd = p; }, []); // a hand on the wheel disconnects the autopilot
   const setT = (v: number) => { const x = Math.max(0, Math.min(1, v)); controls.current.thrust = x; setThrust(x); };
   useEffect(() => {
     if (!inside) return undefined;
     const held = new Set<string>();
     const apply = () => { controls.current.rollCmd = (held.has('ArrowRight') ? 1 : 0) - (held.has('ArrowLeft') ? 1 : 0); controls.current.pitchCmd = (held.has('ArrowDown') ? 1 : 0) - (held.has('ArrowUp') ? 1 : 0); };
-    const kd = (e: KeyboardEvent) => { if (e.key.startsWith('Arrow')) { e.preventDefault(); held.add(e.key); apply(); } if (e.key === 'w') setT(controls.current.thrust + 0.05); if (e.key === 's') setT(controls.current.thrust - 0.05); };
+    const kd = (e: KeyboardEvent) => { if (e.key.startsWith('Arrow')) { e.preventDefault(); held.add(e.key); setAp(false); apply(); } if (e.key === 'w') setT(controls.current.thrust + 0.05); if (e.key === 's') setT(controls.current.thrust - 0.05); };
     const ku = (e: KeyboardEvent) => { if (held.delete(e.key)) apply(); };
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); };
   }, [inside]);
@@ -121,8 +129,18 @@ export default function Cockpit() {
                   <div className="flex gap-2"><button type="button" data-testid="luna-next" onClick={() => setLuna((k) => k + 1)} className="min-h-[32px] border border-white/50 px-2">{luna + 1 < LUNA.length ? 'つぎ' : '操縦を始める'}</button><button type="button" onClick={() => setLuna(LUNA.length)} className="text-white/60">とばす</button></div></div>
               </div>)}
           </div>
-          {/* glare shield */}
-          <div className="h-4" style={{ background: INK, boxShadow: '0 4px 0 #0005' }} />
+          {/* glare shield: the MCP (autopilot) */}
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-[10px] text-white" style={{ background: INK, boxShadow: '0 4px 0 #0005' }} data-testid="mcp">
+            <span className="font-mono tracking-widest text-[#aaa]">MCP</span>
+            {([['spd', '速さ m/s', 5], ['hdg', '方位 °', 10], ['alt', '高度 m', 300]] as const).map(([key, label, stepv]) => (
+              <span key={key} className="flex items-center gap-1 rounded-sm bg-[#2a2c30] px-1.5 py-1">{label}
+                <button type="button" onClick={() => setMcp((m) => ({ ...m, [key]: key === 'hdg' ? (m.hdg - stepv + 360) % 360 : m[key] - stepv }))} className="h-6 w-6 rounded-sm bg-[#3a3d42]" aria-label={`${label}を下げる`}>−</button>
+                <b className="w-12 text-center font-mono text-[#fff27a]" data-testid={`mcp-${key}`}>{mcp[key]}</b>
+                <button type="button" onClick={() => setMcp((m) => ({ ...m, [key]: key === 'hdg' ? (m.hdg + stepv) % 360 : m[key] + stepv }))} className="h-6 w-6 rounded-sm bg-[#3a3d42]" aria-label={`${label}を上げる`}>＋</button>
+              </span>))}
+            <button type="button" data-testid="ap" onClick={() => setAp((x) => !x)} className="min-h-[32px] rounded-sm border-2 px-2 font-semibold" style={{ borderColor: ap ? '#7fd36b' : '#555', color: ap ? '#7fd36b' : '#ccc' }}>A/P {ap ? 'ON' : 'OFF'}</button>
+            <span className="text-[#888]">操縦輪かキーを動かすと外れる</span>
+          </div>
           {/* main panel */}
           <div className="grid gap-3 p-3 md:grid-cols-[1fr_2fr_1fr]" style={{ background: PANEL }}>
             <SidePlate who="アリミノガール（仮）" cols={GIRL} side="L" />
