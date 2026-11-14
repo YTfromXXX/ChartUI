@@ -5,9 +5,10 @@
 // Facts about Satoshi Nakamoto are public record only (where and when he wrote); nothing is guessed about who he is.
 // トトシ中元 is fictional (a big dollar holder of this game). Nothing here teaches hiding messages or evading anyone.
 export const HOST = {
-  name: 'トンネル・ヨウスケ（仮）', role: 'クオンタムクイズの司会者',
+  name: 'トンネル・ヨウスケ（:ミュウ）', role: 'クオンタムクイズの司会者',
   profile: [
-    ['年齢', '測るまで二つ（本人いわく 29 か 92）'],
+    ['年齢', '測るまで二つ（29 種か 92 種）。年はとらず、季節ごとに同じ顔が交代する'],
+    ['ミュウ', 'μ（ミュー粒子）。物質を通り抜ける粒。博物館のエレクトロンボックスで、四つの時期を投影できる'],
     ['出身', '港町の、壁の向こうの町（トンネル効果で通ってきた、と言い張っている）'],
     ['眼鏡', 'レンズが二枚ずれて重なった「重ね合わせ眼鏡」'],
     ['口癖', '「答えは、測るまで二つ」「では——測定！」'],
