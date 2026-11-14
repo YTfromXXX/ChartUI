@@ -44,7 +44,7 @@ export default function MangaBanner({ s, onClose }: { s: BannerState; onClose?: 
         {/* panel 2: speed lines + burst */}
         <div className="relative grid place-items-center overflow-hidden bg-white" style={{ backgroundImage: 'repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 2deg, transparent 2deg 9deg)' }}>
           <div className="absolute inset-[18%] rounded-full bg-white blur-[2px]" />
-          <div className="relative grid h-14 w-14 place-items-center bg-[#c8001a] sm:h-16 sm:w-16 text-[11px] font-black text-white" style={{ clipPath: 'polygon(50% 0,61% 30%,95% 20%,70% 45%,100% 60%,66% 64%,75% 98%,50% 72%,25% 98%,34% 64%,0 60%,30% 45%,5% 20%,39% 30%)' }} data-testid="burst">{burst}</div>
+          <div className="relative grid h-14 w-14 place-items-center bg-[#c8001a] sm:h-16 sm:w-16 text-[9px] font-black sm:text-[11px] text-white" style={{ clipPath: 'polygon(50% 0,61% 30%,95% 20%,70% 45%,100% 60%,66% 64%,75% 98%,50% 72%,25% 98%,34% 64%,0 60%,30% 45%,5% 20%,39% 30%)' }} data-testid="burst">{burst}</div>
         </div>
         {/* panel 3: the prediction */}
         <div className="space-y-1 bg-[#eef6fb] p-1.5 text-[10px]" style={{ backgroundImage: 'radial-gradient(#2b3a6722 1.2px, transparent 1.6px)', backgroundSize: '7px 7px' }}>
