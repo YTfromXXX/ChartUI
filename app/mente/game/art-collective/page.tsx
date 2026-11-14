@@ -60,6 +60,14 @@ export default function ArtCollective() {
   return (
     <main className="mx-auto max-w-5xl space-y-4 bg-[#f6f3ee] p-4 text-[#1f1f1f]">
       <style>{'@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}@keyframes snipA{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(-12deg)}}@keyframes snipB{0%,100%{transform:rotate(2deg)}50%{transform:rotate(12deg)}}@keyframes glow{0%,100%{opacity:.45}50%{opacity:1}}@keyframes drift{from{transform:translateX(0)}to{transform:translateX(-14px)}}@keyframes needle{0%,100%{transform:rotate(-30deg)}50%{transform:rotate(25deg)}}@keyframes flow{from{stroke-dashoffset:0}to{stroke-dashoffset:-24}}@keyframes pass{from{transform:translateX(0)}to{transform:translateX(160px)}}'}</style>
+      <aside className="flex flex-wrap items-center gap-3 rounded-md border-2 border-[#1f1f1f] bg-white p-3 text-xs" data-testid="ibm-intro">
+        <span className="rounded-sm bg-[#1f1f1f] px-1.5 py-0.5 font-mono text-[10px] text-white">IBM 量子キャンペーン · 導入</span>
+        <span>2026-11-20（金）〜 12-17 の 28 日間。測る道具の展覧会から始めて、量子の実機で「測る」へ進む。</span>
+        <span className="text-stone-500">11-20 布 ／ 11-26 髪の割り当て ／ 12-03 クレーターの角度 ／ 12-10 髪をもう一度 ／ 12-17 まとめ</span>
+        <a href="/lab/spin" className="ml-auto rounded-sm border-2 border-[#1f1f1f] px-2 py-1 font-semibold" data-testid="to-campaign">キャンペーンへ進む →</a>
+        <a href="/mente/game/black-bloom" className="rounded-sm border border-stone-400 px-2 py-1">黒い背景の花 →</a>
+      </aside>
+
       <header className="space-y-2">
         <p className="text-xs tracking-[0.3em] text-stone-500">ART COLLECTIVE</p>
         <h1 className="text-3xl font-black tracking-tight"><span style={{ color: BOY }}>ARIMINOBOY</span><span className="text-stone-400">/</span><span style={{ color: GIRL }}>GIRL</span><span className="ml-2 align-middle text-xs font-normal text-stone-500">（仮）</span></h1>
