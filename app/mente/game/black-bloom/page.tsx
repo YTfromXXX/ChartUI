@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ACCENTS, blackout, checks } from '@/lib/blackout';
+import { ARIMINO_4, GOLDEN, MU, loadRules, saveRule } from '@/lib/colorRules';
 import { contrailLikely, isaTemp, turnRate } from '@/lib/flightModel';
 import { ELEMENTS } from '@/lib/shootingStar';
 import { contrast } from '@/lib/smokeCandle';
@@ -11,10 +12,11 @@ import { contrast } from '@/lib/smokeCandle';
 // Where the standard atmosphere is colder than −40 °C (above ~8.5 km), it leaves a contrail; each contrail
 // puff blooms into a flower after a moment. Petals follow Fibonacci numbers and sit on the golden angle.
 // The colour rule decides the petal colours, and every colour is checked against the black page (≥ 3 : 1).
-type RuleKey = 'arimino' | 'mu' | 'elements' | 'blackout';
+type RuleKey = 'arimino' | 'mu' | 'golden' | 'elements' | 'blackout';
 const RULES: Record<RuleKey, { name: string; colors: string[]; note: string }> = {
-  arimino: { name: 'アリミノの規則', colors: ['#f29b30', '#a9c62a', '#22b8c8', '#ece055'], note: '左に傾いて咲く花は機長席の色（オレンジ・黄緑）、右に傾くと副操縦士席の色（シアン・黄）。' },
-  mu: { name: 'ミュウの規則', colors: ['#22b8c8', '#f29b30'], note: '咲くまで白いつぼみ。咲いた瞬間に 29 種（水色）か 92 種（橙）に決まる。' },
+  arimino: { name: 'アリミノの規則（4 色）', colors: ARIMINO_4.map((c) => c.hex), note: '左に傾いて咲く花は機長席の色（オレンジ・黄緑）、右に傾くと副操縦士席の色（シアン・黄）。' },
+  mu: { name: 'ミュウの規則', colors: [MU.strain29.hex, MU.strain92.hex], note: '咲くまで白いつぼみ。咲いた瞬間に 29 種（水色）か 92 種（橙）に決まる。' },
+  golden: { name: '黄金のアイコンの規則', colors: GOLDEN.map((c) => c.hex), note: '花びらは四つの金（黄金・明るい金・古い金・金の光）。13 枚の花の中心には、小さな ✦（黄金のアイコンの欠片）が光る。' },
   elements: { name: '流れ星の元素の規則', colors: ELEMENTS.map((e) => e.color), note: '燃える元素の色（ナトリウム・マグネシウム・カルシウム・鉄・空気）。高く飛ぶほど、空気の赤が減る（ゲームの中の決まり）。' },
   blackout: { name: 'ブラックアウトの赤（量子のサイコロ）', colors: ACCENTS, note: '黒いページのために明るくした六つの赤。サイコロの目で一つが主役になる。' },
 };
@@ -30,6 +32,9 @@ export default function BlackBloom() {
   const [stat, setStat] = useState({ bank: 0, rate: 0, flowers: 0 });
   const live = useRef({ rule, alt, face }); live.current = { rule, alt, face };
   const roles = blackout(face);
+  const [saved, setSaved] = useState<Record<string, string[]>>({});
+  useEffect(() => { setSaved(loadRules()); }, []);
+  const save = () => { const cs = rule === 'blackout' ? [ACCENTS[face - 1]] : RULES[rule].colors; if (saveRule(RULES[rule].name, cs)) setSaved(loadRules()); };
   const colorChecks = useMemo(() => (rule === 'blackout' ? [ACCENTS[face - 1]] : RULES[rule].colors).map((c) => ({ c, v: contrast(c, roles.bg) })), [rule, face, roles.bg]);
   useEffect(() => {
     const cv = ref.current; if (!cv) return undefined; const g = cv.getContext('2d')!; const W = cv.width; const H = cv.height;
@@ -48,6 +53,7 @@ export default function BlackBloom() {
       const r = live.current.rule; const cs = RULES[r].colors;
       if (r === 'arimino') return bankSign < 0 ? cs[i % 2] : cs[2 + (i % 2)];
       if (r === 'mu') return cs[Math.random() < 0.5 ? 0 : 1];
+      if (r === 'golden') return cs[Math.floor(Math.random() * cs.length)];
       if (r === 'blackout') return Math.random() < 0.6 ? ACCENTS[live.current.face - 1] : '#f4f1ec';
       const airShare = Math.max(0, 1 - live.current.alt / 12); // less air glow higher up (a game rule)
       return Math.random() < airShare * 0.4 ? cs[4] : cs[Math.floor(Math.random() * 4)];
@@ -60,6 +66,7 @@ export default function BlackBloom() {
       g.save(); g.translate(f.x, f.y); g.rotate(f.spin); g.globalAlpha = fade;
       for (let k = 0; k < f.petals; k += 1) { g.save(); g.rotate(k * GOLD * (f.petals > 8 ? 1 : 0) + (k * Math.PI * 2) / f.petals * (f.petals > 8 ? 0 : 1)); g.fillStyle = col; g.beginPath(); g.ellipse(0, -f.size * grow * 0.55, f.size * grow * 0.22, f.size * grow * 0.5, 0, 0, Math.PI * 2); g.fill(); g.restore(); }
       g.fillStyle = '#0a0a0a'; g.beginPath(); g.arc(0, 0, f.size * grow * 0.16, 0, Math.PI * 2); g.fill(); g.fillStyle = col; g.beginPath(); g.arc(0, 0, f.size * grow * 0.09, 0, Math.PI * 2); g.fill();
+      if (live.current.rule === 'golden' && f.petals === 13 && grow > 0.9) { const r0 = f.size * 0.2; g.fillStyle = '#fff1b8'; g.beginPath(); for (let k = 0; k < 8; k += 1) { const a = (k * Math.PI) / 4; const rr = k % 2 ? r0 * 0.35 : r0; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill(); } // ✦ a golden-icon piece
       g.restore(); g.globalAlpha = 1;
     };
     const frame = (now: number) => {
@@ -100,6 +107,11 @@ export default function BlackBloom() {
         {rule === 'blackout' && <button type="button" data-testid="dice" onClick={() => setFace(1 + Math.floor(Math.random() * 6))} className="rounded-sm border px-2 py-1" style={{ borderColor: roles.accent, color: roles.accent, background: roles.panel }}>🎲 サイコロ（いま {face} の目）</button>}
       </div>
       <p className="text-xs" style={{ color: roles.sub }}>{RULES[rule].note}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="saved">
+        <button type="button" data-testid="save-rule" onClick={save} className="rounded-sm border px-2 py-1" style={{ borderColor: roles.accent, background: roles.panel }}>この色規則を保存</button>
+        {Object.entries(saved).map(([n, cs]) => <span key={n} className="flex items-center gap-1 rounded-sm border px-1.5 py-0.5" style={{ borderColor: roles.line }}>{n}{cs.map((c) => <span key={c} className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: c }} />)}</span>)}
+        <span style={{ color: roles.sub }}>アリミノの 4 色は、lib/colorRules.ts にも保存済み（どのページもここから読む）。</span>
+      </div>
       <section className="grid gap-2 sm:grid-cols-2" data-testid="checks">
         <div className="space-y-1 rounded-sm border p-2 text-xs" style={{ borderColor: roles.line, background: roles.panel }}>
           <p className="font-semibold">花びらの色と黒の背景のコントラスト（3：1 以上で合格）</p>
