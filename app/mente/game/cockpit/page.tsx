@@ -1,12 +1,23 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import FibWheel from '@/components/flight/FibWheel';
+import type { DropKind } from '@/components/flight/SkyFlight';
+import { PARTS } from '@/lib/cockpitParts';
+import { contrailLikely, deg, initialFlight, isaTemp, layerAt, turnRate, type Controls, type Flight } from '@/lib/flightModel';
 import { COLOUR_DICE, contrastHex } from '@/lib/faceContour';
 import { PALETTES } from '@/lib/skyPalettes';
-import type { DropResult } from '@/components/cloud/SkewerScene';
 
-const SkewerScene = dynamic(() => import('@/components/cloud/SkewerScene'), { ssr: false });
+const SkyFlight = dynamic(() => import('@/components/flight/SkyFlight'), { ssr: false });
+
+const LUNA = [
+  'ようこそ、操縦席へ。案内は Luna。いつもはフォンを操縦しているけれど、今日は右の席にいる。',
+  '窓の上の串が、水平線。左の操縦輪を左右に回すと傾いて、上下に引くと機首が動く。手を離すと、輪は中央へ戻る。',
+  '近くでキラキラしているのは氷の粒（ミクロ層、数メートル先）。遠くの白い線は、ほかの飛行機の飛行機雲（メソ層、数十キロ先）。氷の粒をつまんで、サイコロの目へ運んでみて。',
+  '下の八つの枠が、本物の計器と同じ数字。いまは高度およそ 10,600 m、巡航のところ。キーボードなら ← → で傾き、↓ で機首上げ（引く）・↑ で機首下げ（押す）、W・S で推力。',
+];
+const fmt = (n: number, d = 0) => n.toLocaleString('ja-JP', { maximumFractionDigits: d, minimumFractionDigits: d });
 
 const INK = '#1f1f1f'; const PANEL = '#26282b'; const WARN = '#c8001a';
 const GIRL = COLOUR_DICE[2].start.map((k) => COLOUR_DICE[2].faces[k]); // アリミノガール（仮）：オレンジ + 黄緑
@@ -45,17 +56,38 @@ export default function Cockpit() {
   const [inside, setInside] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [checks, setChecks] = useState(0);
-  const [last, setLast] = useState<DropResult | null>(null);
+  const [last, setLast] = useState<DropKind | null>(null);
+  const [luna, setLuna] = useState(0);
+  const [tel, setTel] = useState<Flight>(initialFlight);
+  const [thrust, setThrust] = useState(0.62);
+  const controls = useRef<Controls>({ pitchCmd: 0, rollCmd: 0, thrust: 0.62 });
   useEffect(() => { setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches); }, []);
-  const onDrop = useCallback((r: DropResult) => { setLast(r); if (r.kind === 'perfect') setChecks((c) => c + 1); }, []);
+  const onDrop = useCallback((k: DropKind) => { setLast(k); if (k === 'perfect') setChecks((c) => c + 1); }, []);
+  const onWheel = useCallback((r: number, p: number) => { controls.current.rollCmd = r; controls.current.pitchCmd = p; }, []);
+  const setT = (v: number) => { const x = Math.max(0, Math.min(1, v)); controls.current.thrust = x; setThrust(x); };
+  useEffect(() => {
+    if (!inside) return undefined;
+    const held = new Set<string>();
+    const apply = () => { controls.current.rollCmd = (held.has('ArrowRight') ? 1 : 0) - (held.has('ArrowLeft') ? 1 : 0); controls.current.pitchCmd = (held.has('ArrowDown') ? 1 : 0) - (held.has('ArrowUp') ? 1 : 0); };
+    const kd = (e: KeyboardEvent) => { if (e.key.startsWith('Arrow')) { e.preventDefault(); held.add(e.key); apply(); } if (e.key === 'w') setT(controls.current.thrust + 0.05); if (e.key === 's') setT(controls.current.thrust - 0.05); };
+    const ku = (e: KeyboardEvent) => { if (held.delete(e.key)) apply(); };
+    window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); };
+  }, [inside]);
+  const temp = isaTemp(tel.alt); const mach = tel.speed / (20.05 * Math.sqrt(temp + 273.15)); const layer = layerAt(tel.alt);
+  const PARAMS: [string, string, string][] = [
+    ['ピッチ', `${fmt(deg(tel.pitch), 1)}°`, '機首の上げ下げ'], ['ロール', `${fmt(deg(tel.roll), 1)}°`, `旋回 ${fmt(deg(turnRate(tel.roll, tel.speed)), 1)}°/秒`],
+    ['推力', `${Math.round(thrust * 100)}%`, 'W・S か下のレバー'], ['速度', `${fmt(tel.speed)} m/s`, `${fmt(tel.speed * 3.6)} km/h・M${fmt(mach, 2)}`],
+    ['高度', `${fmt(tel.alt)} m`, `FL${Math.round(tel.alt / 0.3048 / 100)}${layer ? `・${layer.name}の中` : ''}`], ['昇降率', `${fmt(tel.vs, 1)} m/s`, tel.vs > 0.5 ? '上昇' : tel.vs < -0.5 ? '降下' : '水平'],
+    ['方位', `${String(Math.round(deg(tel.heading))).padStart(3, '0')}°`, '北が 000'], ['外気温', `${fmt(temp, 1)} °C`, contrailLikely(tel.alt) ? '飛行機雲ができやすい（−40 °C 以下）' : '飛行機雲はできにくい'],
+  ];
   const sky = PALETTES[0];
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 bg-[#faf7f2] p-4 text-[#1f1f1f]">
       <header className="space-y-1">
         <p className="text-xs text-stone-500">メタ視点 → コックピット</p>
-        <h1 className="text-xl font-bold">串の姿勢計を、運転席の計器へ</h1>
-        <p className="text-sm">雲の上の飛行機に、外から近づいて、操縦席に入る。サイコロの指示器は、中央の計器「IND-01 串の姿勢計」になる。色はアリミノガール（機長席）とアリミノボーイ（副操縦士席）の決まりで塗り分ける。</p>
+        <h1 className="text-xl font-bold">串の姿勢計を、空へ — 操縦席</h1>
+        <p className="text-sm">雲の上の飛行機に、外から近づいて、操縦席に入る。サイコロの指示器「IND-01 串の姿勢計」は窓の空へ移り、串が水平線になる（傾きと機首に合わせて動き、サイコロは速さに合わせて回る）。中央には PermanentY の操縦輪。色はアリミノガール（機長席）とアリミノボーイ（副操縦士席）の決まりで塗り分ける。</p>
         <p className="text-[11px] text-stone-500">アリミノガール・アリミノボーイは仮の名前（公開前に、オリジナルの名前へ替える）。</p>
       </header>
 
@@ -77,37 +109,56 @@ export default function Cockpit() {
         </section>
       ) : (
         <section className="space-y-0 overflow-hidden rounded-sm border-4" style={{ borderColor: INK }} data-testid="cockpit">
-          {/* windshield */}
-          <div className="relative h-28" style={{ background: `linear-gradient(${sky.sky.join(',')})` }}>
-            <div className="absolute inset-y-0 left-1/3 w-3 -skew-x-12" style={{ background: INK }} />
-            <div className="absolute inset-y-0 right-1/3 w-3 skew-x-12" style={{ background: INK }} />
-            <p className="absolute bottom-1 left-2 text-[10px] text-white/90">風防：写実の空（天頂 {sky.sky[0]} → 地平 {sky.sky[4]}）</p>
+          {/* windshield: the sky, with IND-01 moved onto it as the HUD horizon */}
+          <div className="relative" style={{ background: INK }}>
+            <SkyFlight controls={controls} onTelemetry={setTel} onDrop={onDrop} reduced={reduced} />
+            <div className="pointer-events-none absolute inset-y-0 left-[30%] w-3 -skew-x-6" style={{ background: INK }} />
+            <div className="pointer-events-none absolute inset-y-0 right-[30%] w-3 skew-x-6" style={{ background: INK }} />
+            {luna < LUNA.length && (
+              <div className="absolute bottom-2 left-2 right-2 flex items-start gap-2 rounded-sm border-2 border-[#22b8c8] bg-[#1f1f1fee] p-2 text-xs text-white sm:right-auto sm:max-w-md" data-testid="luna">
+                <span className="text-lg" aria-hidden>🌙</span>
+                <div className="space-y-1"><p className="font-semibold text-[#22b8c8]">Luna</p><p>{LUNA[luna]}</p>
+                  <div className="flex gap-2"><button type="button" data-testid="luna-next" onClick={() => setLuna((k) => k + 1)} className="min-h-[32px] border border-white/50 px-2">{luna + 1 < LUNA.length ? 'つぎ' : '操縦を始める'}</button><button type="button" onClick={() => setLuna(LUNA.length)} className="text-white/60">とばす</button></div></div>
+              </div>)}
           </div>
           {/* glare shield */}
           <div className="h-4" style={{ background: INK, boxShadow: '0 4px 0 #0005' }} />
           {/* main panel */}
           <div className="grid gap-3 p-3 md:grid-cols-[1fr_2fr_1fr]" style={{ background: PANEL }}>
             <SidePlate who="アリミノガール（仮）" cols={GIRL} side="L" />
-            <div className="relative rounded-md border-4 p-3" style={{ borderColor: '#3a3d42', background: INK }} data-testid="ind-01">
-              <Screw x="4px" y="4px" /><Screw x="calc(100% - 14px)" y="4px" /><Screw x="4px" y="calc(100% - 14px)" /><Screw x="calc(100% - 14px)" y="calc(100% - 14px)" />
-              <SkewerScene opts={{ palette: sky, mode: 'bubble', p: 2, q: 3, dolly: 0.35, auto: false, reduced, onDrop }} />
-              <div className="mt-2 flex items-center justify-between text-[10px] text-white">
-                <span className="rounded-sm bg-[#3a3d42] px-1.5 py-0.5 font-mono tracking-widest">IND-01　串の姿勢計</span>
-                <span>確認の印 <b data-testid="checks">{checks}</b>{last && last.kind !== 'perfect' ? '（もう少し目の中心へ）' : ''}</span>
+            <div className="space-y-2">
+              <div className="relative rounded-md border-4 p-2" style={{ borderColor: '#3a3d42', background: INK }} data-testid="ind-01">
+                <Screw x="4px" y="4px" /><Screw x="calc(100% - 14px)" y="4px" /><Screw x="4px" y="calc(100% - 14px)" /><Screw x="calc(100% - 14px)" y="calc(100% - 14px)" />
+                <FibWheel onChange={onWheel} color={GIRL[0].hex} />
               </div>
-              <p className="mt-1 text-[10px] text-[#bbb]">泡をつまんでサイコロの目へ：目が染まれば「確認の印」。左右どちらの席からも届く位置。</p>
+              <div className="flex items-center justify-between rounded-sm p-2 text-[10px] text-white" style={{ background: INK }}>
+                <span className="rounded-sm bg-[#3a3d42] px-1.5 py-0.5 font-mono tracking-widest">IND-01（空へ移した）</span>
+                <span>確認の印 <b data-testid="checks">{checks}</b>{last === 'near' ? '（もう少し目の中心へ）' : last === 'miss' ? '（サイコロまで運ぶ）' : ''}</span>
+              </div>
+              <label className="flex items-center gap-2 rounded-sm p-2 text-[10px] text-white" style={{ background: INK }}>スラストレバー<input type="range" min={0} max={1} step={0.01} value={thrust} onChange={(e) => setT(Number(e.target.value))} className="flex-1" data-testid="thrust" />{Math.round(thrust * 100)}%</label>
             </div>
             <SidePlate who="アリミノボーイ（仮）" cols={BOY} side="R" />
           </div>
           {/* bottom: reserved for flight parameters */}
           <div className="space-y-1 p-3" style={{ background: INK }} data-testid="flight-params">
-            <p className="text-[11px] font-semibold text-white">操縦パラメーター（下部・次の作業で設計）</p>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">{Array.from({ length: 8 }, (_, k) => (
-              <div key={k} className="flex min-h-[56px] items-center justify-center rounded-sm border border-dashed text-[10px] text-[#888]" style={{ borderColor: k < 4 ? GIRL[0].hex : BOY[0].hex }}>◻︎ {k + 1}</div>))}</div>
-            <p className="text-[10px] text-[#999]">1〜4 は機長席の側（オレンジの縁）、5〜8 は副操縦士席の側（シアンの縁）。中身はまだ空。</p>
+            <p className="text-[11px] font-semibold text-white">操縦パラメーター（下部）</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">{PARAMS.map(([name, v, sub], k) => (
+              <div key={name} className="min-h-[56px] rounded-sm border p-1.5 text-white" style={{ borderColor: k < 4 ? GIRL[0].hex : BOY[0].hex }} data-testid={`param-${k + 1}`}>
+                <p className="text-[9px] text-[#aaa]">{k + 1}・{name}</p><p className="font-mono text-sm">{v}</p><p className="text-[9px] text-[#999]">{sub}</p>
+              </div>))}</div>
+            <p className="text-[10px] text-[#999]">1〜4 は機長席の側（入力に近い値）、5〜8 は副操縦士席の側（確かめる値）。外気温は標準大気（ISA）からの計算。</p>
           </div>
         </section>
       )}
+
+      <section className="space-y-1 text-xs" data-testid="parts">
+        <p className="font-semibold">写真から回収した部品（考え方だけを使う。配置や商標は写さない）</p>
+        <div className="grid gap-1 sm:grid-cols-2">{PARTS.map((p) => (
+          <div key={p.name} className="flex gap-2 border border-stone-300 bg-white p-1.5">
+            <span className="shrink-0 rounded-sm px-1 text-[10px] text-white" style={{ background: p.use === 'now' ? '#2f6b1a' : p.use === 'next' ? '#2b3a67' : '#78716c' }}>{p.use === 'now' ? '使用中' : p.use === 'next' ? '次' : 'あとで'}</span>
+            <span><b>{p.area}・{p.name}</b>：{p.does}{p.game ? ` → ${p.game}` : ''}</span>
+          </div>))}</div>
+      </section>
 
       <section className="space-y-1 text-xs" data-testid="id-rules">
         <p className="font-semibold">インダストリアルデザインの要件（この計器の実用性）</p>
