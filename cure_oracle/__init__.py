@@ -3,6 +3,7 @@
     pip install cure-oracle            # knots, .meshmeta
     pip install "cure-oracle[sign]"    # + Ed25519 signatures on .meshmeta
     pip install "cure-oracle[api]"     # + the FastAPI cure-initial/1 router
+    pip install "cure-oracle[quantum]" # + Qiskit: the resonance Max-Cut (cure_oracle.resonance)
 
 The modules keep their repository names so the app and the package share one copy of the code.
 """
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import importlib
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["knot_crossings", "mesh_meta", "cure_initial", "__version__"]
 
 

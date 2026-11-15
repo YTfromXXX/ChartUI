@@ -10,6 +10,11 @@ const W = 860; const H = 520; const GROUND = 300; const PAD_X = 70;
 const PETALS = [3, 5, 8, 13, 5, 8];
 const GROUP = [MU.strain92.hex, MU.strain29.hex]; // group 0 = orange (アリミノガール側), group 1 = cyan (アリミノボーイ側)
 type Curve = 'poly' | 'cr' | 'bs';
+type Rec = { file: string; mode: string; backend: string; shots: number; size: { depth: number; two_qubit: number }; p_optimal_measured: number; p_optimal_ideal: number; p_optimal_random: number; counts: Record<string, number>; when: string; source?: string };
+const RECORDS = ['resonance-local-statevector.json', 'resonance-fake-fake_torino.json', 'resonance-ibm.json']; // the last one appears after the real QPU run
+const REC_NAME: Record<string, string> = { local: '手元の Python（理想）', fake: '偽のチップ（雑音つきリハーサル）', ibm: 'IBM の実機' };
+/** The most frequent measured bitstring as groups (Qiskit keys put qubit 0 on the right); coin 0 always in group 0. */
+const groupsOf = (r: Rec, n: number) => { const top = Object.entries(r.counts).sort((x, y) => y[1] - x[1])[0][0]; const g = Array.from({ length: n }, (_, i) => Number(top[top.length - 1 - i])); return g[0] === 1 ? g.map((x) => 1 - x) : g; };
 
 function Flower({ x, y, n, color, s }: { x: number; y: number; n: number; color: string; s: number }) {
   if (s <= 0) return null;
@@ -29,7 +34,11 @@ export default function RootBloom() {
   const [curve, setCurve] = useState<Curve>('cr'); const [ctrl, setCtrl] = useState(false);
   const raf = useRef(0);
   const a = useMemo(() => analyse(series), [series]);
-  const cut = useMemo(() => solveCut(a.C, COINS.map((c) => c.label)), [a]);
+  const cut0 = useMemo(() => solveCut(a.C, COINS.map((c) => c.label)), [a]);
+  const [recs, setRecs] = useState<Rec[]>([]); const [play, setPlay] = useState<string>('browser');
+  useEffect(() => { Promise.all(RECORDS.map((f) => fetch(`/quantum/${f}`).then((r) => (r.ok ? r.json() : null)).then((j) => (j ? { ...j, file: f } : null)).catch(() => null))).then((xs) => setRecs(xs.filter(Boolean) as Rec[])); }, []);
+  const rec = recs.find((r) => r.file === play);
+  const cut = rec && source === 'synthetic' ? { ...cut0, groups: groupsOf(rec, COINS.length) } : cut0;
   const xs = COINS.map((_, i) => 190 + i * 118);
   const roots: Root[][] = useMemo(() => COINS.map((_, i) => growRoots(xs[i], GROUND, {
     depth: Math.min(40, 18 + a.dds[i] * 60), wobble: Math.max(0.12, Math.min(0.8, a.vols[i] * 14)), branch: Math.max(0.04, Math.min(0.2, 0.03 + a.vols[i] * 3)),
@@ -101,7 +110,16 @@ export default function RootBloom() {
           <p>動きの似ていない組み合わせ（重み 1 − 相関）を切り離すように、二つの組に分ける。</p>
           <p><span className="rounded-sm px-1 text-black" style={{ background: GROUP[0] }}>組 0</span> {COINS.filter((_, i) => cut.groups[i] === 0).map((c) => c.label).join('・')}　<span className="rounded-sm px-1 text-black" style={{ background: GROUP[1] }}>組 1</span> {COINS.filter((_, i) => cut.groups[i] === 1).map((c) => c.label).join('・') || '—'}</p>
           <p>総当たり（64 通り）の最適と、手元の状態ベクトルで測った QAOA（1 層）：最適の組分けが出る確率 <b>{(cut.qaoaOptimal * 100).toFixed(1)}%</b>（でたらめなら {(cut.randomOptimal * 100).toFixed(1)}%）。</p>
-          <p style={{ color: SUB }}>次の一歩：同じ 6 量子ビットの回路を、IBM 量子キャンペーン（11-20〜12-17）の実機で一度だけ回し、手元の結果と並べる。鍵はオーナーの手元だけに置く。</p>
+          <div className="space-y-1 border-t pt-2" style={{ borderColor: LINE }} data-testid="replay">
+            <p className="font-semibold">記録の再生（花と根の色を、その記録でいちばん多く出た組分けで塗る）</p>
+            <div className="flex flex-wrap gap-1">
+              <button type="button" onClick={() => setPlay('browser')} className="rounded-sm border px-2 py-0.5" style={{ borderColor: play === 'browser' ? '#fff1b8' : LINE }}>ブラウザ（最適）</button>
+              {recs.map((r) => <button key={r.file} type="button" data-testid={`rec-${r.mode}`} onClick={() => setPlay(r.file)} className="rounded-sm border px-2 py-0.5" style={{ borderColor: play === r.file ? '#fff1b8' : LINE }}>{REC_NAME[r.mode] ?? r.mode}</button>)}
+            </div>
+            {recs.map((r) => <p key={r.file} className="font-mono text-[10px]">{REC_NAME[r.mode] ?? r.mode} · {r.backend} · 2 量子ビットゲート {r.size.two_qubit} · {r.shots} 回：最適の組分け <b>{(r.p_optimal_measured * 100).toFixed(1)}%</b>（理想 {(r.p_optimal_ideal * 100).toFixed(1)}%・でたらめ {(r.p_optimal_random * 100).toFixed(1)}%）</p>)}
+            {!recs.some((r) => r.mode === 'ibm') && <p style={{ color: SUB }}>実機の記録はまだない。タブレットのノート（quantum/notebooks/resonance_tablet.ipynb）で実行し、resonance-ibm.json を public/quantum/ に置くと、ここに出る。</p>}
+            {rec && source !== 'synthetic' && <p style={{ color: '#ff8a8a' }}>記録は合成データの問題で取ったもの。ライブのデータとは別の問題なので、色は塗り替えない。</p>}
+          </div>
         </div>
       </section>
     </main>

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cure-oracle"
-version = "0.1.0"
+version = "0.2.0"
 description = "ChartUI / METADOGG ORACLE core: knot crossings, .meshmeta byte pointers and signatures, cure-initial/1 contract"
 readme = "cure_oracle/README.md"
 license = { text = "MIT" }
@@ -16,6 +16,7 @@ dependencies = []
 [project.optional-dependencies]
 sign = ["cryptography>=42"]
 api = ["fastapi>=0.110", "pydantic>=2"]
+quantum = ["qiskit>=2.0", "qiskit-ibm-runtime>=0.40", "qiskit-aer>=0.17"]
 
 [project.scripts]
 cure = "cure_oracle.cli:main"
@@ -23,3 +24,6 @@ cure = "cure_oracle.cli:main"
 [tool.setuptools]
 packages = ["cure_oracle"]
 py-modules = ["knot_crossings", "mesh_meta", "meshmeta_v2", "cure_initial"]
+
+[tool.setuptools.package-data]
+cure_oracle = ["data/*.json"]
