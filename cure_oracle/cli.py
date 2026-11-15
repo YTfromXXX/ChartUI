@@ -26,6 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("resonance", help="six-coin resonance Max-Cut (QAOA p=1): local or fake-chip run, or export OpenQASM 3")
     r.add_argument("--mode", choices=["local", "fake"], default="local"); r.add_argument("--shots", type=int, default=2000)
     r.add_argument("--export-qasm", metavar="FILE"); r.add_argument("--out-dir", default=".")
+    r.add_argument("--mail", metavar="EMAIL", help="send the result to this address after the run")
+    r.add_argument("--notify", metavar="TARGET", default="stdout",
+                   help="stdout (default) | email:addr | file:path.html  — where to deliver the result")
     a = p.parse_args(argv)
     if a.cmd == "version":
         print(__version__); return 0
@@ -33,7 +36,12 @@ def main(argv: list[str] | None = None) -> int:
         from cure_oracle import resonance
         if a.export_qasm:
             resonance.export_qasm(a.export_qasm); print("wrote", a.export_qasm); return 0
-        resonance.run(a.mode, shots=a.shots, out_dir=a.out_dir); return 0
+        result = resonance.run(a.mode, shots=a.shots, out_dir=a.out_dir)
+        # delivery
+        from cure_oracle import mail as _mail
+        target = f"email:{a.mail}" if a.mail else a.notify
+        _mail.deliver(result, to=target)
+        return 0
     import mesh_meta as mm
     if a.cmd == "meshmeta":
         with open(a.stl, "rb") as f:
