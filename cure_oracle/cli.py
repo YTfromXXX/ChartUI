@@ -3,13 +3,15 @@
     cure version
     cure meshmeta in.stl out [--key key.pem]   → out.stl + out.meshmeta (signed with --key)
     cure verify out.stl out.meshmeta [--pub HEX]
-    cure resonance [--mode local|fake] [--shots N] [--export-qasm FILE]   (the real QPU: use the notebook or the Python API)
+    cure resonance [--mode local|fake] [--shots N] [--export-qasm FILE]   (the real QPU: use the notebook)
+    cure round [--round N] [--mode local|fake] [--shots N]                (MothBlast eternal-space randomness)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import sys
 
 from cure_oracle import __version__
@@ -29,6 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--mail", metavar="EMAIL", help="send the result to this address after the run")
     r.add_argument("--notify", metavar="TARGET", default="stdout",
                    help="stdout (default) | email:addr | file:path.html  — where to deliver the result")
+    rr = sub.add_parser("round", help="MothBlast: quantum randomness for one eternal-space round")
+    rr.add_argument("--round", type=int, default=1, dest="round_num")
+    rr.add_argument("--mode", choices=["local", "fake"], default="local")
+    rr.add_argument("--shots", type=int, default=500)
+    rr.add_argument("--out-dir", default=".")
+    rr.add_argument("--notify", metavar="TARGET", default="stdout")
     a = p.parse_args(argv)
     if a.cmd == "version":
         print(__version__); return 0
@@ -41,6 +49,18 @@ def main(argv: list[str] | None = None) -> int:
         from cure_oracle import mail as _mail
         target = f"email:{a.mail}" if a.mail else a.notify
         _mail.deliver(result, to=target)
+        return 0
+    if a.cmd == "round":
+        from cure_oracle.round_circuit import round_circuit, guide_angles
+        r = round_circuit(a.round_num, mode=a.mode, shots=a.shots)
+        out = pathlib.Path(a.out_dir) / f"round-{a.round_num}-{r['mode']}.json"
+        out.write_text(json.dumps(r, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"ラウンド {a.round_num}  A:{r['teleport_angle_a']}°  B:{r['teleport_angle_b']}°  "
+              f"events:{[k for k,v in r['events'].items() if v]}  → {out}")
+        gs = guide_angles(r)
+        for g in gs:
+            mark = "★" if g["active"] else "  "
+            print(f"  {mark} {g['name']:18s} {g['angle']:3d}° [{g['team']}]")
         return 0
     import mesh_meta as mm
     if a.cmd == "meshmeta":
