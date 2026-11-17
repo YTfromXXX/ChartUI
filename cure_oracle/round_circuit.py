@@ -203,3 +203,71 @@ def guide_angles(result: dict | None = None) -> list[dict]:
         }
         for g in GUIDES
     ]
+
+
+def spiral_preview(result: dict) -> str:
+    """ASCII polar ring: 10 guide positions, L1/R1 ladder hints, teleport arrows.
+
+    ★ = active guide (quantum-collapsed to this angle)
+    · = inactive guide (still in superposition)
+    ◎ = centre (eternal-space origin)
+    ◀ / ▶ = L1 / R1 step direction
+    """
+    import math
+
+    W, H = 48, 15
+    cx, cy = W // 2, H // 2
+    Rx, Ry = 20, 6  # char aspect ≈ 3.3:1
+
+    grid = [[" "] * W for _ in range(H)]
+
+    active_a = set(result.get("active_guides_a", []))
+    active_b = set(result.get("active_guides_b", []))
+
+    for g in GUIDES:
+        name, team, angle_deg, _ = g
+        rad = math.radians(angle_deg - 90)  # 0° at top
+        x = round(cx + Rx * math.cos(rad))
+        y = round(cy + Ry * math.sin(rad))
+        x, y = max(0, min(W - 5, x)), max(0, min(H - 1, y))
+
+        sym = "★" if name in (active_a | active_b) else "·"
+        label = f"{sym}{'A' if team == 'A' else 'B'}{angle_deg:>3}°"
+        for i, ch in enumerate(label):
+            if x + i < W:
+                grid[y][x + i] = ch
+
+    # centre
+    grid[cy][cx] = "◎"
+
+    # teleport angle needles
+    for ang, marker in [
+        (result.get("teleport_angle_a", 0), "→A"),
+        (result.get("teleport_angle_b", 0), "→B"),
+    ]:
+        rad = math.radians(ang - 90)
+        nx = round(cx + (Rx * 0.55) * math.cos(rad))
+        ny = round(cy + (Ry * 0.55) * math.sin(rad))
+        nx, ny = max(0, min(W - 3, nx)), max(0, min(H - 1, ny))
+        for i, ch in enumerate(marker):
+            if nx + i < W:
+                grid[ny][nx + i] = ch
+
+    # ladder hint row
+    ring_row = "  ◀L1 "
+    for g in GUIDES:
+        _, team, ang, _ = g
+        sym = "●" if g[0] in (active_a | active_b) else "○"
+        ring_row += f"{sym} "
+    ring_row += "R1▶"
+
+    lines = ["  " + "─" * (W - 2)] + ["".join(row) for row in grid] + ["  " + "─" * (W - 2), ring_row]
+
+    ta = result.get("teleport_angle_a", 0)
+    tb = result.get("teleport_angle_b", 0)
+    events = [k for k, v in result.get("events", {}).items() if v]
+    lines += [
+        f"  A(スハル)  テレポート: {ta:>7.2f}°   B(リナリス) テレポート: {tb:>7.2f}°",
+        f"  イベント: {', '.join(events) if events else 'none'}",
+    ]
+    return "\n".join(lines)

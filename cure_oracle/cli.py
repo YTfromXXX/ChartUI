@@ -51,16 +51,13 @@ def main(argv: list[str] | None = None) -> int:
         _mail.deliver(result, to=target)
         return 0
     if a.cmd == "round":
-        from cure_oracle.round_circuit import round_circuit, guide_angles
+        from cure_oracle.round_circuit import round_circuit, guide_angles, spiral_preview
         r = round_circuit(a.round_num, mode=a.mode, shots=a.shots)
         out = pathlib.Path(a.out_dir) / f"round-{a.round_num}-{r['mode']}.json"
         out.write_text(json.dumps(r, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"ラウンド {a.round_num}  A:{r['teleport_angle_a']}°  B:{r['teleport_angle_b']}°  "
-              f"events:{[k for k,v in r['events'].items() if v]}  → {out}")
-        gs = guide_angles(r)
-        for g in gs:
-            mark = "★" if g["active"] else "  "
-            print(f"  {mark} {g['name']:18s} {g['angle']:3d}° [{g['team']}]")
+        print(f"\n━━━ MothBlast ラウンド {a.round_num} ({r['mode']}) ━━━")
+        print(spiral_preview(r))
+        print(f"\n  → {out}")
         return 0
     import mesh_meta as mm
     if a.cmd == "meshmeta":
