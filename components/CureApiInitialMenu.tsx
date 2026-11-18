@@ -16,6 +16,7 @@ import {
 } from '@/lib/cureApiStore';
 import CureProjectionEngine from '@/components/cure/CureProjectionEngine';
 import ArcanaLoopBinder from '@/components/cure/ArcanaLoopBinder';
+import CureOsTerminal from '@/components/cure/CureOsTerminal';
 import { orbitPath, orbitPoint } from '@/lib/cureOrbit';
 import IntuitionChoicePopup from '@/components/cure/IntuitionChoicePopup';
 import { IDLE_PROMPT, PATTERN_ANALYSIS, type Pattern } from '@/lib/cureKit';
@@ -289,6 +290,8 @@ export default function CureApiInitialMenu() {
             </div>
 
             {exParameter === 0 && <ArcanaLoopBinder />}
+
+            <CureOsTerminal />
 
             <CureLayer layer={6} className="relative overflow-hidden rounded border border-amber-200/15 bg-black/50">
               <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[9px] uppercase tracking-[0.2em] text-amber-200"><Activity size={12} /> News Tab Zone</div>
