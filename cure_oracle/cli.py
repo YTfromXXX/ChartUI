@@ -73,9 +73,17 @@ def main(argv: list[str] | None = None) -> int:
             instance = __import__("os").environ["IBM_QUANTUM_INSTANCE"]
             print("\n  接続中…")
             info = verify_instance(token, instance)
-            print(f"  接続 OK: {info['instance']}")
-            print(f"  QPU バックエンド ({info['qpu_count']}台): {', '.join(info['qpu_backends'])}")
-            print(f"  最小待機 (13q+): {info['least_busy_13q']}")
+            print(f"  チャンネル: {info['channel']}")
+            print(f"  接続 OK: {info['instance'][:60]}...")
+            print(f"  全バックエンド: {info['total_backends']}台")
+            if info["qpu_backends"]:
+                print(f"  QPU バックエンド ({info['qpu_count']}台):")
+                for bk in info["qpu_backends"]:
+                    q = f"  queue={bk['queue']}" if bk["queue"] is not None else ""
+                    print(f"    ★ {bk['name']}  ({bk['qubits']}q){q}")
+            else:
+                print(f"  QPU バックエンド: 0台 (open-instanceは下記で確認: quantum.ibm.com)")
+            print(f"  最小待機 (13q+): {info['least_busy_13q'] or '—'}")
         return 0
 
     if a.cmd == "birth-cert":
