@@ -1,0 +1,30 @@
+{
+  "certificate_id": "eec6d63c3dba2b2e",
+  "game_token": "eec6d63c3dba2b2e",
+  "born_at": "2026-11-18T19:47:43+00:00",
+  "backend": "FakeMarrakesh",
+  "bitstring": "0110111111111",
+  "teleport_angle_a": 288.0,
+  "teleport_angle_b": 174.12,
+  "active_guides_a": [
+    "スハル-A0",
+    "スハル-A3"
+  ],
+  "active_guides_b": [
+    "リナリス-B0",
+    "リナリス-B1",
+    "リナリス-B2",
+    "リナリス-B3",
+    "リナリス-B4"
+  ],
+  "events": {
+    "entanglement_shot": true,
+    "superposition_dash": true,
+    "luna_event": true
+  },
+  "qpu_seconds": null,
+  "midwife": "Luna + エーリアル",
+  "round": 1,
+  "mode": "fake_marrakesh_rehearsal",
+  "note": "FakeMarrakesh rehearsal — real ibm_marrakesh pending IBM account verification"
+}
