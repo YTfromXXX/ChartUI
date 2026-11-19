@@ -35,6 +35,7 @@ from typing import Any
 
 try:
     from fastapi import FastAPI, Header, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel
     _HAS_FASTAPI = True
@@ -150,6 +151,12 @@ if _HAS_FASTAPI:
         title="Cure-API Mock",
         description="Synthetic QPU endpoint for MothBlast round_circuit mode='custom'",
         version="1.0.0",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     class RunRequest(BaseModel):

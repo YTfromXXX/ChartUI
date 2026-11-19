@@ -157,6 +157,15 @@ svg.mdlogo{width:72px;height:72px;}
 .run-btn:active{transform:scale(.98);}
 .run-btn.running{opacity:.6;cursor:wait;}
 
+/* server config bar */
+.server-bar{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:0;flex-wrap:wrap;}
+.srv-label{font-size:.62rem;color:var(--sub);letter-spacing:.08em;white-space:nowrap;}
+.srv-input{flex:1;min-width:180px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:5px 9px;outline:none;}
+.srv-input:focus{border-color:var(--cyan);}
+.srv-status{font-size:.65rem;padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.srv-status.ok{background:color-mix(in srgb,var(--green) 15%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 25%,transparent);}
+.srv-status.err{background:color-mix(in srgb,var(--red) 15%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 25%,transparent);}
+.srv-status.pend{background:color-mix(in srgb,var(--gold) 15%,var(--surf2));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 25%,transparent);}
 /* scrollbar */
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -164,6 +173,14 @@ svg.mdlogo{width:72px;height:72px;}
 </style>
 
 <div class="page">
+
+<!-- SERVER CONFIG BAR -->
+<div class="server-bar">
+  <span class="srv-label">API SERVER</span>
+  <input class="srv-input" id="srv-url" value="http://localhost:8700" placeholder="http://localhost:8700" onchange="pingServer()">
+  <span class="srv-status pend" id="srv-status">— —</span>
+  <button class="ctrl-btn" onclick="pingServer()" style="white-space:nowrap">Test</button>
+</div>
 
 <!-- HEADER -->
 <div class="header">
@@ -346,226 +363,202 @@ svg.mdlogo{width:72px;height:72px;}
 </div><!-- .page -->
 
 <script>
-// ── Symbols ────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────
 const SYMBOLS = [
   'USD/JPY','EUR/USD','GBP/USD','AUD/USD','USD/CAD',
   'USD/CHF','NZD/USD','EUR/JPY','GBP/JPY','XAU/USD',
   'BTC/USD','ETH/USD','SOL/USD','MENTE/USD'
 ];
 
-const state = {
-  symA: 0, symB: 1,
-  round: 0,
-  accounts: Array.from({length:48},(_,i)=>({id:i+1,pos:'hold',pl:0,sym:'',round:null})),
-  view: 'all',
-  feedItems: [],
-};
+const state = { symA:0, symB:1, round:0, view:'all', feedItems:[] };
+function apiBase(){ return (document.getElementById('srv-url')?.value||'http://localhost:8700').replace(/\/$/,''); }
 
-// ── LCG PRNG ──────────────────────────────────────────────
-let _seed = 0xadd435ab;
-function lcg(){ _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 0xffffffff; }
-function lcgSeed(s){ _seed = s >>> 0; }
+// ── Server ping ───────────────────────────────────────────
+async function pingServer(){
+  const el = document.getElementById('srv-status');
+  el.className='srv-status pend'; el.textContent='connecting…';
+  try{
+    const r = await fetch(apiBase()+'/pool/status',{signal:AbortSignal.timeout(3000)});
+    if(!r.ok) throw new Error(r.status);
+    const pool = await r.json();
+    el.className='srv-status ok';
+    el.textContent='● ONLINE · '+pool.length+' QPU';
+  }catch(e){
+    el.className='srv-status err';
+    el.textContent='✕ OFFLINE';
+  }
+}
 
 // ── Reel builder ──────────────────────────────────────────
 function buildReel(id, active){
   const reel = document.getElementById('reel-'+id);
-  reel.innerHTML = '';
-  const n = SYMBOLS.length;
-  // show 3 items: prev, active, next
+  reel.innerHTML='';
+  const n=SYMBOLS.length;
   for(let d=-1;d<=1;d++){
-    const idx = ((active+d)%n+n)%n;
-    const div = document.createElement('div');
-    div.className = 'sym-item'+(d===0?' active':'');
-    div.textContent = SYMBOLS[idx];
+    const idx=((active+d)%n+n)%n;
+    const div=document.createElement('div');
+    div.className='sym-item'+(d===0?' active':'');
+    div.textContent=SYMBOLS[idx];
     reel.appendChild(div);
   }
 }
-function shiftSym(ab, dir){
-  if(ab==='a') state.symA = ((state.symA+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
-  else state.symB = ((state.symB+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
+function shiftSym(ab,dir){
+  if(ab==='a') state.symA=((state.symA+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
+  else          state.symB=((state.symB+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
   buildReel(ab, ab==='a'?state.symA:state.symB);
   updateSigLabels();
 }
 function updateSigLabels(){
-  document.getElementById('sig-a-label').textContent = SYMBOLS[state.symA]+' sig';
-  document.getElementById('sig-b-label').textContent = SYMBOLS[state.symB]+' sig';
+  document.getElementById('sig-a-label').textContent=SYMBOLS[state.symA]+' sig';
+  document.getElementById('sig-b-label').textContent=SYMBOLS[state.symB]+' sig';
 }
 
-// ── QPU simulation ────────────────────────────────────────
-function simQPU(shots=500){
-  // 13 H-gate qubits with slight noise
-  const bits = Array.from({length:13},()=> lcg()<0.5?1:0);
-  // noise
-  for(let i=0;i<13;i++) if(lcg()<0.004) bits[i]^=1;
-  return bits;
-}
-
-function interpretBits(bits){
-  // q0-q4 → symA, q5-q9 → symB, q10-q12 → events
-  const aCount = bits.slice(0,5).reduce((s,b)=>s+b,0);
-  const bCount = bits.slice(5,10).reduce((s,b)=>s+b,0);
-  const q10=bits[10], q11=bits[11], q12=bits[12];
-
-  const aSig = aCount/5; // 0..1
-  const bSig = bCount/5;
-  const aDir = aCount>=3?'LONG':'SHORT';
-  const bDir = bCount>=3?'LONG':'SHORT';
-
-  // BE = bullish composite, PE = bearish composite
-  const beScore = (aSig + bSig)/2 * 100 * (q10?1.15:1) * (q11?0.85:1);
-  const peScore = ((1-aSig)+(1-bSig))/2 * 100 * (q11?1.15:1) * (q12?0.9:1);
-  const total = (beScore+peScore)/2;
-
-  const bitstring = bits.join('');
-  // mini nonce
-  const nonce = Array.from(bitstring+state.round).reduce((h,c)=>(Math.imul(31,h)+c.charCodeAt(0))|0,0).toString(16).padStart(8,'0')+Array.from(bitstring).reverse().join('').slice(0,8);
-
-  return { bits, aCount, bCount, aSig, bSig, aDir, bDir, q10, q11, q12, beScore, peScore, total, bitstring, nonce };
-}
-
-// ── Run predict ───────────────────────────────────────────
-function runPredict(){
-  const btn = document.getElementById('run-btn');
+// ── Run predict → real API ────────────────────────────────
+async function runPredict(){
+  const btn=document.getElementById('run-btn');
   btn.classList.add('running');
-  btn.textContent = '⟳  COMPUTING QPU ROUND…';
+  btn.textContent='⟳  CALLING /oracle/predict…';
 
-  setTimeout(()=>{
-    state.round++;
-    lcgSeed(_seed ^ state.round);
-    const bits = simQPU();
-    const r = interpretBits(bits);
+  const symPair=encodeURIComponent(SYMBOLS[state.symA]+' × '+SYMBOLS[state.symB]);
+  const url=apiBase()+'/oracle/predict/'+symPair+'?shots=500';
 
-    // Update scores
-    document.getElementById('sc-total').textContent = r.total.toFixed(1);
-    document.getElementById('sc-be').textContent = '+'+r.beScore.toFixed(1);
-    document.getElementById('sc-pe').textContent = '-'+r.peScore.toFixed(1);
-    document.getElementById('sc-total-sub').textContent = r.aDir+'×'+r.bDir;
-    document.getElementById('sc-be-sub').textContent = 'q='+r.aCount+'/5 · '+r.aDir;
-    document.getElementById('sc-pe-sub').textContent = 'q='+r.bCount+'/5 · '+r.bDir;
+  try{
+    const res=await fetch(url,{
+      headers:{'X-Session-Id':'metadogg-home-'+Date.now()},
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+
+    // scores
+    state.round=d.round_num;
+    document.getElementById('sc-total').textContent=d.scores.total.toFixed(1);
+    document.getElementById('sc-be').textContent='+'+d.scores.be.toFixed(1);
+    document.getElementById('sc-pe').textContent='-'+d.scores.pe.toFixed(1);
+    document.getElementById('sc-total-sub').textContent=d.signal.symbol_a.direction+'×'+d.signal.symbol_b.direction;
+    document.getElementById('sc-be-sub').textContent='q='+d.signal.symbol_a.active_qubits+'/5 · '+d.signal.symbol_a.direction;
+    document.getElementById('sc-pe-sub').textContent='q='+d.signal.symbol_b.active_qubits+'/5 · '+d.signal.symbol_b.direction;
 
     // signal bars
-    document.getElementById('sig-a-fill').style.width = (r.aSig*100)+'%';
-    document.getElementById('sig-b-fill').style.width = (r.bSig*100)+'%';
-    document.getElementById('sig-a-pct').textContent = (r.aSig*100).toFixed(0)+'%';
-    document.getElementById('sig-b-pct').textContent = (r.bSig*100).toFixed(0)+'%';
+    const aSig=d.signal.symbol_a.strength, bSig=d.signal.symbol_b.strength;
+    document.getElementById('sig-a-fill').style.width=(aSig*100)+'%';
+    document.getElementById('sig-b-fill').style.width=(bSig*100)+'%';
+    document.getElementById('sig-a-pct').textContent=(aSig*100).toFixed(0)+'%';
+    document.getElementById('sig-b-pct').textContent=(bSig*100).toFixed(0)+'%';
 
     // events
-    setEv('ev-q10', r.q10, 'q10 CAPTURE');
-    setEv('ev-q11', r.q11, 'q11 CRASH');
-    setEv('ev-q12', r.q12, 'q12 PASS');
-    document.getElementById('ev-nonce').classList.toggle('on', true);
-    document.getElementById('nonce-short').textContent = 'nonce: '+r.nonce.slice(0,10)+'…';
+    setEv('ev-q10',d.events.q10_capture,'q10 CAPTURE');
+    setEv('ev-q11',d.events.q11_crash,  'q11 CRASH');
+    setEv('ev-q12',d.events.q12_pass,   'q12 PASS');
+    document.getElementById('ev-nonce').classList.add('on');
+    document.getElementById('nonce-short').textContent='nonce: '+d.contract_nonce.slice(0,10)+'…';
+    document.getElementById('round-badge').textContent='ROUND '+String(d.round_num).padStart(3,'0');
 
-    document.getElementById('round-badge').textContent = 'ROUND '+String(state.round).padStart(3,'0');
+    addFeedItem(d);
 
-    // 48 accounts: assign round_num mod 48 → accounts
-    const acctIdx = (state.round-1) % 48;
-    const acc = state.accounts[acctIdx];
-    // determine position from both signals + events
-    let pos='hold';
-    if(r.q11){ pos='hold'; } // CRASH = stand down
-    else if(r.q10){ pos = r.aDir==='LONG'&&r.bDir==='LONG'?'long':'short'; }
-    else if(r.q12){ pos='hold'; }
-    else { pos = r.aDir==='LONG'?'long':'short'; }
-
-    const leverage=10, base=20.83;
-    const pnl = pos==='long'? +(base*leverage*(r.aSig-.5+r.bSig-.5)*lcg()).toFixed(2)
-              : pos==='short'? -(base*leverage*(r.aSig-.5+r.bSig-.5)*lcg()).toFixed(2)
-              : 0;
-
-    acc.pos = pos;
-    acc.pl = +(acc.pl+pnl).toFixed(2);
-    acc.sym = SYMBOLS[state.symA]+'/'+SYMBOLS[state.symB];
-    acc.round = state.round;
-
-    renderAccounts();
-    addFeedItem(r);
+    // pull 48-account state from server
+    await refreshAccounts();
 
     btn.classList.remove('running');
-    btn.textContent = '▶ RUN /oracle/predict';
-  }, 480);
+    btn.textContent='▶ RUN /oracle/predict';
+  }catch(e){
+    btn.classList.remove('running');
+    btn.textContent='▶ RUN /oracle/predict';
+    const srv=document.getElementById('srv-status');
+    srv.className='srv-status err';
+    srv.textContent='✕ '+e.message;
+  }
 }
 
-function setEv(id, on, label){
-  const el = document.getElementById(id);
-  el.className = 'ev-pill '+(on?'on':'off');
-  el.innerHTML = `<div class="ev-dot"></div>${label}`;
+function setEv(id,on,label){
+  const el=document.getElementById(id);
+  el.className='ev-pill '+(on?'on':'off');
+  el.innerHTML=`<div class="ev-dot"></div>${label}`;
 }
 
-// ── Accounts ──────────────────────────────────────────────
-function renderAccounts(){
-  const grid = document.getElementById('acct-grid');
-  grid.innerHTML = '';
-  let totalPL=0, longs=0, shorts=0, holds=0;
+// ── Accounts — pulled from server ────────────────────────
+async function refreshAccounts(){
+  try{
+    const res=await fetch(apiBase()+'/oracle/accounts',{signal:AbortSignal.timeout(4000)});
+    if(!res.ok) return;
+    const d=await res.json();
+    renderAccountsFromServer(d.accounts, d.summary);
+  }catch(_){}
+}
 
-  state.accounts.forEach(acc=>{
-    totalPL+=acc.pl;
-    if(acc.pos==='long') longs++;
-    else if(acc.pos==='short') shorts++;
-    else holds++;
+function renderAccountsFromServer(accounts, summary){
+  const grid=document.getElementById('acct-grid');
+  grid.innerHTML='';
 
-    if(state.view!=='all' && acc.pos!==state.view) return;
+  accounts.forEach(acc=>{
+    const pos=(acc.position||'HOLD').toLowerCase();
+    if(state.view!=='all' && pos!==state.view) return;
 
-    const cell = document.createElement('div');
-    cell.className = 'acct-cell '+acc.pos+(acc.round===state.round?' active-round':'');
-    cell.title = `#${acc.id} ${acc.sym||'—'}\n${acc.pos.toUpperCase()}\nP&L: $${acc.pl}`;
+    const isActive=acc.round_num===state.round;
+    const cell=document.createElement('div');
+    cell.className='acct-cell '+pos+(isActive?' active-round':'');
+    cell.title=`#${acc.id} ${acc.symbol||'—'}\n${pos.toUpperCase()}\nP&L: $${acc.pl}`;
 
-    const plClass = acc.pl>0?'pos':acc.pl<0?'neg':'zero';
-    const plSign = acc.pl>0?'+':'';
-    cell.innerHTML = `<div class="acct-num">#${String(acc.id).padStart(2,'0')}</div>
+    const plClass=acc.pl>0?'pos':acc.pl<0?'neg':'zero';
+    const plSign=acc.pl>0?'+':'';
+    const symTag=acc.symbol?acc.symbol.split(/[/× ]/)[0]:'';
+    cell.innerHTML=`<div class="acct-num">#${String(acc.id).padStart(2,'0')}</div>
 <div class="acct-pl ${plClass}">${plSign}${acc.pl.toFixed(0)}</div>
-${acc.sym?`<div class="sym-tag">${acc.sym.split('/')[0]}</div>`:''}`;
-
+${symTag?`<div class="sym-tag">${symTag}</div>`:''}`;
     grid.appendChild(cell);
   });
 
-  document.getElementById('tot-pl').textContent = '$'+(totalPL>=0?'+':'')+totalPL.toFixed(2);
-  document.getElementById('tot-pl').style.color = totalPL>=0?'var(--green)':'var(--red)';
-  document.getElementById('tot-long').textContent = longs;
-  document.getElementById('tot-short').textContent = shorts;
-  document.getElementById('tot-hold').textContent = holds;
-  document.getElementById('tot-round').textContent = state.round||'—';
+  const pl=summary.total_pl;
+  document.getElementById('tot-pl').textContent='$'+(pl>=0?'+':'')+pl.toFixed(2);
+  document.getElementById('tot-pl').style.color=pl>=0?'var(--green)':'var(--red)';
+  document.getElementById('tot-long').textContent=summary.long_count;
+  document.getElementById('tot-short').textContent=summary.short_count;
+  document.getElementById('tot-hold').textContent=summary.hold_count;
+  document.getElementById('tot-round').textContent=state.round||'—';
 }
 
 function setView(v){
   state.view=v;
   document.querySelectorAll('.ctrl-btn').forEach(b=>{
-    b.classList.toggle('active', b.textContent.toLowerCase()===v||(v==='all'&&b.textContent==='ALL'));
+    b.classList.toggle('active',b.textContent.toLowerCase()===v||(v==='all'&&b.textContent==='ALL'));
   });
-  renderAccounts();
+  refreshAccounts();
 }
 
-function resetAccounts(){
+async function resetAccounts(){
+  try{
+    await fetch(apiBase()+'/oracle/accounts/reset',{method:'POST',signal:AbortSignal.timeout(4000)});
+  }catch(_){}
   state.round=0;
-  state.accounts.forEach(a=>{a.pl=0;a.pos='hold';a.sym='';a.round=null;});
   ['sc-total','sc-be','sc-pe'].forEach(id=>document.getElementById(id).textContent='— —');
   document.getElementById('round-badge').textContent='ROUND — —';
   ['ev-q10','ev-q11','ev-q12'].forEach(id=>setEv(id,false,document.getElementById(id).textContent.replace(/^.*?(q\d+)/,'$1')));
   document.getElementById('feed-list').innerHTML='<div class="feed-item" style="justify-content:center;color:var(--sub);font-size:.72rem;">— run /oracle/predict to populate feed —</div>';
-  renderAccounts();
+  await refreshAccounts();
 }
 
 // ── Feed ──────────────────────────────────────────────────
-function addFeedItem(r){
-  const feed = document.getElementById('feed-list');
+function addFeedItem(d){
+  const feed=document.getElementById('feed-list');
   if(feed.children[0]?.textContent.includes('populate')) feed.innerHTML='';
 
-  const now = new Date();
-  const ts = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  const now=new Date();
+  const ts=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  const dir=d.signal.symbol_a.direction;
+  const str=(d.signal.symbol_a.strength*100).toFixed(0);
 
-  const item = document.createElement('div');
-  item.className = 'feed-item';
-  const symPair = SYMBOLS[state.symA]+' / '+SYMBOLS[state.symB];
-  item.innerHTML = `
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`
     <span class="feed-time">${ts}</span>
-    <span class="feed-sym">${symPair}</span>
-    <span class="feed-dir ${r.aDir.toLowerCase()}">${r.aDir}</span>
-    <span class="feed-str">str:${(r.aSig*100).toFixed(0)}%</span>
-    <span class="feed-nonce">${r.nonce}</span>`;
-  feed.insertBefore(item, feed.firstChild);
+    <span class="feed-sym">${d.symbol}</span>
+    <span class="feed-dir ${dir.toLowerCase()}">${dir}</span>
+    <span class="feed-str">str:${str}% · ${d.backend}</span>
+    <span class="feed-nonce">${d.contract_nonce}</span>`;
+  feed.insertBefore(item,feed.firstChild);
 
   state.feedItems.push(item);
-  if(state.feedItems.length>50){ feed.removeChild(feed.lastChild); state.feedItems.shift(); }
+  if(state.feedItems.length>50){feed.removeChild(feed.lastChild);state.feedItems.shift();}
 }
 
 function clearFeed(){
@@ -574,8 +567,8 @@ function clearFeed(){
 }
 
 // ── Init ──────────────────────────────────────────────────
-buildReel('a', state.symA);
-buildReel('b', state.symB);
+buildReel('a',state.symA);
+buildReel('b',state.symB);
 updateSigLabels();
-renderAccounts();
+pingServer().then(()=>refreshAccounts());
 </script>
