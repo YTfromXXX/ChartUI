@@ -263,6 +263,33 @@ h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-we
 .fiku-k { font-size:1.2rem; line-height:1; margin-bottom:3px; }
 .fiku-name { font-family:'Space Grotesk',sans-serif; font-size:.72rem; font-weight:500; margin-bottom:2px; }
 .fiku-v { font-family:monospace; font-size:.62rem; color:var(--sub); }
+
+/* ── Floor 4F (luna layer) ──────── */
+.floor-tab.f4 { border-color:color-mix(in srgb,#c8c0f8 40%,var(--border)); color:#c8c0f8; }
+.floor-tab.f4.active { border-color:#c8c0f8; color:#c8c0f8; background:color-mix(in srgb,#c8c0f8 12%,var(--surf2)); }
+.floor-expand-notice {
+  display:none; padding:7px 10px; margin-bottom:8px;
+  background:color-mix(in srgb,#c8c0f8 8%,var(--surf));
+  border:1px solid #c8c0f8; border-radius:6px;
+  font-size:.75rem; color:#c8c0f8;
+}
+.floor-expand-notice.show { display:block; }
+.chess-cell.piece-luna { background:color-mix(in srgb,#c8c0f8 15%,var(--surf)); border-color:#c8c0f8; color:#c8c0f8; }
+
+/* ── Assist popup ───────────────── */
+.assist-popup {
+  display:none; margin-top:10px; padding:9px 12px;
+  background:var(--surf2);
+  border:1px solid color-mix(in srgb,var(--gold) 40%,var(--border));
+  border-radius:7px; font-size:.75rem;
+}
+.assist-popup.show { display:block; }
+.assist-head { font-weight:600; color:var(--sub); font-size:.65rem; margin-bottom:5px; letter-spacing:.06em; text-transform:uppercase; }
+.assist-hint { padding:2px 0; }
+.assist-label { font-weight:600; }
+.assist-label.q10 { color:var(--gold); }
+.assist-label.q11 { color:var(--red); }
+.assist-detail { color:var(--sub); }
 </style>
 
 <!-- ── Header ── -->
@@ -385,6 +412,7 @@ h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-we
         <button class="floor-tab" data-f="1">2F（中）</button>
         <button class="floor-tab" data-f="0">1F（下）</button>
       </div>
+      <div id="floor-expand-notice" class="floor-expand-notice">🌙 ルナイベント発火 — 4F 解放 · 新しいレイヤーが開きました</div>
       <div class="chess-grid" id="chess-board"></div>
       <div style="margin-top:8px;font-size:.65rem;color:var(--sub)">
         <span style="color:var(--cyan)">◆</span> 白（スハル側）
@@ -399,6 +427,7 @@ h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-we
         <button class="btn" id="btn-reset">リセット</button>
         <span class="sim-status" id="sim-status">ターン 0 / 200</span>
       </div>
+      <div id="assist-popup" class="assist-popup"></div>
       <div class="section-label" style="margin-bottom:8px">イベントログ</div>
       <div class="turn-log" id="turn-log">
         <div class="log-row" style="color:var(--sub);font-size:.72rem;padding:12px">
@@ -517,10 +546,11 @@ const FIKU = [
 // ──────────────────────────────────────────
 // CHESS ENGINE
 // ──────────────────────────────────────────
-const SIZE=5, FLOORS=3, FILES='abcde';
+const SIZE=5, FILES='abcde';
+let floorCount=3, floor4Unlocked=false;
 function sqN(s){ return FILES[s.x]+(s.y+1)+'@'+(s.f+1)+'F'; }
 function same(a,b){ return a.x===b.x&&a.y===b.y&&a.f===b.f; }
-function inside(s){ return s.x>=0&&s.y>=0&&s.f>=0&&s.x<SIZE&&s.y<SIZE&&s.f<FLOORS; }
+function inside(s,floors=floorCount){ return s.x>=0&&s.y>=0&&s.f>=0&&s.x<SIZE&&s.y<SIZE&&s.f<floors; }
 
 const STEPS=(()=>{
   const out=[], ax=['x','y','f'];
@@ -531,9 +561,9 @@ const STEPS=(()=>{
   return out;
 })();
 
-function legal(p,pieces){
+function legal(p,pieces,floors=floorCount){
   return STEPS.map(d=>({x:p.at.x+d.x,y:p.at.y+d.y,f:p.at.f+d.f}))
-    .filter(s=>inside(s)&&!pieces.some(q=>q.alive&&q.color===p.color&&same(q.at,s)));
+    .filter(s=>inside(s,floors)&&!pieces.some(q=>q.alive&&q.color===p.color&&same(q.at,s)));
 }
 
 function initPieces(){
@@ -554,11 +584,11 @@ function lcg(seed){
   return ()=>{ s=Math.imul(s,1664525)+1013904223>>>0; return s/0xFFFFFFFF; };
 }
 
-function cpuMove(color,pieces,rnd){
+function cpuMove(color,pieces,rnd,floors=floorCount){
   const mine=pieces.filter(p=>p.alive&&p.color===color);
   const foes=pieces.filter(p=>p.alive&&p.color!==color);
   let best=null;
-  for(const p of mine) for(const to of legal(p,pieces)){
+  for(const p of mine) for(const to of legal(p,pieces,floors)){
     const cap=foes.some(f=>same(f.at,to))?10:0;
     const dist=foes.length?Math.min(...foes.map(f=>Math.abs(f.at.x-to.x)+Math.abs(f.at.y-to.y)+Math.abs(f.at.f-to.f))):5;
     const sc=cap+(5-dist)+rnd()*1.5;
@@ -603,24 +633,31 @@ function computeSim(){
   let pieces=initPieces();
   const turns=[];
   const qEvents={es:false,sd:false,le:false};
+  let simFloors=3;
   for(let n=1;n<=200;n++){
-    const wm=cpuMove('white',pieces,rnd);
-    const bm=cpuMove('black',pieces,rnd);
+    const wm=cpuMove('white',pieces,rnd,simFloors);
+    const bm=cpuMove('black',pieces,rnd,simFloors);
     const{pieces:next,ev}=runTurn(pieces,wm,bm);
     // Check quantum events
     for(const e of ev){
       if(e.kind==='capture'&&e.text.includes('[3F→q10]')&&!qEvents.es) qEvents.es=true;
       if(e.kind==='crash'&&!qEvents.sd) qEvents.sd=true;
-      if(e.kind==='pass'&&!qEvents.le) qEvents.le=true;
+      if(e.kind==='pass'&&!qEvents.le){
+        qEvents.le=true;
+        simFloors=4;
+        // Luna expansion: spawn new pieces on 4F
+        next.push({id:'W5',color:'white',at:{x:0,y:0,f:3},alive:true});
+        next.push({id:'B5',color:'black',at:{x:4,y:4,f:3},alive:true});
+      }
     }
     // Respawn if needed (keep game going for 200 turns)
     if(next.filter(p=>p.alive&&p.color==='white').length===0){
       next.push({id:'W'+(n%4+1),color:'white',at:{x:1+n%3,y:0,f:0},alive:true});
     }
     if(next.filter(p=>p.alive&&p.color==='black').length===0){
-      next.push({id:'B'+(n%4+1),color:'black',at:{x:3-n%3,y:4,f:2},alive:true});
+      next.push({id:'B'+(n%4+1),color:'black',at:{x:3-n%3,y:4,f:simFloors-1},alive:true});
     }
-    turns.push({n,pieces:next.map(p=>({...p,at:{...p.at}})),ev,qSnap:{...qEvents}});
+    turns.push({n,pieces:next.map(p=>({...p,at:{...p.at}})),ev,qSnap:{...qEvents},floors:simFloors});
     pieces=next;
   }
   return turns;
@@ -675,10 +712,11 @@ function renderBoard(pieces,floor){
       const bs=pieces.filter(p=>p.alive&&p.color==='black'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
       const wd=pieces.filter(p=>!p.alive&&p.color==='white'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
       const bd=pieces.filter(p=>!p.alive&&p.color==='black'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
+      const isLuna=ps=>ps.some(p=>p.id==='W5'||p.id==='B5');
       if(ws.length&&bs.length){ cell.classList.add('both'); cell.textContent='✕'; }
-      else if(ws.length){ cell.classList.add('piece-w'); cell.textContent='◆';
+      else if(ws.length){ cell.classList.add(isLuna(ws)?'piece-luna':'piece-w'); cell.textContent='◆';
         const id=document.createElement('div'); id.className='piece-id'; id.textContent=ws.map(p=>p.id).join(''); cell.appendChild(id);
-      } else if(bs.length){ cell.classList.add('piece-b'); cell.textContent='◆';
+      } else if(bs.length){ cell.classList.add(isLuna(bs)?'piece-luna':'piece-b'); cell.textContent='◆';
         const id=document.createElement('div'); id.className='piece-id'; id.textContent=bs.map(p=>p.id).join(''); cell.appendChild(id);
       }
       grid.appendChild(cell);
@@ -698,6 +736,63 @@ function updateSimMeters(qSnap){
   document.getElementById('sm-le').classList.toggle('on',simQFired.le);
   const cnt=[simQFired.es,simQFired.sd,simQFired.le].filter(Boolean).length;
   document.getElementById('sim-event-count').textContent=`発火: ${cnt} / 3`;
+}
+
+function unlockFloor4(){
+  if(floor4Unlocked) return;
+  floor4Unlocked=true; floorCount=4;
+  const tabs=document.getElementById('floor-tabs');
+  const btn=document.createElement('button');
+  btn.className='floor-tab f4'; btn.dataset.f='3'; btn.textContent='4F（ルナ）';
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.floor-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); currentFloor=3;
+    const ps=simIdx>0&&simTurns?simTurns[simIdx-1].pieces:initPieces();
+    renderBoard(ps,3);
+  });
+  tabs.insertBefore(btn,tabs.firstChild);
+  document.getElementById('floor-expand-notice').classList.add('show');
+}
+
+function computeAssistHints(pieces,fired){
+  const hints=[];
+  const alive=pieces.filter(p=>p.alive);
+  const whites=alive.filter(p=>p.color==='white');
+  const blacks=alive.filter(p=>p.color==='black');
+  if(!fired.es){
+    for(const w of whites){
+      const wm=STEPS.map(d=>({x:w.at.x+d.x,y:w.at.y+d.y,f:w.at.f+d.f})).filter(s=>inside(s));
+      for(const b of blacks) if(b.at.f===2&&wm.some(m=>m.x===b.at.x&&m.y===b.at.y&&m.f===b.at.f))
+        hints.push({q:'q10',label:'⚡ q10 チャンス',detail:`${w.id}→${b.id} を3Fで取れる`});
+    }
+    for(const b of blacks){
+      const bm=STEPS.map(d=>({x:b.at.x+d.x,y:b.at.y+d.y,f:b.at.f+d.f})).filter(s=>inside(s));
+      for(const w of whites) if(w.at.f===2&&bm.some(m=>m.x===w.at.x&&m.y===w.at.y&&m.f===w.at.f))
+        hints.push({q:'q10',label:'⚡ q10 チャンス',detail:`${b.id}→${w.id} を3Fで取れる`});
+    }
+  }
+  if(!fired.sd){
+    const wDests=new Map();
+    whites.forEach(w=>STEPS.map(d=>({x:w.at.x+d.x,y:w.at.y+d.y,f:w.at.f+d.f})).filter(s=>inside(s)).forEach(s=>{
+      const k=s.x+','+s.y+','+s.f;
+      if(!wDests.has(k)) wDests.set(k,[]);
+      wDests.get(k).push(w.id);
+    }));
+    blacks.forEach(b=>STEPS.map(d=>({x:b.at.x+d.x,y:b.at.y+d.y,f:b.at.f+d.f})).filter(s=>inside(s)).forEach(s=>{
+      const k=s.x+','+s.y+','+s.f;
+      if(wDests.has(k)&&hints.filter(h=>h.q==='q11').length<2)
+        hints.push({q:'q11',label:'⚡ q11 チャンス',detail:`${wDests.get(k)[0]}×${b.id} → 衝突可能区画`});
+    }));
+  }
+  return hints.slice(0,4);
+}
+
+function renderAssistPopup(hints){
+  const pop=document.getElementById('assist-popup');
+  if(!hints.length){pop.classList.remove('show');return;}
+  pop.classList.add('show');
+  pop.innerHTML='<div class="assist-head">🎯 次の一手アシスト — 量子イベント未発火</div>'+
+    hints.map(h=>`<div class="assist-hint"><span class="assist-label ${h.q}">${h.label}</span><span class="assist-detail"> — ${h.detail}</span></div>`).join('');
 }
 
 function addLogRow(turn,ev,qSnap){
@@ -727,9 +822,12 @@ function addLogRow(turn,ev,qSnap){
 function stepSim(){
   if(simIdx>=simTurns.length) return false;
   const t=simTurns[simIdx];
+  if(!floor4Unlocked&&t.floors===4) unlockFloor4();
   renderBoard(t.pieces,currentFloor);
   addLogRow(t.n,t.ev,t.qSnap);
   updateSimMeters(t.qSnap);
+  if(!simQFired.es||!simQFired.sd) renderAssistPopup(computeAssistHints(t.pieces,simQFired));
+  else renderAssistPopup([]);
   document.getElementById('sim-status').textContent=`ターン ${t.n} / 200`;
   simIdx++;
   return simIdx<simTurns.length;
@@ -752,6 +850,12 @@ function stopSim(){
 function resetSim(){
   stopSim();
   simTurns=null; simIdx=0; simQFired={es:false,sd:false,le:false};
+  floorCount=3; floor4Unlocked=false;
+  document.querySelectorAll('.floor-tab.f4').forEach(b=>b.remove());
+  currentFloor=2;
+  document.querySelectorAll('.floor-tab').forEach(b=>b.classList.toggle('active',b.dataset.f==='2'));
+  document.getElementById('floor-expand-notice').classList.remove('show');
+  document.getElementById('assist-popup').classList.remove('show');
   renderBoard(initPieces(),currentFloor);
   updateSimMeters(null);
   document.getElementById('turn-log').innerHTML=
