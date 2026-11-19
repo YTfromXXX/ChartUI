@@ -471,10 +471,10 @@ h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-we
 // ──────────────────────────────────────────
 const CERT = {
   id: 'add435abfe106be3',
-  bitstring: '0010111011000',
-  guides_a: ['A0','A1','A3'],  // active
-  guides_b: ['B0','B1','B3','B4'],  // active
-  events: { es: false, sd: false, le: false }
+  bitstring: '0100110011111',  // Round 4 ibm_marrakesh
+  guides_a: ['A0','A2','A3'],  // active (teleport 180°)
+  guides_b: ['B0','B3','B4'],  // active (teleport 324°)
+  events: { es: true, sd: true, le: true }
 };
 
 // 28 FIKU forms
