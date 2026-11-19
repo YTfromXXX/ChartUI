@@ -1,0 +1,757 @@
+<title>FamiDance × PoledancerChart</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --bg:#0d0f14;--surf:#13161e;--surf2:#1a1e28;--border:#252a38;
+  --fg:#e2e6f0;--sub:#7a82a0;
+  --cyan:#22b8c8;--orange:#f29b30;--purple:#9b55c0;--green:#3ecf8e;
+  --red:#f06a6a;--gold:#c8a84a;--pink:#e879a0;
+  --camo1:#3a4f20;--camo2:#5a7030;--camo3:#1e2a0e;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f0f4f8;--surf:#fff;--surf2:#e8ecf5;--border:#d0d5e8;--fg:#1a1e2e;--sub:#60698a;color-scheme:light;}}
+:root[data-theme="light"]{--bg:#f0f4f8;--surf:#fff;--surf2:#e8ecf5;--border:#d0d5e8;--fg:#1a1e2e;--sub:#60698a;color-scheme:light;}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'Space Grotesk',system-ui,sans-serif;font-size:14px;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));
+  min-height:100vh;display:flex;flex-direction:column;gap:14px;}
+
+/* header bar */
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.topbar h1{font-size:1rem;font-weight:700;margin:0;font-family:'Space Grotesk',sans-serif;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 1.2s infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.btn{background:var(--surf2);border:1px solid var(--border);color:var(--fg);border-radius:7px;padding:5px 14px;font-size:.8rem;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s;white-space:nowrap;}
+.btn:hover{border-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 10%,var(--surf2));}
+.btn.prime{background:var(--cyan);border-color:var(--cyan);color:#0d0f14;font-weight:700;}
+.btn.prime:hover{filter:brightness(1.1);}
+.btn.auto-on{background:var(--red);border-color:var(--red);color:#fff;}
+.round-label{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--sub);}
+
+/* main grid */
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;}
+@media(max-width:720px){.main-grid{grid-template-columns:1fr;}}
+
+/* panel */
+.panel{background:var(--surf);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+.panel-head{padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.panel-head .ico{font-size:1rem;}
+.panel-head .title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+.panel-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+
+/* ═══ FAMI DANCE ═══ */
+.dance-stage{position:relative;border-radius:8px;overflow:hidden;height:220px;background:var(--camo3);}
+.carpet-svg{position:absolute;inset:0;width:100%;height:100%;opacity:.85;}
+.dancers-row{position:absolute;bottom:0;left:0;right:0;display:flex;}
+#danceA,#danceB{flex:1;height:200px;}
+.divider-line{position:absolute;left:50%;top:0;bottom:0;width:2px;background:color-mix(in srgb,var(--gold) 50%,transparent);pointer-events:none;}
+.vote-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.vote-card{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;text-align:center;}
+.vote-team{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:4px;}
+.vote-team.a{color:var(--cyan);}
+.vote-team.b{color:var(--orange);}
+.vote-count{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;}
+.vote-bar-wrap{height:5px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden;}
+.vote-bar{height:100%;border-radius:3px;transition:width .4s;}
+.vba{background:var(--cyan);}
+.vbb{background:var(--orange);}
+.vote-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.vbtn{flex:1;min-width:0;padding:7px 4px;border-radius:7px;border:1px solid var(--border);background:var(--surf2);color:var(--fg);font-size:.8rem;font-weight:700;cursor:pointer;transition:.15s;font-family:'Space Grotesk',sans-serif;}
+.vbtn:hover{filter:brightness(1.2);}
+.vbtn.a-vote{border-color:var(--cyan);color:var(--cyan);}
+.vbtn.b-vote{border-color:var(--orange);color:var(--orange);}
+
+/* ═══ POLE DANCERS ═══ */
+.pole-stage{position:relative;border-radius:8px;overflow:hidden;height:220px;background:#08090f;}
+#poleCanvas{width:100%;height:100%;display:block;}
+.be-pe-wrap{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;padding:0 20px;pointer-events:none;}
+.be-pe-wrap svg{width:52px;height:88px;}
+.pole-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.pole-controls label{font-size:.78rem;color:var(--sub);}
+.amount-input{background:var(--surf2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:5px 10px;font-family:'JetBrains Mono',monospace;font-size:.82rem;width:90px;}
+.pnl-row{display:flex;gap:16px;font-family:'JetBrains Mono',monospace;font-size:.82rem;}
+.pnl-row span{color:var(--sub);}
+.pnl-row .pnl-val{font-weight:700;}
+.pnl-val.up{color:var(--green);}
+.pnl-val.dn{color:var(--red);}
+.pnl-val.flat{color:var(--sub);}
+
+/* ═══ BENCHMARK POPUP ═══ */
+.bench-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:flex-end;justify-content:center;}
+.bench-backdrop.open{display:flex;}
+.bench-sheet{background:var(--surf);border-radius:16px 16px 0 0;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;padding:0 0 32px;box-shadow:0 -8px 40px rgba(0,0,0,.5);animation:slideUp .28s ease;}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.bench-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+.bench-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1rem;padding:14px 20px 6px;border-bottom:1px solid var(--border);}
+.bench-subtitle{font-size:.75rem;color:var(--sub);font-weight:400;margin-top:2px;}
+.bench-cards{display:flex;flex-direction:column;gap:1px;padding:0 12px;margin-top:12px;}
+.bench-card{background:var(--surf2);border-radius:10px;padding:14px 16px;margin-bottom:6px;}
+.bench-card-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.backend-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;flex-shrink:0;}
+.bi-ideal{background:color-mix(in srgb,var(--green) 20%,var(--surf));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);}
+.bi-eagle{background:color-mix(in srgb,var(--cyan) 20%,var(--surf));color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 35%,transparent);}
+.bi-falcon{background:color-mix(in srgb,var(--gold) 20%,var(--surf));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 35%,transparent);}
+.bi-heron{background:color-mix(in srgb,var(--purple) 20%,var(--surf));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 35%,transparent);}
+.backend-name{font-family:'JetBrains Mono',monospace;font-size:.82rem;font-weight:500;}
+.backend-score{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;}
+.bench-params{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:.77rem;margin-bottom:10px;}
+.param-row{display:flex;justify-content:space-between;}
+.param-key{color:var(--sub);}
+.param-val{font-family:'JetBrains Mono',monospace;color:var(--fg);}
+.bench-bars{display:flex;flex-direction:column;gap:5px;}
+.bench-bar-row{display:flex;align-items:center;gap:8px;font-size:.72rem;}
+.bench-bar-label{color:var(--sub);min-width:60px;}
+.bench-bar-track{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden;}
+.bench-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+.bench-bar-num{min-width:36px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--sub);}
+.bench-close{position:absolute;top:14px;right:16px;background:var(--border);border:none;color:var(--sub);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;}
+.bench-close:hover{color:var(--fg);}
+</style>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="live-dot"></div>
+  <h1>FamiDance × PoledancerChart</h1>
+  <span class="round-label" id="roundLabel">Round —</span>
+  <button class="btn prime" id="btnRun">▶ QPU Run</button>
+  <button class="btn" id="btnAuto">Auto</button>
+  <button class="btn" id="btnBench" style="border-color:var(--gold);color:var(--gold)">◎ Benchmark</button>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main-grid">
+
+  <!-- ══ LEFT: FamiDance ══ -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ico">🕹</span>
+      <span class="title" style="color:var(--cyan)">FamiDance Revolution</span>
+      <span style="margin-left:auto;font-size:.7rem;color:var(--sub)" id="fdEvent">—</span>
+    </div>
+    <div class="panel-body">
+      <!-- Stage with apoptosome carpet -->
+      <div class="dance-stage">
+        <!-- Apoptosome 7-fold geometric carpet SVG -->
+        <svg class="carpet-svg" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- 7-fold apoptosome petal unit -->
+            <g id="apo7">
+              <!-- center ring -->
+              <circle cx="0" cy="0" r="12" fill="none" stroke="#c8a84a" stroke-width="1.2" opacity=".6"/>
+              <circle cx="0" cy="0" r="6"  fill="#c8a84a" opacity=".4"/>
+              <!-- 7 spokes + petals -->
+              <g id="spoke1"><line x1="0" y1="-12" x2="0" y2="-38" stroke="#c8a84a" stroke-width=".8" opacity=".5"/>
+                <ellipse cx="0" cy="-28" rx="5" ry="10" fill="#5a7030" opacity=".5" transform="rotate(0)"/>
+                <circle cx="0" cy="-38" r="4" fill="#c8a84a" opacity=".4"/>
+              </g>
+              <use href="#spoke1" transform="rotate(51.43)"/>
+              <use href="#spoke1" transform="rotate(102.86)"/>
+              <use href="#spoke1" transform="rotate(154.29)"/>
+              <use href="#spoke1" transform="rotate(205.71)"/>
+              <use href="#spoke1" transform="rotate(257.14)"/>
+              <use href="#spoke1" transform="rotate(308.57)"/>
+            </g>
+            <!-- tiled pattern -->
+            <pattern id="apoTile" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+              <rect width="80" height="80" fill="#1e2a0e"/>
+              <!-- camo spots -->
+              <ellipse cx="15" cy="20" rx="12" ry="8" fill="#2a3a18" opacity=".7"/>
+              <ellipse cx="60" cy="10" rx="16" ry="7" fill="#3a4f20" opacity=".6"/>
+              <ellipse cx="70" cy="55" rx="10" ry="14" fill="#2a3a18" opacity=".5"/>
+              <ellipse cx="20" cy="65" rx="14" ry="8" fill="#1e2a0e" opacity=".8"/>
+              <!-- apoptosome unit at each tile corner/center -->
+              <use href="#apo7" transform="translate(40,40) scale(.8)"/>
+            </pattern>
+            <!-- gold chevron overlay -->
+            <pattern id="chevron" x="0" y="0" width="40" height="20" patternUnits="userSpaceOnUse">
+              <polyline points="0,10 20,0 40,10" fill="none" stroke="#c8a84a" stroke-width=".6" opacity=".2"/>
+              <polyline points="0,20 20,10 40,20" fill="none" stroke="#c8a84a" stroke-width=".6" opacity=".2"/>
+            </pattern>
+          </defs>
+          <!-- carpet layers -->
+          <rect width="400" height="220" fill="url(#apoTile)"/>
+          <rect width="400" height="220" fill="url(#chevron)"/>
+          <!-- stage edge glow -->
+          <rect x="0" y="180" width="400" height="40" fill="url(#stageGlow)" opacity=".6"/>
+          <defs>
+            <linearGradient id="stageGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#c8a84a" stop-opacity="0"/>
+              <stop offset="1" stop-color="#c8a84a" stop-opacity=".25"/>
+            </linearGradient>
+          </defs>
+          <!-- center spotlight rings -->
+          <circle cx="200" cy="140" r="80" fill="none" stroke="#c8a84a" stroke-width=".5" opacity=".15"/>
+          <circle cx="200" cy="140" r="50" fill="none" stroke="#c8a84a" stroke-width=".5" opacity=".2"/>
+          <circle cx="200" cy="140" r="20" fill="none" stroke="#c8a84a" stroke-width=".5" opacity=".3"/>
+          <!-- division line glow -->
+          <rect x="198" y="0" width="4" height="220" fill="#c8a84a" opacity=".12"/>
+        </svg>
+        <!-- dancer canvases -->
+        <div class="dancers-row">
+          <canvas id="danceA"></canvas>
+          <canvas id="danceB"></canvas>
+        </div>
+        <div class="divider-line"></div>
+      </div>
+
+      <!-- vote counts -->
+      <div class="vote-row">
+        <div class="vote-card">
+          <div class="vote-team a">スハル Team A</div>
+          <div class="vote-count" id="voteA" style="color:var(--cyan)">0</div>
+          <div class="vote-bar-wrap"><div class="vote-bar vba" id="vbarA" style="width:50%"></div></div>
+        </div>
+        <div class="vote-card">
+          <div class="vote-team b">リナリス Team B</div>
+          <div class="vote-count" id="voteB" style="color:var(--orange)">0</div>
+          <div class="vote-bar-wrap"><div class="vote-bar vbb" id="vbarB" style="width:50%"></div></div>
+        </div>
+      </div>
+
+      <!-- vote buttons -->
+      <div class="vote-btns">
+        <button class="vbtn a-vote" id="vbA" title="A — q10 CAPTURE vote">A ★</button>
+        <button class="vbtn b-vote" id="vbB" title="B — q11 CRASH vote">B ✕</button>
+        <button class="vbtn" style="border-color:var(--orange);color:var(--orange)" id="vbY" title="Y — q12 PASS vote">Y ○</button>
+        <button class="vbtn" style="border-color:var(--sub);color:var(--sub)" id="vbX" title="X — SKIP">X »</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT: Pole Dancers Chart ══ -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ico">📊</span>
+      <span class="title" style="color:var(--gold)">PoledancerChart Battle</span>
+      <span style="margin-left:auto;font-size:.7rem;color:var(--sub)" id="pdEvent">BE vs PE</span>
+    </div>
+    <div class="panel-body">
+      <!-- Stage -->
+      <div class="pole-stage">
+        <canvas id="poleCanvas"></canvas>
+        <!-- BE and PE characters -->
+        <div class="be-pe-wrap">
+          <!-- Bull Entertainer (BE) -->
+          <svg id="beSvg" viewBox="0 0 52 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- pole -->
+            <rect x="24" y="0" width="4" height="88" fill="#333" rx="2"/>
+            <!-- body costume (bull) -->
+            <ellipse cx="26" cy="52" rx="11" ry="14" fill="#3ecf8e" opacity=".9"/>
+            <!-- head with horns -->
+            <circle cx="26" cy="30" r="10" fill="#5a8a60"/>
+            <path d="M18,24 Q12,16 15,12 Q20,10 22,20" fill="#c8a84a"/>
+            <path d="M34,24 Q40,16 37,12 Q32,10 30,20" fill="#c8a84a"/>
+            <!-- face -->
+            <circle cx="22" cy="30" r="2" fill="#0d0f14"/>
+            <circle cx="30" cy="30" r="2" fill="#0d0f14"/>
+            <ellipse cx="26" cy="34" rx="5" ry="3" fill="#4a7050"/>
+            <!-- arms pose -->
+            <line id="beArmL" x1="15" y1="50" x2="4" y2="40" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/>
+            <line id="beArmR" x1="37" y1="50" x2="48" y2="40" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/>
+            <!-- legs -->
+            <line x1="20" y1="66" x2="14" y2="82" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/>
+            <line x1="32" y1="66" x2="38" y2="82" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/>
+            <!-- costume tag -->
+            <rect x="17" y="56" width="18" height="8" rx="3" fill="#2a7a50"/>
+            <text x="26" y="63" text-anchor="middle" font-size="5" fill="#fff" font-family="Arial" font-weight="bold">BE</text>
+          </svg>
+          <!-- Bear Entertainer (PE) -->
+          <svg id="peSvg" viewBox="0 0 52 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- pole -->
+            <rect x="24" y="0" width="4" height="88" fill="#333" rx="2"/>
+            <!-- body -->
+            <ellipse cx="26" cy="52" rx="11" ry="14" fill="#f06a6a" opacity=".9"/>
+            <!-- head -->
+            <circle cx="26" cy="30" r="10" fill="#8a4040"/>
+            <!-- bear ears -->
+            <circle cx="17" cy="22" r="5" fill="#8a4040"/>
+            <circle cx="17" cy="22" r="3" fill="#b05050"/>
+            <circle cx="35" cy="22" r="5" fill="#8a4040"/>
+            <circle cx="35" cy="22" r="3" fill="#b05050"/>
+            <!-- face -->
+            <circle cx="22" cy="30" r="2" fill="#0d0f14"/>
+            <circle cx="30" cy="30" r="2" fill="#0d0f14"/>
+            <ellipse cx="26" cy="34" rx="5" ry="3" fill="#6a3030"/>
+            <!-- arms pose (reaching down = bear/short market) -->
+            <line id="peArmL" x1="15" y1="50" x2="4" y2="62" stroke="#f06a6a" stroke-width="3" stroke-linecap="round"/>
+            <line id="peArmR" x1="37" y1="50" x2="48" y2="62" stroke="#f06a6a" stroke-width="3" stroke-linecap="round"/>
+            <!-- legs -->
+            <line x1="20" y1="66" x2="14" y2="82" stroke="#f06a6a" stroke-width="3" stroke-linecap="round"/>
+            <line x1="32" y1="66" x2="38" y2="82" stroke="#f06a6a" stroke-width="3" stroke-linecap="round"/>
+            <!-- costume tag -->
+            <rect x="17" y="56" width="18" height="8" rx="3" fill="#8a2020"/>
+            <text x="26" y="63" text-anchor="middle" font-size="5" fill="#fff" font-family="Arial" font-weight="bold">PE</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- P&L + controls -->
+      <div class="pnl-row">
+        <div><span>Total </span><span class="pnl-val flat" id="pnlTotal">$0.00</span></div>
+        <div><span>BE </span><span class="pnl-val up" id="pnlBe">$0.00</span></div>
+        <div><span>PE </span><span class="pnl-val dn" id="pnlPe">$0.00</span></div>
+        <div><span>Rounds </span><span class="pnl-val flat" id="pnlRounds">0</span></div>
+      </div>
+      <div class="pole-controls">
+        <label>Invest / round</label>
+        <input class="amount-input" type="number" id="amountInput" value="20.83" min="1" step="0.01">
+        <button class="btn" id="btnInvest" style="border-color:var(--gold);color:var(--gold)">+ Invest</button>
+        <button class="btn" id="btnReset48" style="font-size:.74rem">Reset 48</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BENCHMARK POPUP ═══ -->
+<div class="bench-backdrop" id="benchBackdrop">
+  <div class="bench-sheet" style="position:relative">
+    <button class="bench-close" id="benchClose">✕</button>
+    <div class="bench-handle"></div>
+    <div class="bench-title">Synthetic QPU Benchmark
+      <div class="bench-subtitle">Circuit: 13-qubit H-gate + measure · shots 500</div>
+    </div>
+    <div class="bench-cards" id="benchCards"></div>
+  </div>
+</div>
+
+<script>
+// ══ QPU simulation ════════════════════════════════════════════════════════════
+const BACKENDS = [
+  { id:"ideal",  name:"cure_synth_ideal_v1",  cls:"bi-ideal",  score:100.0,
+    err:0.000, queue:0,  lat:80,   shots:9999,
+    entropy:13.00, evRate:50.0, t1:"∞",        depth:2, bias:0.000, label:"IDEAL" },
+  { id:"eagle",  name:"cure_synth_eagle_r3",  cls:"bi-eagle",  score:82.5,
+    err:0.004, queue:4,  lat:420,  shots:2000,
+    entropy:12.94, evRate:49.6, t1:"~250µs",   depth:4, bias:0.004, label:"R3" },
+  { id:"heron",  name:"cure_synth_heron_r2",  cls:"bi-heron",  score:71.8,
+    err:0.002, queue:11, lat:680,  shots:1800,
+    entropy:12.97, evRate:49.8, t1:"~500µs",   depth:4, bias:0.002, label:"R2" },
+  { id:"falcon", name:"cure_synth_falcon_r1", cls:"bi-falcon", score:61.3,
+    err:0.012, queue:2,  lat:210,  shots:2000,
+    entropy:12.78, evRate:48.8, t1:"~85µs",    depth:4, bias:0.012, label:"R1" },
+];
+
+let roundNum = 0, autoTimer = null;
+let voteA = 0, voteB = 0;
+let pnlBe = 0, pnlPe = 0, pnlRounds = 0;
+const snakeSegs = []; // {x,y,w,h,dir,amount,round}
+let currentState = null;
+
+function simRound(backend) {
+  const counts = {};
+  for (let i = 0; i < 500; i++) {
+    let bits = "";
+    for (let q = 12; q >= 0; q--) {
+      const p = 0.5 + (Math.random() - 0.5) * backend.err * 4;
+      bits += Math.random() < Math.min(Math.max(p, 0.02), 0.98) ? "1" : "0";
+    }
+    counts[bits] = (counts[bits] || 0) + 1;
+  }
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+  const bits = top.split("").reverse().map(Number);
+  return {
+    bits, top,
+    q10: !!bits[10], q11: !!bits[11], q12: !!bits[12],
+    angleA: centroid(bits.slice(0,5), [0,72,144,216,288], 0),
+    angleB: centroid(bits.slice(5,10), [36,108,180,252,324], 1),
+    backend: backend.name,
+  };
+}
+
+function centroid(gBits, angles, mode) {
+  const active = angles.filter((_,i) => mode===0 ? gBits[i]===0 : gBits[i]===1);
+  if (!active.length) return 0;
+  const rads = active.map(a => a * Math.PI / 180);
+  return ((Math.atan2(
+    rads.reduce((s,r)=>s+Math.sin(r),0)/rads.length,
+    rads.reduce((s,r)=>s+Math.cos(r),0)/rads.length
+  ) * 180 / Math.PI) + 360) % 360;
+}
+
+// pick best backend by score
+function bestBackend() {
+  return BACKENDS.reduce((a,b) => a.score > b.score ? a : b);
+}
+
+// ══ Dance Canvas ══════════════════════════════════════════════════════════════
+function resizeDanceCanvases() {
+  const a = document.getElementById("danceA");
+  const b = document.getElementById("danceB");
+  const stage = a.closest(".dance-stage");
+  const W = stage.clientWidth / 2;
+  const H = 200;
+  [a, b].forEach(c => { c.width = W; c.height = H; });
+}
+
+function drawDancer(canvas, teamColor, state, teamKey, roundN) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // subtle spotlight
+  const grd = ctx.createRadialGradient(W/2, H, 10, W/2, H, H*.7);
+  grd.addColorStop(0, `${teamColor}22`);
+  grd.addColorStop(1, "transparent");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+
+  const cx = W / 2, by = H - 20;
+  const ev = state;
+
+  // determine pose from QPU state
+  let pose = "idle";
+  if (teamKey === "A" && ev.q10) pose = "capture";
+  if (teamKey === "B" && ev.q11) pose = "crash";
+  if (ev.q12) pose = "pass";
+
+  // body sway based on angle
+  const angle = teamKey === "A" ? ev.angleA : ev.angleB;
+  const sway = Math.sin(angle * Math.PI / 180) * 8;
+
+  ctx.save();
+  ctx.translate(cx + sway, by);
+
+  // draw stick figure
+  ctx.strokeStyle = teamColor;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+
+  // legs
+  if (pose === "capture") {
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(-18, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(14, -4); ctx.stroke();
+  } else if (pose === "crash") {
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(-10, 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(10, 4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -30, 6, 0, Math.PI*2); ctx.strokeStyle = "#f06a6a"; ctx.stroke();
+  } else if (pose === "pass") {
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(-14, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(14, 0); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(-10, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(10, 0); ctx.stroke();
+  }
+
+  // body
+  ctx.strokeStyle = teamColor;
+  ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(0, -58); ctx.stroke();
+
+  // arms
+  if (pose === "capture") {
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(-22, -58); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(22, -66); ctx.stroke();
+  } else if (pose === "crash") {
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(-18, -38); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(18, -38); ctx.stroke();
+  } else if (pose === "pass") {
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(-20, -62); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(20, -62); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(-16, -40); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(16, -40); ctx.stroke();
+  }
+
+  // head
+  ctx.fillStyle = teamColor;
+  ctx.beginPath(); ctx.arc(0, -68, 11, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#0d0f14";
+  ctx.beginPath(); ctx.arc(-4, -70, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -70, 2, 0, Math.PI*2); ctx.fill();
+
+  // event glow ring
+  if (pose !== "idle") {
+    ctx.strokeStyle = pose === "crash" ? "#f06a6a" : pose === "pass" ? "#f29b30" : "#22b8c8";
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = .5;
+    ctx.beginPath(); ctx.arc(0, -44, 28, 0, Math.PI*2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  // team label
+  ctx.fillStyle = teamColor;
+  ctx.font = "bold 10px Space Grotesk, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`Team ${teamKey}`, cx, 16);
+  ctx.fillStyle = "rgba(255,255,255,.4)";
+  ctx.font = "9px JetBrains Mono, monospace";
+  ctx.fillText(`${Math.round(angle)}°`, cx, 28);
+}
+
+// ══ Snake Chart ══════════════════════════════════════════════════════════════
+function resizePole() {
+  const c = document.getElementById("poleCanvas");
+  const wrap = c.parentElement;
+  c.width = wrap.clientWidth; c.height = 220;
+}
+
+function drawSnakeChart() {
+  const c = document.getElementById("poleCanvas");
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#08090f";
+  ctx.fillRect(0, 0, W, H);
+
+  if (snakeSegs.length === 0) {
+    ctx.fillStyle = "#252a38";
+    ctx.font = "13px Space Grotesk, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("+ Invest → square wave starts", W/2, H/2);
+    return;
+  }
+
+  // zero line
+  const mid = H / 2;
+  ctx.strokeStyle = "#252a38";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // draw segments as filled blocks (square wave snake)
+  const segW = Math.max(4, Math.min(32, (W - 20) / Math.max(snakeSegs.length, 1)));
+  let x = 10;
+  snakeSegs.forEach((seg, i) => {
+    const h = Math.min(Math.abs(seg.pnl) * 1.2 + 8, mid * .8);
+    const up = seg.dir > 0;
+    const y = up ? mid - h : mid;
+    const color = up ? "#3ecf8e" : "#f06a6a";
+    // block
+    ctx.fillStyle = color + "55";
+    ctx.fillRect(x, y, segW - 1, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, up ? y : y + h - 2, segW - 1, 2);
+    // amount label (every 8th)
+    if (i % 8 === 0) {
+      ctx.fillStyle = "#7a82a0";
+      ctx.font = "8px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`$${seg.amount.toFixed(0)}`, x + segW/2, up ? y - 3 : y + h + 10);
+    }
+    x += segW;
+  });
+
+  // snake spine line
+  ctx.strokeStyle = "#c8a84a";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  x = 10 + segW / 2;
+  snakeSegs.forEach((seg, i) => {
+    const up = seg.dir > 0;
+    const h = Math.min(Math.abs(seg.pnl) * 1.2 + 8, mid * .8);
+    const y = up ? mid - h : mid + h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    x += segW;
+  });
+  ctx.stroke();
+
+  // current P&L overlay
+  const total = snakeSegs.reduce((s, g) => s + g.pnl, 0);
+  ctx.fillStyle = total >= 0 ? "#3ecf8e" : "#f06a6a";
+  ctx.font = "bold 11px JetBrains Mono, monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`${total >= 0 ? "+" : ""}$${total.toFixed(2)}`, W - 10, 20);
+}
+
+// ══ Main Run Round ════════════════════════════════════════════════════════════
+function runRound(investAmount) {
+  roundNum++;
+  document.getElementById("roundLabel").textContent = `Round ${roundNum}`;
+  const best = bestBackend();
+  const state = simRound(best);
+  currentState = state;
+
+  // fami dance
+  resizeDanceCanvases();
+  drawDancer(document.getElementById("danceA"), "#22b8c8", state, "A", roundNum);
+  drawDancer(document.getElementById("danceB"), "#f29b30", state, "B", roundNum);
+  const evStr = [state.q10?"★CAPTURE":"", state.q11?"✕CRASH":"", state.q12?"○PASS":""].filter(Boolean).join(" ");
+  document.getElementById("fdEvent").textContent = evStr || "— no event";
+
+  // auto vote from events
+  if (state.q10) { voteA += 2; }
+  if (state.q11) { voteB += 2; }
+  if (state.q12) { voteA += 1; voteB += 1; }
+  updateVotes();
+
+  // pole chart
+  if (investAmount && investAmount > 0) {
+    const dir = state.q10 ? 1 : state.q11 ? -1 : (Math.random() > .5 ? 1 : -1);
+    const pnlDelta = investAmount * (dir > 0 ? 0.03 : -0.025) * (1 + Math.random() * 0.5);
+    if (dir > 0) pnlBe += pnlDelta; else pnlPe -= pnlDelta;
+    snakeSegs.push({ dir, pnl: pnlDelta, amount: investAmount, round: roundNum });
+    if (snakeSegs.length > 60) snakeSegs.shift();
+    pnlRounds++;
+    updatePnL();
+    animateCharacters(state);
+  }
+  drawSnakeChart();
+  document.getElementById("pdEvent").textContent = `${state.q10?"▲BE":"▼PE"} R${roundNum}`;
+}
+
+function animateCharacters(state) {
+  const beArms = document.querySelectorAll("#beArmL,#beArmR");
+  const peArms = document.querySelectorAll("#peArmL,#peArmR");
+  if (state.q10) { // bull win
+    document.getElementById("beArmL").setAttribute("x2","2");
+    document.getElementById("beArmL").setAttribute("y2","28");
+    document.getElementById("beArmR").setAttribute("x2","50");
+    document.getElementById("beArmR").setAttribute("y2","28");
+    setTimeout(()=>{
+      document.getElementById("beArmL").setAttribute("x2","4");
+      document.getElementById("beArmL").setAttribute("y2","40");
+      document.getElementById("beArmR").setAttribute("x2","48");
+      document.getElementById("beArmR").setAttribute("y2","40");
+    }, 400);
+  }
+  if (state.q11) { // bear win
+    document.getElementById("peArmL").setAttribute("x2","2");
+    document.getElementById("peArmL").setAttribute("y2","40");
+    document.getElementById("peArmR").setAttribute("x2","50");
+    document.getElementById("peArmR").setAttribute("y2","40");
+    setTimeout(()=>{
+      document.getElementById("peArmL").setAttribute("x2","4");
+      document.getElementById("peArmL").setAttribute("y2","62");
+      document.getElementById("peArmR").setAttribute("x2","48");
+      document.getElementById("peArmR").setAttribute("y2","62");
+    }, 400);
+  }
+}
+
+function updateVotes() {
+  document.getElementById("voteA").textContent = voteA;
+  document.getElementById("voteB").textContent = voteB;
+  const total = voteA + voteB || 1;
+  document.getElementById("vbarA").style.width = (voteA / total * 100) + "%";
+  document.getElementById("vbarB").style.width = (voteB / total * 100) + "%";
+}
+
+function updatePnL() {
+  const total = pnlBe - Math.abs(pnlPe);
+  const tEl = document.getElementById("pnlTotal");
+  tEl.textContent = `${total >= 0 ? "+" : ""}$${total.toFixed(2)}`;
+  tEl.className = `pnl-val ${total > 0 ? "up" : total < 0 ? "dn" : "flat"}`;
+  document.getElementById("pnlBe").textContent = `+$${pnlBe.toFixed(2)}`;
+  document.getElementById("pnlPe").textContent = `-$${Math.abs(pnlPe).toFixed(2)}`;
+  document.getElementById("pnlRounds").textContent = pnlRounds;
+}
+
+// ══ Benchmark Sheet ══════════════════════════════════════════════════════════
+function buildBenchCards() {
+  const container = document.getElementById("benchCards");
+  const barColors = { score:"#22b8c8", entropy:"#9b55c0", evRate:"#f29b30", accuracy:"#3ecf8e" };
+  container.innerHTML = BACKENDS.map(b => `
+    <div class="bench-card">
+      <div class="bench-card-head">
+        <div class="backend-icon ${b.cls}">${b.label}</div>
+        <div>
+          <div class="backend-name">${b.name}</div>
+          <div style="font-size:.7rem;color:var(--sub);font-family:'JetBrains Mono',monospace">${b.id === "ideal" ? "noise_model: ideal" : `error_rate: ${b.err}`}</div>
+        </div>
+        <div class="backend-score" style="color:${b.score>=80?"#3ecf8e":b.score>=65?"#f29b30":"#f06a6a"}">${b.score}</div>
+      </div>
+      <div class="bench-params">
+        <div class="param-row"><span class="param-key">qubit_flip_bias</span><span class="param-val">${b.bias.toFixed(3)}</span></div>
+        <div class="param-row"><span class="param-key">event_fire_rate</span><span class="param-val">${b.evRate}%</span></div>
+        <div class="param-row"><span class="param-key">bitstring_entropy</span><span class="param-val">${b.entropy} bits</span></div>
+        <div class="param-row"><span class="param-key">t1_equivalent</span><span class="param-val">${b.t1}</span></div>
+        <div class="param-row"><span class="param-key">circuit_depth</span><span class="param-val">${b.depth}</span></div>
+        <div class="param-row"><span class="param-key">queue_len</span><span class="param-val">${b.queue}</span></div>
+        <div class="param-row"><span class="param-key">latency_ms</span><span class="param-val">${b.lat}ms</span></div>
+        <div class="param-row"><span class="param-key">available_shots</span><span class="param-val">${b.shots}</span></div>
+      </div>
+      <div class="bench-bars">
+        <div class="bench-bar-row"><span class="bench-bar-label">score</span><div class="bench-bar-track"><div class="bench-bar-fill" style="width:${b.score}%;background:#22b8c8"></div></div><span class="bench-bar-num">${b.score}</span></div>
+        <div class="bench-bar-row"><span class="bench-bar-label">entropy</span><div class="bench-bar-track"><div class="bench-bar-fill" style="width:${(b.entropy/13*100).toFixed(1)}%;background:#9b55c0"></div></div><span class="bench-bar-num">${(b.entropy/13*100).toFixed(0)}%</span></div>
+        <div class="bench-bar-row"><span class="bench-bar-label">ev rate</span><div class="bench-bar-track"><div class="bench-bar-fill" style="width:${b.evRate*2}%;background:#f29b30"></div></div><span class="bench-bar-num">${b.evRate}%</span></div>
+        <div class="bench-bar-row"><span class="bench-bar-label">accuracy</span><div class="bench-bar-track"><div class="bench-bar-fill" style="width:${(1-b.err/0.05)*100}%;background:#3ecf8e"></div></div><span class="bench-bar-num">${((1-b.err/0.05)*100).toFixed(0)}%</span></div>
+      </div>
+    </div>`).join("");
+}
+
+// ══ Events ═══════════════════════════════════════════════════════════════════
+document.getElementById("btnRun").addEventListener("click", () => {
+  const amt = parseFloat(document.getElementById("amountInput").value) || 0;
+  runRound(amt);
+});
+
+document.getElementById("btnAuto").addEventListener("click", function() {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    this.textContent = "Auto"; this.className = "btn";
+  } else {
+    const amt = parseFloat(document.getElementById("amountInput").value) || 0;
+    autoTimer = setInterval(() => runRound(amt), 1600);
+    this.textContent = "■ Stop"; this.className = "btn auto-on";
+    runRound(amt);
+  }
+});
+
+document.getElementById("btnInvest").addEventListener("click", () => {
+  const amt = parseFloat(document.getElementById("amountInput").value) || 0;
+  runRound(amt);
+});
+
+document.getElementById("btnReset48").addEventListener("click", () => {
+  pnlBe = 0; pnlPe = 0; pnlRounds = 0;
+  snakeSegs.length = 0;
+  updatePnL(); drawSnakeChart();
+  // reset to $20.83 (1000/48)
+  document.getElementById("amountInput").value = "20.83";
+});
+
+// vote buttons
+document.getElementById("vbA").addEventListener("click", () => { voteA += 1; updateVotes(); if (!currentState) return; });
+document.getElementById("vbB").addEventListener("click", () => { voteB += 1; updateVotes(); });
+document.getElementById("vbY").addEventListener("click", () => { voteA += 1; voteB += 1; updateVotes(); });
+document.getElementById("vbX").addEventListener("click", () => {
+  const amt = parseFloat(document.getElementById("amountInput").value) || 0;
+  runRound(amt);
+});
+
+// benchmark popup
+document.getElementById("btnBench").addEventListener("click", () => {
+  buildBenchCards();
+  document.getElementById("benchBackdrop").classList.add("open");
+});
+document.getElementById("benchClose").addEventListener("click", () => {
+  document.getElementById("benchBackdrop").classList.remove("open");
+});
+document.getElementById("benchBackdrop").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) document.getElementById("benchBackdrop").classList.remove("open");
+});
+
+// keyboard
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const amt = parseFloat(document.getElementById("amountInput").value) || 0;
+  if (e.key.toLowerCase() === "a") { voteA += 2; updateVotes(); runRound(amt); }
+  if (e.key.toLowerCase() === "b") { voteB += 2; updateVotes(); runRound(amt); }
+  if (e.key.toLowerCase() === "y") { voteA += 1; voteB += 1; updateVotes(); runRound(amt); }
+  if (e.key.toLowerCase() === "x") { runRound(amt); }
+});
+
+// resize
+window.addEventListener("resize", () => {
+  resizeDanceCanvases();
+  resizePole();
+  if (currentState) {
+    drawDancer(document.getElementById("danceA"), "#22b8c8", currentState, "A", roundNum);
+    drawDancer(document.getElementById("danceB"), "#f29b30", currentState, "B", roundNum);
+  }
+  drawSnakeChart();
+});
+
+// init
+resizeDanceCanvases();
+resizePole();
+drawSnakeChart();
+// draw idle dancers
+const idleState = { q10:false, q11:false, q12:false, angleA:180, angleB:324 };
+drawDancer(document.getElementById("danceA"), "#22b8c8", idleState, "A", 0);
+drawDancer(document.getElementById("danceB"), "#f29b30", idleState, "B", 0);
+</script>
