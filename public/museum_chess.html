@@ -425,6 +425,7 @@ h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-we
         <button class="btn primary" id="btn-play">▶ 実行</button>
         <button class="btn" id="btn-step" disabled>1手進む</button>
         <button class="btn" id="btn-reset">リセット</button>
+        <button class="btn" id="btn-r4mode" title="q10/q11発火を優先するAIに切替">⚡ R4攻略</button>
         <span class="sim-status" id="sim-status">ターン 0 / 200</span>
       </div>
       <div id="assist-popup" class="assist-popup"></div>
@@ -547,7 +548,7 @@ const FIKU = [
 // CHESS ENGINE
 // ──────────────────────────────────────────
 const SIZE=5, FILES='abcde';
-let floorCount=3, floor4Unlocked=false;
+let floorCount=3, floor4Unlocked=false, round4Mode=false;
 function sqN(s){ return FILES[s.x]+(s.y+1)+'@'+(s.f+1)+'F'; }
 function same(a,b){ return a.x===b.x&&a.y===b.y&&a.f===b.f; }
 function inside(s,floors=floorCount){ return s.x>=0&&s.y>=0&&s.f>=0&&s.x<SIZE&&s.y<SIZE&&s.f<floors; }
@@ -584,14 +585,19 @@ function lcg(seed){
   return ()=>{ s=Math.imul(s,1664525)+1013904223>>>0; return s/0xFFFFFFFF; };
 }
 
-function cpuMove(color,pieces,rnd,floors=floorCount){
+function cpuMove(color,pieces,rnd,floors=floorCount,r4=false,qFired={es:false,sd:false,le:false}){
   const mine=pieces.filter(p=>p.alive&&p.color===color);
   const foes=pieces.filter(p=>p.alive&&p.color!==color);
   let best=null;
+  const rndWeight = r4 ? 0.3 : 1.5; // less randomness in r4 → more deterministic
   for(const p of mine) for(const to of legal(p,pieces,floors)){
     const cap=foes.some(f=>same(f.at,to))?10:0;
     const dist=foes.length?Math.min(...foes.map(f=>Math.abs(f.at.x-to.x)+Math.abs(f.at.y-to.y)+Math.abs(f.at.f-to.f))):5;
-    const sc=cap+(5-dist)+rnd()*1.5;
+    // q10: heavy bonus for capture on 3F
+    const q10b = r4&&!qFired.es&&cap>0&&to.f===2 ? 90 : 0;
+    // q10 approach: reward moving to 3F at all
+    const f3b  = r4&&!qFired.es&&to.f===2 ? 18 : 0;
+    const sc=cap+(5-dist)+rnd()*rndWeight+q10b+f3b;
     if(!best||sc>best.sc) best={id:p.id,to,sc};
   }
   return best?{id:best.id,to:best.to}:null;
@@ -634,9 +640,30 @@ function computeSim(){
   const turns=[];
   const qEvents={es:false,sd:false,le:false};
   let simFloors=3;
+  const r4=round4Mode;
   for(let n=1;n<=200;n++){
-    const wm=cpuMove('white',pieces,rnd,simFloors);
-    const bm=cpuMove('black',pieces,rnd,simFloors);
+    let wm=cpuMove('white',pieces,rnd,simFloors,r4,{...qEvents});
+    let bm=cpuMove('black',pieces,rnd,simFloors,r4,{...qEvents});
+    // q11 crash-nudge: after q10 fires, find shared square and force collision
+    if(r4&&qEvents.es&&!qEvents.sd){
+      const whites=pieces.filter(p=>p.alive&&p.color==='white');
+      const blacks=pieces.filter(p=>p.alive&&p.color==='black');
+      let found=null;
+      outerCrash:
+      for(const w of whites){
+        for(const ws of legal(w,pieces,simFloors)){
+          for(const b of blacks){
+            if(legal(b,pieces,simFloors).some(bs=>same(bs,ws))){
+              found={wid:w.id,bid:b.id,sq:ws}; break outerCrash;
+            }
+          }
+        }
+      }
+      if(found&&rnd()<0.65){
+        wm={id:found.wid,to:{...found.sq}};
+        bm={id:found.bid,to:{...found.sq}};
+      }
+    }
     const{pieces:next,ev}=runTurn(pieces,wm,bm);
     // Check quantum events
     for(const e of ev){
@@ -956,6 +983,15 @@ document.getElementById('btn-step').addEventListener('click',()=>{
   stepSim();
 });
 document.getElementById('btn-reset').addEventListener('click',resetSim);
+
+document.getElementById('btn-r4mode').addEventListener('click',()=>{
+  round4Mode=!round4Mode;
+  const btn=document.getElementById('btn-r4mode');
+  btn.style.borderColor=round4Mode?'var(--gold)':'';
+  btn.style.color=round4Mode?'var(--gold)':'';
+  btn.textContent=round4Mode?'⚡ R4攻略 ON':'⚡ R4攻略';
+  resetSim();
+});
 
 document.querySelectorAll('.filter-btn').forEach(btn=>{
   btn.addEventListener('click',()=>applyFilter(btn.dataset.filter));
