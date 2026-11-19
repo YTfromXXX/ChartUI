@@ -12,6 +12,12 @@ Usage:
     r = round_circuit(round_num=1, mode="ibm",
                       token=..., instance=..., confirm="RUN ON QPU")
 
+    # Cure-API: SELECT existing synthetic QPU or CREATE custom one
+    r = round_circuit(round_num=5, mode="custom",
+                      endpoint="https://your-cure-api/qpu/run",
+                      api_key="...",
+                      noise_model={"type": "depolarizing", "error_rate": 0.005})
+
 The eternal space: five guide positions per team (10 total).
   Team A (双渦輪, スハル - cyan):   bits 0-4
   Team B (四枝雷, リナリス - orange): bits 5-9
@@ -74,6 +80,62 @@ def _run_fake(qc, shots: int, backend_name: str | None) -> dict[str, int]:
     return SamplerV2(mode=bk).run([isa], shots=shots).result()[0].data.meas.get_counts()
 
 
+def _run_custom(
+    qc,
+    shots: int,
+    round_num: int,
+    endpoint: str,
+    api_key: str | None = None,
+    noise_model: dict | None = None,
+    extra_headers: dict | None = None,
+) -> tuple[dict[str, int], str | None]:
+    """POST the circuit to a Cure-API custom QPU endpoint and retrieve counts.
+
+    Request body (JSON):
+        circuit      : OpenQASM 3 string of the mothblast circuit
+        shots        : number of measurement shots
+        round_num    : round identifier (for server-side logging / smart-contract nonce)
+        noise_model  : optional noise profile, e.g. {"type":"depolarizing","error_rate":0.005}
+
+    Expected response (JSON):
+        counts       : dict[bitstring, int]  — measurement histogram (MSB-first, like Qiskit)
+        backend_name : str (optional)        — which QPU the server selected
+        qpu_seconds  : float (optional)      — QPU wall-clock seconds used
+
+    Cure-API SELECT / CREATE pattern:
+        - Set endpoint to ".../qpu/select" to let the server choose from its QPU pool.
+        - Set endpoint to ".../qpu/create" with a noise_model to spin up a custom backend
+          and receive counts from that freshly-created synthetic QPU.
+        - The smart-contract nonce can be derived from round_num + top bitstring on the
+          server side, keeping randomness source verifiable and tamper-evident.
+    """
+    import json
+    import urllib.request
+    from qiskit.qasm3 import dumps as qasm3_dumps
+
+    payload = json.dumps({
+        "circuit":     qasm3_dumps(qc),
+        "shots":       shots,
+        "round_num":   round_num,
+        **({"noise_model": noise_model} if noise_model else {}),
+    }).encode()
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if extra_headers:
+        headers.update(extra_headers)
+
+    req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read())
+
+    counts = data["counts"]
+    backend_name = data.get("backend_name", endpoint)
+    qpu_s = data.get("qpu_seconds", None)
+    return counts, backend_name, qpu_s
+
+
 def _run_ibm(qc, shots: int, backend_name: str | None,
              token: str, instance: str) -> tuple[dict[str, int], str | None]:
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
@@ -134,27 +196,47 @@ def round_circuit(
     token: str | None = None,
     instance: str | None = None,
     confirm: str | None = None,
+    # --- custom QPU parameters ---
+    endpoint: str | None = None,
+    api_key: str | None = None,
+    noise_model: dict | None = None,
+    extra_headers: dict | None = None,
 ) -> dict:
     """Generate quantum randomness for one MothBlast round.
 
     Parameters
     ----------
-    round_num : int     round number (used as seed for local mode)
-    mode      : str     'local' | 'fake' | 'ibm'
-    shots     : int     measurement shots (capped at max_shots)
-    confirm   : str     must equal "RUN ON QPU" for mode='ibm'
+    round_num     : int   round number (seed for local mode; nonce hint for custom)
+    mode          : str   'local' | 'fake' | 'ibm' | 'custom'
+    shots         : int   measurement shots (capped at max_shots)
+    confirm       : str   must equal "RUN ON QPU" for mode='ibm'
+
+    Custom QPU parameters (mode='custom')
+    --------------------------------------
+    endpoint      : str   Cure-API endpoint URL
+                          .../qpu/run    — run on the server's default QPU
+                          .../qpu/select — let the server SELECT from its QPU pool
+                          .../qpu/create — CREATE a new synthetic QPU from noise_model
+    api_key       : str   Bearer token for Cure-API authentication
+    noise_model   : dict  Synthetic QPU profile, e.g.:
+                          {"type": "depolarizing", "error_rate": 0.005}
+                          {"type": "thermal", "T1_us": 100, "T2_us": 80}
+                          {"type": "custom", "gate_errors": {...}}
+    extra_headers : dict  Additional HTTP headers (e.g. routing, smart-contract context)
 
     Returns
     -------
-    dict with keys: round, mode, backend, when, bits, guide_bits,
+    dict with keys: round, mode, backend, when, guide_bits,
                     active_guides_a/b, teleport_angle_a/b, events, counts, size
     """
-    if mode not in ("local", "fake", "ibm"):
-        raise ValueError("mode is local, fake or ibm")
+    if mode not in ("local", "fake", "ibm", "custom"):
+        raise ValueError("mode must be local | fake | ibm | custom")
     if shots > max_shots:
         raise ValueError(f"{shots} > max_shots ({max_shots})")
     if mode == "ibm" and confirm != CONFIRM:
         raise PermissionError(f'real-QPU run needs confirm="{CONFIRM}"')
+    if mode == "custom" and not endpoint:
+        raise ValueError("mode='custom' requires endpoint=")
 
     qc = _build_qc()
     size = {"qubits": qc.num_qubits, "depth": qc.depth()}
@@ -166,6 +248,11 @@ def round_circuit(
     elif mode == "fake":
         counts = _run_fake(qc, shots, backend)
         backend_name = backend or "FakeTorino"
+    elif mode == "custom":
+        counts, backend_name, qpu_s = _run_custom(
+            qc, shots, round_num, endpoint,
+            api_key=api_key, noise_model=noise_model, extra_headers=extra_headers,
+        )
     else:
         counts, qpu_s = _run_ibm(qc, shots, backend, token, instance)
         backend_name = backend or "least_busy"
