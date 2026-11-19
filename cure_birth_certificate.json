@@ -1,28 +1,27 @@
 {
   "certificate_id": "add435abfe106be3",
   "game_token": "add435abfe106be3",
-  "born_at": "2026-11-19T01:51:25+00:00",
+  "born_at": "2026-11-19T04:47:41+00:00",
   "backend": "ibm_marrakesh",
-  "bitstring": "0010111011000",
-  "teleport_angle_a": 36.0,
-  "teleport_angle_b": 360.0,
+  "bitstring": "0100110011111",
+  "teleport_angle_a": 180.0,
+  "teleport_angle_b": 324.0,
   "active_guides_a": [
     "スハル-A0",
-    "スハル-A1",
+    "スハル-A2",
     "スハル-A3"
   ],
   "active_guides_b": [
     "リナリス-B0",
-    "リナリス-B1",
     "リナリス-B3",
     "リナリス-B4"
   ],
   "events": {
-    "entanglement_shot": false,
-    "superposition_dash": false,
-    "luna_event": false
+    "entanglement_shot": true,
+    "superposition_dash": true,
+    "luna_event": true
   },
   "qpu_seconds": 0,
   "midwife": "Luna + エーリアル",
-  "round": 3
+  "round": 4
 }
