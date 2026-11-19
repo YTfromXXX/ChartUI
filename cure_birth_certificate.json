@@ -1,30 +1,28 @@
 {
-  "certificate_id": "eec6d63c3dba2b2e",
-  "game_token": "eec6d63c3dba2b2e",
-  "born_at": "2026-11-18T19:47:43+00:00",
-  "backend": "FakeMarrakesh",
-  "bitstring": "0110111111111",
-  "teleport_angle_a": 288.0,
-  "teleport_angle_b": 174.12,
+  "certificate_id": "add435abfe106be3",
+  "game_token": "add435abfe106be3",
+  "born_at": "2026-11-19T01:51:25+00:00",
+  "backend": "ibm_marrakesh",
+  "bitstring": "0010111011000",
+  "teleport_angle_a": 36.0,
+  "teleport_angle_b": 360.0,
   "active_guides_a": [
     "スハル-A0",
+    "スハル-A1",
     "スハル-A3"
   ],
   "active_guides_b": [
     "リナリス-B0",
     "リナリス-B1",
-    "リナリス-B2",
     "リナリス-B3",
     "リナリス-B4"
   ],
   "events": {
-    "entanglement_shot": true,
-    "superposition_dash": true,
-    "luna_event": true
+    "entanglement_shot": false,
+    "superposition_dash": false,
+    "luna_event": false
   },
-  "qpu_seconds": null,
+  "qpu_seconds": 0,
   "midwife": "Luna + エーリアル",
-  "round": 1,
-  "mode": "fake_marrakesh_rehearsal",
-  "note": "FakeMarrakesh rehearsal — real ibm_marrakesh pending IBM account verification"
+  "round": 3
 }
