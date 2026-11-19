@@ -2,20 +2,25 @@
 
 Endpoints
 ---------
-POST /qpu/run    — run on the pool's current default backend
-POST /qpu/select — score the pool and SELECT the best backend
-POST /qpu/create — build a synthetic QPU from noise_model, run, return counts
+QPU layer (Cure-API):
+  POST /qpu/run         — run on the pool's current default backend
+  POST /qpu/select      — score the pool and SELECT the best backend
+  POST /qpu/create      — build a synthetic QPU from noise_model, run, return counts
+  GET  /pool/status     — live pool telemetry (loaded from pool_config.json)
+
+Oracle layer (METADOGG-ORACLE-API):
+  GET  /oracle/predict/{symbol}  — QPU signal → direction + score for a symbol pair
+  POST /oracle/certify           — verify a contract nonce (P3)
+  GET  /oracle/accounts          — 48-account pool status
+  POST /oracle/accounts/reset    — reset all 48 accounts
 
 Usage
 -----
     pip install fastapi uvicorn
     uvicorn cure_api.server:app --port 8700 --reload
 
-Then in round_circuit:
-    r = round_circuit(5, mode="custom", endpoint="http://localhost:8700/qpu/run", api_key="dev")
-
-Smart-contract nonce is computed server-side and returned in the response:
-    sha256(str(round_num) + top_bitstring + str(qpu_seconds) + session_id)
+Pool config lives in cure_api/pool_config.json — edit it to simulate live telemetry.
+Smart-contract nonce: sha256(str(round_num) + top_bitstring + str(qpu_seconds) + session_id)
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import pathlib
 import random
 import time
 from typing import Any
@@ -36,18 +42,36 @@ except ImportError:
     _HAS_FASTAPI = False
 
 from cure_api.scoring import select_best, score_backend
+from cure_api.oracle import (
+    AccountPool,
+    build_predict_response,
+    parse_bitstring,
+    verify_nonce,
+)
 
-# ── QPU pool ──────────────────────────────────────────────────────────────────
-# In production, replace with live telemetry. Static for the mock.
-QPU_POOL: list[dict] = [
-    {"name": "cure_synth_eagle_r3",  "queue_len": 4,  "avg_gate_error": 0.004, "latency_ms": 420,  "available_shots": 2000, "operational": True},
-    {"name": "cure_synth_heron_r2",  "queue_len": 11, "avg_gate_error": 0.002, "latency_ms": 680,  "available_shots": 1800, "operational": True},
-    {"name": "cure_synth_falcon_r1", "queue_len": 2,  "avg_gate_error": 0.012, "latency_ms": 210,  "available_shots": 2000, "operational": True},
-    {"name": "cure_synth_ideal_v1",  "queue_len": 0,  "avg_gate_error": 0.000, "latency_ms": 80,   "available_shots": 9999, "operational": True},
-]
+_POOL_CONFIG = pathlib.Path(__file__).parent / "pool_config.json"
+
+# ── QPU pool — loaded from pool_config.json (P2 live telemetry) ───────────────
+def _load_pool() -> list[dict]:
+    """Load QPU pool from pool_config.json; fall back to static defaults."""
+    try:
+        return json.loads(_POOL_CONFIG.read_text())
+    except Exception:
+        return [
+            {"name": "cure_synth_eagle_r3",  "queue_len": 4,  "avg_gate_error": 0.004, "latency_ms": 420,  "available_shots": 2000, "operational": True},
+            {"name": "cure_synth_heron_r2",  "queue_len": 11, "avg_gate_error": 0.002, "latency_ms": 680,  "available_shots": 1800, "operational": True},
+            {"name": "cure_synth_falcon_r1", "queue_len": 2,  "avg_gate_error": 0.012, "latency_ms": 210,  "available_shots": 2000, "operational": True},
+            {"name": "cure_synth_ideal_v1",  "queue_len": 0,  "avg_gate_error": 0.000, "latency_ms": 80,   "available_shots": 9999, "operational": True},
+        ]
+
+QPU_POOL: list[dict] = _load_pool()
 
 DEFAULT_BACKEND = "cure_synth_eagle_r3"
 N_QUBITS = 13
+
+# 48-account pool singleton
+_ACCOUNT_POOL = AccountPool()
+_round_counter: int = 0
 
 
 # ── noise simulation ──────────────────────────────────────────────────────────
@@ -194,10 +218,115 @@ if _HAS_FASTAPI:
 
     @app.get("/pool/status")
     def pool_status():
+        """Return live pool telemetry (re-reads pool_config.json each call)."""
+        pool = _load_pool()
         return [
             {**b, "score": round(score_backend(b), 2)}
-            for b in QPU_POOL
+            for b in pool
         ]
+
+    # ── Oracle endpoints (P1 / P2 / P3) ─────────────────────────────────────
+
+    class PredictQuery(BaseModel):
+        symbol: str = "USD/JPY"
+        shots: int = 500
+        noise_model: dict[str, Any] | None = None
+
+    class CertifyRequest(BaseModel):
+        round_num: int
+        bitstring: str
+        qpu_seconds: float
+        session_id: str
+        nonce: str
+
+    @app.get("/oracle/predict/{symbol:path}")
+    def oracle_predict(
+        symbol: str,
+        shots: int = 500,
+        authorization: str | None = Header(default=None),
+        x_session_id: str = Header(default=""),
+        x_datacenter_zone: str = Header(default=""),
+    ):
+        """P1 — QPU signal for a symbol. Internally calls qpu/select logic."""
+        _auth(authorization)
+        global _round_counter
+        _round_counter += 1
+        round_num = _round_counter
+
+        # select best backend (zone-aware)
+        weights = {"latency": 2.0} if "ap" in x_datacenter_zone else None
+        best = select_best(_load_pool(), weights)
+
+        counts, qpu_s = _simulate(None, shots)
+        top = max(counts, key=counts.get)
+        nonce = _nonce(round_num, top, qpu_s, x_session_id)
+
+        parsed = parse_bitstring(top)
+
+        # update 48-account pool (P2)
+        base = 20.83
+        pnl_delta = 0.0
+        pos = parsed["position"]
+        if pos == "LONG":
+            pnl_delta = round(base * 10 * (parsed["a_strength"] - 0.5) * random.uniform(0.5, 1.5), 2)
+        elif pos == "SHORT":
+            pnl_delta = round(-base * 10 * (parsed["b_strength"] - 0.5) * random.uniform(0.5, 1.5), 2)
+
+        _ACCOUNT_POOL.assign(round_num, pos, symbol, pnl_delta, nonce)
+
+        return build_predict_response(
+            symbol=symbol,
+            parsed=parsed,
+            bitstring=top,
+            backend_name=best["name"],
+            qpu_seconds=qpu_s,
+            round_num=round_num,
+            contract_nonce=nonce,
+        )
+
+    @app.post("/oracle/certify")
+    def oracle_certify(
+        req: CertifyRequest,
+        authorization: str | None = Header(default=None),
+    ):
+        """P3 — verify a contract nonce against the QPU round parameters."""
+        _auth(authorization)
+        valid = verify_nonce(
+            req.round_num, req.bitstring, req.qpu_seconds, req.session_id, req.nonce
+        )
+        return {
+            "valid": valid,
+            "round_num": req.round_num,
+            "certified": valid,
+            "disclaimer": "quantum_random_signal_not_financial_advice",
+        }
+
+    @app.get("/oracle/accounts")
+    def oracle_accounts(
+        authorization: str | None = Header(default=None),
+    ):
+        """P2 — 48-account pool status."""
+        _auth(authorization)
+        return {
+            "accounts": _ACCOUNT_POOL.get_all(),
+            "summary": _ACCOUNT_POOL.summary(),
+        }
+
+    @app.get("/oracle/accounts/{account_id}")
+    def oracle_account_one(account_id: int, authorization: str | None = Header(default=None)):
+        _auth(authorization)
+        acc = _ACCOUNT_POOL.get_one(account_id)
+        if acc is None:
+            raise HTTPException(status_code=404, detail=f"account {account_id} not found")
+        return acc
+
+    @app.post("/oracle/accounts/reset")
+    def oracle_accounts_reset(authorization: str | None = Header(default=None)):
+        _auth(authorization)
+        global _round_counter
+        _round_counter = 0
+        _ACCOUNT_POOL.reset()
+        return {"reset": True, "accounts": 48}
 
 else:
     # Standalone fallback (no FastAPI installed) — used by tests
