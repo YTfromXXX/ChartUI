@@ -44,6 +44,9 @@ html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden;
   background: var(--accent); color: #04050e;
   border-color: var(--accent); box-shadow: 0 0 14px rgba(79,195,247,.5);
 }
+.sfx-btn { font-size:14px; padding:4px 7px; border-radius:14px; border:1px solid var(--border); background:transparent; cursor:pointer; transition:all .18s; line-height:1; }
+.sfx-btn.active { background:var(--accent2); box-shadow:0 0 10px rgba(105,240,174,.4); }
+#sfx-row { display:flex; gap:3px; align-items:center; }
 #start-btn {
   font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
   padding: 5px 16px; border-radius: 20px; border: none;
@@ -108,6 +111,12 @@ html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden;
   <button class="ratio-btn active" id="btn-golden" onclick="setRatio('golden')">黄金比 φ</button>
   <button class="ratio-btn" id="btn-yamato" onclick="setRatio('yamato')">大和比 √2</button>
   <span id="bpm-info">— BPM</span>
+  <div id="sfx-row">
+    <button class="sfx-btn active" title="Bloop" onclick="setSfx('bloop',event)">💧</button>
+    <button class="sfx-btn" title="Zap"   onclick="setSfx('zap',event)">⚡</button>
+    <button class="sfx-btn" title="Surf"  onclick="setSfx('surf',event)">🌊</button>
+    <button class="sfx-btn" title="Bell"  onclick="setSfx('bell',event)">✨</button>
+  </div>
   <button id="start-btn" onclick="startAudio()">▶ START</button>
 </div>
 <div id="mode-badge">φ² × φ × 1</div>
@@ -172,6 +181,16 @@ async function startAudio() {
   masterLPF  = new Tone.Filter({ frequency:280, type:'lowpass', rolloff:-24 }).toDestination();
   dropFilter = new Tone.Filter({ frequency:280, type:'lowpass', rolloff:-12 });
   dropFilter.connect(masterLPF);
+
+  sfxOut = new Tone.Reverb({decay:.3, wet:.15}).toDestination();
+  sfxSynths.bloop = new Tone.MembraneSynth({pitchDecay:.04,octaves:5,envelope:{attack:.001,decay:.2,sustain:0,release:.07}});
+  sfxSynths.bloop.volume.value=-8; sfxSynths.bloop.connect(sfxOut);
+  sfxSynths.zap = new Tone.Synth({oscillator:{type:'square'},envelope:{attack:.001,decay:.07,sustain:0,release:.03}});
+  sfxSynths.zap.volume.value=-14; sfxSynths.zap.connect(sfxOut);
+  sfxSynths.surf = new Tone.NoiseSynth({noise:{type:'pink'},envelope:{attack:.008,decay:.24,sustain:0,release:.1}});
+  sfxSynths.surf.volume.value=-16; sfxSynths.surf.connect(sfxOut);
+  sfxSynths.bell = new Tone.MetalSynth({frequency:200,envelope:{attack:.001,decay:.55,release:.25},harmonicity:5.1,modulationIndex:32,resonance:3000,octaves:.5});
+  sfxSynths.bell.volume.value=-14; sfxSynths.bell.connect(sfxOut);
 
   kickSynth = new Tone.MembraneSynth({ pitchDecay:.06, octaves:8,
     envelope:{attack:.001,decay:.35,sustain:0,release:.1} });
@@ -289,6 +308,22 @@ function buildCharCards() {
 buildContactUI(); buildCharCards();
 document.getElementById('bpm-info').textContent = RATIOS[currentRatio].bpm + ' BPM';
 
+/* ── sfx ─────────────────────────────────────────────────── */
+let selectedSfx='bloop', sfxSynths={}, sfxOut;
+function setSfx(t,e){
+  selectedSfx=t;
+  document.querySelectorAll('.sfx-btn').forEach(b=>b.classList.remove('active'));
+  if(e&&e.target) e.target.classList.add('active');
+}
+function playSfx(t){
+  if(!audioStarted) return;
+  const s=sfxSynths[t]; if(!s) return;
+  try{
+    if(t==='surf') s.triggerAttackRelease('16n',Tone.now());
+    else if(t==='bell') s.triggerAttackRelease(Tone.now());
+    else s.triggerAttackRelease(t==='bloop'?'C2':'A4','16n',Tone.now());
+  }catch(_){}
+}
 /* ── bubble & creature pools ─────────────────────────────── */
 const bubbles   = [];
 const creatures = [];
@@ -297,6 +332,7 @@ const MAX_BUBBLES   = 60;
 const MAX_CREATURES = 50;
 
 function spawnBubbles(mx, my) {
+  playSfx(selectedSfx);
   const count = 4 + Math.floor(Math.random()*4);
   for(let i=0;i<count;i++) {
     const angle = (i/count)*Math.PI*2 + Math.random()*0.5;
