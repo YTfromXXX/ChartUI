@@ -161,13 +161,27 @@ input[type=range]::-webkit-slider-thumb{
 
 // ── Character definitions (from reference images) ────────
 const CHARS = [
-  {name:'Ariel',    tail:'#28c8a0', hair:'#d43020', top:'#8899cc', accent:'#20f0c0'},
-  {name:'Andrina',  tail:'#c03060', hair:'#8b4513', top:'#c03060', accent:'#ff80a0'},
-  {name:'Arista',   tail:'#e04010', hair:'#602010', top:'#b03010', accent:'#ff6030'},
-  {name:'Aquata',   tail:'#4488cc', hair:'#3a2010', top:'#3366aa', accent:'#88bbff'},
-  {name:'Attina',   tail:'#d4a020', hair:'#601008', top:'#aa7010', accent:'#ffd060'},
-  {name:'Adella',   tail:'#9040e0', hair:'#1a1a1a', top:'#8030c0', accent:'#c080ff'},
-  {name:'Alana',    tail:'#c0a030', hair:'#8b2010', top:'#886020', accent:'#e8c860'},
+  // Ariel — iconic long flowing red hair, swept to the side
+  {name:'Ariel',   tail:'#28c8a0', hair:'#d43020', hairHi:'#ff6040', top:'#8899cc', accent:'#20f0c0',
+   hairStyle:'ariel'},
+  // Andrina — brown updo with spiky coral-branch crown ornament
+  {name:'Andrina', tail:'#c03060', hair:'#7a3010', hairHi:'#a05020', top:'#c03060', accent:'#ff80a0',
+   hairStyle:'andrina'},
+  // Arista — auburn, short with curved-spike star crown (3-spike tiara)
+  {name:'Arista',  tail:'#e04010', hair:'#8b3010', hairHi:'#c05020', top:'#b03010', accent:'#ff6030',
+   hairStyle:'arista'},
+  // Aquata — dark brown straight hair with simple arc headband
+  {name:'Aquata',  tail:'#4488cc', hair:'#3a1a08', hairHi:'#6a3818', top:'#3366aa', accent:'#88bbff',
+   hairStyle:'aquata'},
+  // Attina — dark red hair piled into an elaborate high updo with tall crown
+  {name:'Attina',  tail:'#d4a020', hair:'#8a1808', hairHi:'#c03010', top:'#aa7010', accent:'#ffd060',
+   hairStyle:'attina'},
+  // Adella — sleek black hair pulled back, elegant small tiara
+  {name:'Adella',  tail:'#9040e0', hair:'#111118', hairHi:'#303040', top:'#8030c0', accent:'#c080ff',
+   hairStyle:'adella'},
+  // Alana — dark auburn bun updo with loose strands falling from knot
+  {name:'Alana',   tail:'#c0a030', hair:'#6a1808', hairHi:'#982818', top:'#886020', accent:'#e8c860',
+   hairStyle:'alana'},
 ];
 
 // ── Engine config ────────────────────────────────────────
@@ -385,6 +399,233 @@ class Renderer {
     ctx.beginPath(); ctx.moveTo(pole.x-1,0); ctx.lineTo(pole.x-1,H); ctx.stroke();
   }
 
+  // ── Character-specific hair renderer ────────────────────
+  drawHair(ctx, def, hx, hy, t, phase){
+    const f = t * cfg.speed;
+    const flow = Math.sin(f * 2.2 + phase);       // primary sway −1..1
+    const flow2 = Math.sin(f * 1.6 + phase + 1);  // secondary wave
+
+    // helper: draw one strand from (sx,sy) with control point
+    const strand = (sx,sy, cx,cy, ex,ey, color, lw, alpha=1) => {
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.quadraticCurveTo(cx,cy,ex,ey);
+      ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.globalAlpha=alpha;
+      ctx.lineCap='round'; ctx.stroke(); ctx.globalAlpha=1;
+    };
+
+    ctx.save();
+    ctx.lineCap='round';
+
+    switch(def.hairStyle){
+
+      // ── ARIEL: iconic long red hair, all sweeping left ───
+      case 'ariel':{
+        // Head base
+        ctx.beginPath(); ctx.ellipse(hx,hy,11,11,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // 7 long flowing strands; sweep left, great amplitude
+        const strands7=[
+          {ox:-4, oc:-28+flow*14, oe:-36+flow*20, len:52, lw:5},
+          {ox: 2, oc:-18+flow*12, oe:-28+flow*18, len:56, lw:4.5},
+          {ox: 6, oc: -8+flow*10, oe:-16+flow*16, len:60, lw:4},
+          {ox: 8, oc:  2+flow*9,  oe: -4+flow*14, len:58, lw:3.5},
+          {ox: 5, oc: 12+flow*8,  oe:  8+flow*12, len:52, lw:3},
+          {ox: 2, oc: 18+flow*7,  oe: 16+flow*10, len:46, lw:2.5},
+          {ox:-2, oc:-32+flow*16, oe:-44+flow*22, len:48, lw:3},
+        ];
+        strands7.forEach((s,i)=>{
+          const frac=i/6;
+          const col=i===0||i===2?def.hairHi:def.hair;
+          strand(
+            hx+s.ox, hy+10,
+            hx+s.oc, hy+s.len*0.4,
+            hx+s.oe, hy+s.len,
+            col, s.lw, 0.7+frac*0.3
+          );
+        });
+        // Hair highlight
+        strand(hx-2,hy-6, hx-10+flow*4,hy+16, hx-14+flow*8,hy+30, '#ff8060', 2, 0.4);
+        break;
+      }
+
+      // ── ANDRINA: brown hair + spiky coral-branch crown ───
+      case 'andrina':{
+        // Medium length hair falling to shoulder
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        const aStrands=[
+          {ox:-6,  oe:-14+flow*5,  len:30, lw:4},
+          {ox: 0,  oe: -4+flow*5,  len:34, lw:4.5},
+          {ox: 6,  oe:  6+flow*5,  len:30, lw:4},
+          {ox:-8,  oe:-18+flow*4,  len:22, lw:3},
+          {ox: 8,  oe: 12+flow*4,  len:22, lw:3},
+        ];
+        aStrands.forEach((s,i)=>{
+          strand(hx+s.ox,hy+8, hx+s.oe*0.5,hy+s.len*0.5, hx+s.oe,hy+s.len, def.hair, s.lw, 0.85);
+        });
+        // Spiky coral crown (5 branching spikes upward)
+        const spikes5=[[-8,-22],[-4,-28],[0,-30],[4,-28],[8,-22]];
+        spikes5.forEach(([sx,sy],i)=>{
+          const wobble=Math.sin(f*2+i*0.8+phase)*2;
+          ctx.beginPath();
+          ctx.moveTo(hx,hy-8);
+          ctx.quadraticCurveTo(hx+sx*0.4+wobble,hy+sy*0.5, hx+sx+wobble,hy+sy);
+          ctx.strokeStyle=def.accent; ctx.lineWidth=2.5; ctx.globalAlpha=0.9; ctx.stroke(); ctx.globalAlpha=1;
+          // tip dot
+          ctx.beginPath(); ctx.arc(hx+sx+wobble,hy+sy,2,0,Math.PI*2);
+          ctx.fillStyle=def.accent+'cc'; ctx.fill();
+        });
+        // Crown base band
+        ctx.beginPath(); ctx.arc(hx,hy,11,-Math.PI,0);
+        ctx.strokeStyle=def.accent+'88'; ctx.lineWidth=2; ctx.stroke();
+        break;
+      }
+
+      // ── ARISTA: auburn, short + 3-spike star crown ───────
+      case 'arista':{
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // Short neat strands
+        [[-5,20],[ 0,24],[5,20],[-8,14],[8,14]].forEach(([ox,len],i)=>{
+          const sw=flow*3*(i%2===0?1:-1);
+          strand(hx+ox,hy+8, hx+ox+sw,hy+len*0.5, hx+ox+sw*1.6,hy+len, def.hair, 3.5, 0.9);
+        });
+        // 3-spike asterisk crown (curved spikes at 11, 12, 1 o'clock)
+        const aCrown=[[-12,-20],[0,-26],[12,-20]];
+        aCrown.forEach(([sx,sy],i)=>{
+          const wb=Math.sin(f*2.4+i+phase)*2.5;
+          ctx.beginPath();
+          ctx.moveTo(hx,hy-9);
+          ctx.bezierCurveTo(hx+sx*0.3,hy+sy*0.3+wb, hx+sx*0.7,hy+sy*0.7+wb, hx+sx,hy+sy);
+          ctx.strokeStyle=def.hairHi; ctx.lineWidth=3; ctx.globalAlpha=0.95; ctx.stroke(); ctx.globalAlpha=1;
+          ctx.beginPath(); ctx.arc(hx+sx,hy+sy,2.5,0,Math.PI*2);
+          ctx.fillStyle=def.accent; ctx.fill();
+        });
+        // Small ball on top of each spike
+        ctx.beginPath(); ctx.arc(hx,hy-27,3,0,Math.PI*2);
+        ctx.fillStyle=def.accent+'cc'; ctx.fill();
+        break;
+      }
+
+      // ── AQUATA: dark brown straight + arc headband ────────
+      case 'aquata':{
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // Long straight strands with gentle sway
+        const qStrands=[
+          {ox:-8, len:48, lw:4.5},
+          {ox:-3, len:52, lw:5},
+          {ox: 2, len:52, lw:5},
+          {ox: 7, len:48, lw:4.5},
+          {ox:12, len:40, lw:3.5},
+        ];
+        qStrands.forEach((s,i)=>{
+          const sw=flow*4+(i-2)*1.5;
+          strand(hx+s.ox,hy+8, hx+s.ox+sw*0.5,hy+s.len*0.4, hx+s.ox+sw,hy+s.len, def.hair, s.lw, 0.9);
+        });
+        // Hair highlight strand
+        strand(hx-2,hy+6, hx-1+flow*2,hy+28, hx+flow*4,hy+48, def.hairHi, 2, 0.45);
+        // Arc headband across forehead
+        ctx.beginPath();
+        ctx.arc(hx, hy+2, 12, -Math.PI*0.75, -Math.PI*0.25);
+        ctx.strokeStyle=def.accent; ctx.lineWidth=2.5; ctx.globalAlpha=0.9; ctx.stroke(); ctx.globalAlpha=1;
+        // Headband center jewel
+        ctx.beginPath(); ctx.arc(hx,hy-10,2.5,0,Math.PI*2);
+        ctx.fillStyle=def.accent; ctx.fill();
+        break;
+      }
+
+      // ── ATTINA: dark red hair in tall elaborate updo ──────
+      case 'attina':{
+        // Loose base hair
+        ctx.beginPath(); ctx.ellipse(hx,hy+2,9,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // 2-3 loose strands dropping from updo
+        [['-9',32],['9',28],['-4',36]].forEach(([ox,len],i)=>{
+          const sw=flow*3*(i%2===0?1:-1);
+          strand(hx+Number(ox),hy+8, hx+Number(ox)+sw,hy+len*0.5, hx+Number(ox)+sw*1.4,hy+len, def.hair, 3.5, 0.8);
+        });
+        // Piled updo mass on top
+        ctx.beginPath(); ctx.ellipse(hx,hy-16, 10,8, 0.1, 0, Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(hx+2,hy-22, 7,6, -0.15, 0, Math.PI*2);
+        ctx.fillStyle=def.hairHi; ctx.fill();
+        // Tall crown (3 tall arching prongs)
+        [[-10,-38],[0,-44],[10,-38]].forEach(([sx,sy],i)=>{
+          const wb=Math.sin(f*1.8+i*1.2+phase)*2;
+          ctx.beginPath();
+          ctx.moveTo(hx,hy-20);
+          ctx.bezierCurveTo(hx+sx*0.4,hy+sy*0.3, hx+sx*0.8+wb,hy+sy*0.7+wb, hx+sx+wb,hy+sy);
+          ctx.strokeStyle=def.accent; ctx.lineWidth=2.8; ctx.globalAlpha=0.9; ctx.stroke(); ctx.globalAlpha=1;
+          ctx.beginPath(); ctx.arc(hx+sx+wb,hy+sy,3,0,Math.PI*2);
+          ctx.fillStyle=def.accent+'ee'; ctx.fill();
+        });
+        // Crown base ring
+        ctx.beginPath(); ctx.ellipse(hx,hy-20,12,4,0,0,Math.PI*2);
+        ctx.strokeStyle=def.accent+'aa'; ctx.lineWidth=2; ctx.stroke();
+        break;
+      }
+
+      // ── ADELLA: sleek black hair + elegant small tiara ────
+      case 'adella':{
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // Sleek pulled-back look: strands mostly behind, low opacity front
+        // Back strands (behind torso, low visible)
+        [[-6,38],[-2,42],[3,42],[7,36]].forEach(([ox,len],i)=>{
+          const sw=flow*2*(i<2?1:-1);
+          strand(hx+ox,hy+10, hx+ox+sw*0.4,hy+len*0.4, hx+ox+sw,hy+len, def.hair, 3.5, 0.65);
+        });
+        // Slim front wisps
+        strand(hx-6,hy+4, hx-7+flow*1.5,hy+16, hx-6+flow*2,hy+26, def.hairHi, 1.8, 0.4);
+        strand(hx+5,hy+4, hx+6+flow*1.5,hy+16, hx+5+flow*2,hy+26, def.hairHi, 1.5, 0.35);
+        // Small elegant tiara: thin arc + 3 tiny points
+        ctx.beginPath(); ctx.arc(hx,hy, 12, -Math.PI*0.9, -Math.PI*0.1);
+        ctx.strokeStyle=def.accent+'cc'; ctx.lineWidth=1.8; ctx.stroke();
+        [[-8,-10],[0,-14],[8,-10]].forEach(([sx,sy])=>{
+          ctx.beginPath(); ctx.moveTo(hx+sx*0.7,hy+sy*0.6); ctx.lineTo(hx+sx,hy+sy);
+          ctx.strokeStyle=def.accent; ctx.lineWidth=2; ctx.stroke();
+          ctx.beginPath(); ctx.arc(hx+sx,hy+sy,2,0,Math.PI*2);
+          ctx.fillStyle=def.accent+'ee'; ctx.fill();
+        });
+        break;
+      }
+
+      // ── ALANA: dark auburn hair in relaxed bun + loose strands
+      case 'alana':{
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // 4 loose strands falling from bun (casual, not sleek)
+        [[-8,32],[-3,36],[3,34],[8,28]].forEach(([ox,len],i)=>{
+          const sw=flow*5*(i%2===0?1:-1)+flow2*2;
+          strand(hx+ox,hy+8, hx+ox+sw,hy+len*0.4+sw*0.3, hx+ox+sw*1.6,hy+len, def.hair, 4, 0.85);
+        });
+        // Extra wispy strand
+        strand(hx+6,hy+6, hx+12+flow*5,hy+20, hx+10+flow*7,hy+30, def.hairHi, 2, 0.5);
+        // Bun knot at top
+        const bunWobble=flow*2;
+        ctx.beginPath(); ctx.ellipse(hx+bunWobble,hy-14, 9,7, 0.2, 0, Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+        // Bun inner highlight
+        ctx.beginPath(); ctx.ellipse(hx+1+bunWobble,hy-15, 5,4, 0.2, 0, Math.PI*2);
+        ctx.fillStyle=def.hairHi+'88'; ctx.fill();
+        // Spiral line on bun (wrap detail)
+        ctx.beginPath(); ctx.arc(hx+bunWobble,hy-14, 7, -Math.PI*0.6, Math.PI*0.3);
+        ctx.strokeStyle=def.hairHi+'66'; ctx.lineWidth=1.5; ctx.stroke();
+        // Hair tie / scrunchie dot
+        ctx.beginPath(); ctx.ellipse(hx+bunWobble,hy-7, 5,3, 0, 0, Math.PI*2);
+        ctx.strokeStyle=def.accent+'88'; ctx.lineWidth=2; ctx.stroke();
+        break;
+      }
+
+      default:
+        ctx.beginPath(); ctx.ellipse(hx,hy,10,10,0,0,Math.PI*2);
+        ctx.fillStyle=def.hair; ctx.fill();
+    }
+    ctx.restore();
+  }
+
   drawMermaid(m, t){
     const ctx=this.ctx;
     const chain=m.chain;
@@ -488,29 +729,7 @@ class Renderer {
     ctx.restore();
 
     // ── Hair ──
-    ctx.save();
-    const hx=torso.x, hy=torso.y-18;
-    const hairFlow=Math.sin(t*cfg.speed*2.2+m.phase)*8;
-    // Hair mass
-    ctx.beginPath();
-    ctx.ellipse(hx,hy, 10,10, 0, 0, Math.PI*2);
-    ctx.fillStyle=def.hair; ctx.fill();
-    // Hair strands flowing
-    for(let s=0;s<5;s++){
-      const angle=-0.4+s*0.2+hairFlow*0.04;
-      const len=18+s*3;
-      ctx.beginPath();
-      ctx.moveTo(hx,hy+8);
-      ctx.quadraticCurveTo(
-        hx+Math.sin(angle+hairFlow*0.06)*len*0.5,
-        hy+8+len*0.4,
-        hx+Math.sin(angle+hairFlow*0.1)*len,
-        hy+8+len*0.85
-      );
-      ctx.strokeStyle=def.hair+(s===2?'ff':'99');
-      ctx.lineWidth=2.5-s*0.3; ctx.lineCap='round'; ctx.stroke();
-    }
-    ctx.restore();
+    this.drawHair(ctx, def, torso.x, torso.y-18, t, m.phase);
 
     // Name label
     if(m.active && !cfg.allSwim){
