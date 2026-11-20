@@ -170,6 +170,44 @@ svg.mdlogo{width:72px;height:72px;}
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── BEST BACKEND BADGE ───────────────────────────────────── */
+.best-backend-badge{
+  display:flex;align-items:center;gap:7px;
+  padding:4px 11px;border-radius:6px;
+  background:color-mix(in srgb,var(--gold) 12%,var(--surf2));
+  border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);
+  font-size:.65rem;font-family:'JetBrains Mono',monospace;white-space:nowrap;
+}
+.bbb-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
+.bbb-name{color:var(--gold);font-weight:700;letter-spacing:.04em;}
+.bbb-score{color:var(--fg);opacity:.75;}
+.bbb-label{font-size:.55rem;color:var(--sub);letter-spacing:.08em;}
+
+/* ── FIB ACCELERATOR ──────────────────────────────────────── */
+.fib-section{margin:0 0 20px;}
+.fib-panel{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.fib-header{padding:14px 20px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.fib-title{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);}
+.fib-zone-badge{font-size:.65rem;padding:3px 10px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.04em;transition:all .3s;}
+.fib-zone-badge.long{background:color-mix(in srgb,var(--green) 20%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);}
+.fib-zone-badge.short{background:color-mix(in srgb,var(--red) 20%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);}
+.fib-zone-badge.neutral{background:color-mix(in srgb,var(--purple) 15%,var(--surf2));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 30%,transparent);}
+.fib-canvas-wrap{padding:0 16px 12px;position:relative;}
+canvas#fibCanvas{width:100%;height:140px;display:block;border-radius:6px;}
+
+/* ── 航続ハンドル ─────────────────────────────────────────── */
+.handle-section{padding:12px 20px 16px;border-top:1px solid var(--border);}
+.handle-label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);margin-bottom:8px;}
+.handle-track{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+.handle-tick{width:28px;height:28px;border-radius:5px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;transition:all .3s;background:var(--surf2);}
+.handle-tick.long{background:color-mix(in srgb,var(--green) 18%,var(--surf2));border-color:color-mix(in srgb,var(--green) 30%,transparent);color:var(--green);}
+.handle-tick.short{background:color-mix(in srgb,var(--red) 18%,var(--surf2));border-color:color-mix(in srgb,var(--red) 30%,transparent);color:var(--red);}
+.handle-tick.empty{color:var(--border);}
+.handle-trend{margin-left:auto;font-size:.65rem;font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:.04em;}
+.handle-trend.long{color:var(--green);}
+.handle-trend.short{color:var(--red);}
+.handle-trend.neutral{color:var(--sub);}
 </style>
 
 <div class="page">
@@ -244,7 +282,17 @@ svg.mdlogo{width:72px;height:72px;}
     <div>
       <div class="oracle-label">/ oracle / predict</div>
     </div>
-    <div id="round-badge" class="round-badge">ROUND — —</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div class="best-backend-badge">
+        <div class="bbb-dot"></div>
+        <div>
+          <div class="bbb-label">BEST BACKEND</div>
+          <div class="bbb-name">cure_synth_ideal_v1</div>
+        </div>
+        <div class="bbb-score">score: 99.60 ✓</div>
+      </div>
+      <div id="round-badge" class="round-badge">ROUND — —</div>
+    </div>
   </div>
 
   <!-- Symbol scrollers -->
@@ -318,6 +366,23 @@ svg.mdlogo{width:72px;height:72px;}
     </div>
     <div class="ev-pill off" id="ev-nonce" style="margin-left:auto;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
       <div class="ev-dot"></div><span id="nonce-short">nonce: — —</span>
+    </div>
+  </div>
+</div>
+
+<!-- FIB ACCELERATOR + 航続ハンドル -->
+<div class="fib-section">
+  <div class="fib-panel">
+    <div class="fib-header">
+      <div class="fib-title">Fibonacci Accelerator</div>
+      <div class="fib-zone-badge neutral" id="fib-zone-badge">NEUTRAL</div>
+    </div>
+    <div class="fib-canvas-wrap">
+      <canvas id="fibCanvas" height="140"></canvas>
+    </div>
+    <div class="handle-section">
+      <div class="handle-label">航続ハンドル · Sustained Handle</div>
+      <div class="handle-track" id="handle-track"></div>
     </div>
   </div>
 </div>
@@ -462,6 +527,8 @@ async function runPredict(){
     document.getElementById('round-badge').textContent='ROUND '+String(d.round_num).padStart(3,'0');
 
     addFeedItem(d);
+    updateFibAccel(d);
+    updateHandle(d);
 
     // pull 48-account state from server
     await refreshAccounts();
@@ -573,9 +640,158 @@ function clearFeed(){
   state.feedItems=[];
 }
 
+// ── Fibonacci Accelerator ─────────────────────────────────
+const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+const FIB_LABELS = ['0','0.236','0.382','0.5','0.618','0.786','1.0'];
+const fibHistory = []; // {be, pe, strength}
+
+function updateFibAccel(d){
+  const strength = (d.signal.symbol_a.strength + d.signal.symbol_b.strength) / 2;
+  const beNorm = d.scores.be / 100;
+  const peNorm = d.scores.pe / 100;
+  fibHistory.push({be:beNorm, pe:peNorm, strength});
+  if(fibHistory.length > 40) fibHistory.shift();
+
+  // zone badge
+  const badge = document.getElementById('fib-zone-badge');
+  if(strength > 0.618){
+    badge.className='fib-zone-badge long'; badge.textContent='⬆ ACCEL LONG';
+  } else if(strength < 0.382){
+    badge.className='fib-zone-badge short'; badge.textContent='⬇ ACCEL SHORT';
+  } else {
+    badge.className='fib-zone-badge neutral'; badge.textContent='◼ NEUTRAL';
+  }
+
+  drawFibCanvas();
+}
+
+function drawFibCanvas(){
+  const canvas = document.getElementById('fibCanvas');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = 140;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const style = getComputedStyle(document.documentElement);
+  const colBg = style.getPropertyValue('--surf2').trim() || '#12121e';
+  const colBorder = style.getPropertyValue('--border').trim() || '#1e1e32';
+  const colGreen = style.getPropertyValue('--green').trim() || '#3ecf8e';
+  const colRed = style.getPropertyValue('--red').trim() || '#f06060';
+  const colPurple = style.getPropertyValue('--purple').trim() || '#a060f0';
+  const colSub = style.getPropertyValue('--sub').trim() || '#6060a0';
+  const colGold = style.getPropertyValue('--gold').trim() || '#c8a84a';
+  const padL=44, padR=12, padT=8, padB=18;
+  const cW=W-padL-padR, cH=H-padT-padB;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=colBg; ctx.fillRect(0,0,W,H);
+
+  // fib zone fills
+  const yLong = padT + cH*(1-0.618);
+  const yShort = padT + cH*(1-0.382);
+  ctx.fillStyle='rgba(62,207,142,0.07)';
+  ctx.fillRect(padL,padT,cW,yLong-padT);
+  ctx.fillStyle='rgba(240,96,96,0.07)';
+  ctx.fillRect(padL,yShort,cW,padT+cH-yShort);
+
+  // fib level lines + labels
+  FIB_LEVELS.forEach((lv,i)=>{
+    const y = padT + cH*(1-lv);
+    ctx.strokeStyle = lv===0.618?colGreen:lv===0.382?colRed:colBorder;
+    ctx.lineWidth = (lv===0.618||lv===0.382)?1.5:0.7;
+    ctx.setLineDash(lv===0.5?[4,3]:[]);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = lv===0.618?colGreen:lv===0.382?colRed:colSub;
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(FIB_LABELS[i], padL-4, y);
+  });
+
+  if(fibHistory.length < 2){ return; }
+
+  // BE wave (green)
+  const drawWave = (key, color) => {
+    ctx.beginPath();
+    fibHistory.forEach((pt,i)=>{
+      const x = padL + (i/(fibHistory.length-1))*cW;
+      const y = padT + cH*(1-pt[key]);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.globalAlpha=0.75;
+    ctx.stroke(); ctx.globalAlpha=1;
+  };
+  drawWave('be', colGreen);
+  drawWave('pe', colRed);
+
+  // signal strength weaving line (gold) — the "vehicle navigating fib levels"
+  ctx.beginPath();
+  fibHistory.forEach((pt,i)=>{
+    const x = padL + (i/(fibHistory.length-1))*cW;
+    const y = padT + cH*(1-pt.strength);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=colGold; ctx.lineWidth=2.2; ctx.setLineDash([6,3]);
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // current cursor dot
+  const last = fibHistory[fibHistory.length-1];
+  const cx2 = padL+cW;
+  const cy2 = padT + cH*(1-last.strength);
+  ctx.beginPath(); ctx.arc(cx2,cy2,5,0,Math.PI*2);
+  ctx.fillStyle=colGold; ctx.fill();
+  ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+// ── 航続ハンドル ──────────────────────────────────────────
+const handleHistory = []; // 'LONG' | 'SHORT'
+const HANDLE_MAX = 10;
+
+function updateHandle(d){
+  const dir = d.signal.symbol_a.direction; // 'LONG' or 'SHORT'
+  handleHistory.push(dir);
+  if(handleHistory.length > HANDLE_MAX) handleHistory.shift();
+  renderHandle();
+}
+
+function renderHandle(){
+  const track = document.getElementById('handle-track');
+  if(!track) return;
+  track.innerHTML='';
+
+  for(let i=0; i<HANDLE_MAX; i++){
+    const tick = document.createElement('div');
+    const val = handleHistory[i];
+    if(val === undefined){
+      tick.className='handle-tick empty'; tick.textContent='·';
+    } else if(val==='LONG'){
+      tick.className='handle-tick long'; tick.textContent='▲';
+    } else {
+      tick.className='handle-tick short'; tick.textContent='▼';
+    }
+    track.appendChild(tick);
+  }
+
+  // trend label
+  if(handleHistory.length >= 3){
+    const recent = handleHistory.slice(-5);
+    const longs = recent.filter(v=>v==='LONG').length;
+    const shorts = recent.filter(v=>v==='SHORT').length;
+    const trend = document.createElement('div');
+    if(longs >= 4){ trend.className='handle-trend long'; trend.textContent='▲ TREND LONG'; }
+    else if(shorts >= 4){ trend.className='handle-trend short'; trend.textContent='▼ TREND SHORT'; }
+    else { trend.className='handle-trend neutral'; trend.textContent='◼ MIXED'; }
+    track.appendChild(trend);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────
 buildReel('a',state.symA);
 buildReel('b',state.symB);
 updateSigLabels();
+renderHandle(); // init empty handle
+drawFibCanvas(); // init empty fib
 pingServer().then(()=>refreshAccounts());
 </script>
