@@ -371,7 +371,14 @@ const SYMBOLS = [
 ];
 
 const state = { symA:0, symB:1, round:0, view:'all', feedItems:[] };
-function apiBase(){ return (document.getElementById('srv-url')?.value||'http://localhost:8700').replace(/\/$/,''); }
+function apiBase(){
+  // 同一オリジン（Railway等）から配信されている場合はそのまま使う
+  const h = location.hostname;
+  if(h !== 'localhost' && h !== '127.0.0.1' && !h.startsWith('192.168.')){
+    return location.origin;
+  }
+  return (document.getElementById('srv-url')?.value || 'http://localhost:8700').replace(/\/$/,'');
+}
 
 // ── Server ping ───────────────────────────────────────────
 async function pingServer(){

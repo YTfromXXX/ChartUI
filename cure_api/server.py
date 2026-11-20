@@ -36,7 +36,8 @@ from typing import Any
 try:
     from fastapi import FastAPI, Header, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, RedirectResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
     _HAS_FASTAPI = True
 except ImportError:
@@ -158,6 +159,15 @@ if _HAS_FASTAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # ── Static files (homepage) ──────────────────────────────────────────────
+    _PUBLIC = pathlib.Path(__file__).parents[1] / "public"
+    if _PUBLIC.exists():
+        app.mount("/public", StaticFiles(directory=str(_PUBLIC)), name="public")
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/public/metadogg_home.html")
 
     class RunRequest(BaseModel):
         circuit: str
