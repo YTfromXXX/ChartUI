@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mermaid Dance Studio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+<style>
+:root {
+  --bg: #07080f;
+  --panel: rgba(10,14,28,0.88);
+  --accent: #4fc3f7;
+  --accent2: #ce93d8;
+  --text: #e8eaf6;
+  --muted: #7986cb;
+  --border: rgba(79,195,247,0.18);
+  --glow: rgba(79,195,247,0.35);
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; }
+
+#header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px max(16px, env(safe-area-inset-left,0px));
+  background: linear-gradient(to bottom, rgba(7,8,15,0.95), transparent);
+  backdrop-filter: blur(4px);
+}
+#header h1 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(13px,2.2vw,18px); font-weight: 700;
+  letter-spacing: 0.08em; color: var(--accent);
+  text-shadow: 0 0 12px var(--glow);
+  flex: 1;
+}
+.ratio-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(11px,1.5vw,13px); font-weight: 600;
+  padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); cursor: pointer; transition: all 0.25s;
+}
+.ratio-btn.active { background: var(--accent); color: #07080f; border-color: var(--accent); box-shadow: 0 0 10px var(--glow); }
+#bpm-label {
+  font-size: 11px; color: var(--muted); white-space: nowrap;
+  font-family: 'Space Grotesk', sans-serif;
+}
+#start-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 700; padding: 5px 14px;
+  border-radius: 20px; border: none;
+  background: linear-gradient(135deg, #4fc3f7, #ce93d8);
+  color: #07080f; cursor: pointer; transition: opacity 0.2s;
+}
+#start-btn:hover { opacity: 0.85; }
+
+#canvas-wrap {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#canvas-wrap canvas { display: block; }
+
+#stats-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  padding: 8px max(16px, env(safe-area-inset-left,0px)) max(8px,env(safe-area-inset-bottom,0px));
+  background: linear-gradient(to top, rgba(7,8,15,0.95), transparent);
+  backdrop-filter: blur(4px);
+}
+#char-cards {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none;
+}
+#char-cards::-webkit-scrollbar { display: none; }
+.char-card {
+  flex: 0 0 auto;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 5px 10px;
+  min-width: 80px; text-align: center;
+}
+.char-card .cname { font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700; color: var(--accent); }
+.char-card .cgenre { font-size: 9px; color: var(--muted); margin-top: 1px; }
+.char-card .cbar { height: 3px; border-radius: 2px; margin-top: 4px; transition: width 0.4s; }
+
+#contact-panel {
+  position: fixed; top: 48px; right: max(12px,env(safe-area-inset-right,0px)); z-index: 20;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; min-width: 160px;
+  backdrop-filter: blur(8px);
+}
+#contact-panel h3 { font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+.contact-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.contact-row span { font-size: 9px; color: var(--text); flex: 1; white-space: nowrap; }
+.contact-bar-wrap { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+.contact-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
+#mode-label {
+  position: fixed; top: 48px; left: max(12px,env(safe-area-inset-left,0px)); z-index: 20;
+  font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 10px; backdrop-filter: blur(6px);
+}
+#customer-hint {
+  position: fixed; top: 92px; left: max(12px,env(safe-area-inset-left,0px)); z-index: 20;
+  font-size: 10px; color: rgba(121,134,203,0.7);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 10px; backdrop-filter: blur(6px);
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🎼 Mermaid Dance Studio</h1>
+  <button class="ratio-btn active" id="btn-golden" onclick="setRatio('golden')">黄金比 φ</button>
+  <button class="ratio-btn" id="btn-yamato" onclick="setRatio('yamato')">大和比 √2</button>
+  <span id="bpm-label">120 BPM · 4/4</span>
+  <button id="start-btn" onclick="startAudio()">▶ START</button>
+</div>
+
+<div id="mode-label" id="mode-label">φ² × φ × 1</div>
+<div id="customer-hint">Click / Tap → Join playlist</div>
+
+<div id="contact-panel">
+  <h3>Contact Rate</h3>
+  <div id="contact-rows"></div>
+</div>
+
+<div id="canvas-wrap">
+  <div id="p5-container"></div>
+</div>
+
+<div id="stats-panel">
+  <div id="char-cards"></div>
+</div>
+
+<script>
+const PHI = (1 + Math.sqrt(5)) / 2;
+const SQ2 = Math.sqrt(2);
+const RATIOS = {
+  golden: { w: PHI * PHI, h: PHI, d: 1, label: 'φ² × φ × 1' },
+  yamato: { w: 2, h: SQ2, d: 1, label: '2 × √2 × 1' }
+};
+let currentRatio = 'golden';
+
+const CHARS = [
+  { id:0, name:'Ariel',   genre:'Pop',       h:10,  s:85, b:85, hairStyle:'ariel'   },
+  { id:1, name:'Andrina', genre:'R&B',       h:30,  s:70, b:60, hairStyle:'andrina' },
+  { id:2, name:'Arista',  genre:'Rock',      h:15,  s:80, b:70, hairStyle:'arista'  },
+  { id:3, name:'Aquata',  genre:'Jazz',      h:215, s:65, b:72, hairStyle:'aquata'  },
+  { id:4, name:'Attina',  genre:'Classical', h:40,  s:75, b:75, hairStyle:'attina'  },
+  { id:5, name:'Adella',  genre:'EDM',       h:270, s:80, b:80, hairStyle:'adella'  },
+  { id:6, name:'Alana',   genre:'Reggae',    h:55,  s:70, b:72, hairStyle:'alana'   },
+];
+
+const DANCE = [
+  { fx:1.00, fy:0.618, fz:1.618, px:0.00, py:1.00, pz:2.00 },
+  { fx:1.50, fy:1.000, fz:0.500, px:1.00, py:0.00, pz:0.50 },
+  { fx:0.75, fy:1.400, fz:1.000, px:2.00, py:1.50, pz:0.00 },
+  { fx:2.00, fy:0.500, fz:1.500, px:0.50, py:2.00, pz:1.00 },
+  { fx:1.20, fy:1.800, fz:0.800, px:1.50, py:0.50, pz:2.50 },
+  { fx:0.90, fy:1.100, fz:2.000, px:2.50, py:1.80, pz:0.30 },
+  { fx:1.70, fy:0.900, fz:1.300, px:0.80, py:2.30, pz:1.70 },
+];
+
+const PATTERNS = {
+  'Pop':      ['C5','E5','G5','A5','G5','E5','C5','E5','D5','F5','A5','C6','A5','F5','D5','F5','E5','G5','B5','D6','B5','G5','E5','G5','F5','A5','C6','E6','C6','A5','F5','G5'],
+  'R&B':      ['F4',null,'Ab4','C5',null,'Eb5',null,'F5','F4',null,'Ab4','C5',null,'Eb5','C5',null,'Eb4',null,'G4','Bb4',null,'Db5',null,'Eb5','F4',null,'Ab4','C5','Eb5',null,'C5',null],
+  'Rock':     ['E4','B3','E4','G4','E4','B3','G4','A4','A3','E4','A3','C4','E4','A3','C4','D4','B3','E4','B3','D4','G4','B3','D4','G4','G3','D4','G3','B3','D4','G3','B3','C4'],
+  'Jazz':     ['Bb4','Ab4','G4','F4','Eb4','D4','C4','Bb3','F4','Eb4','D4','C4','Bb3','Ab3','G3','F3','Bb3','C4','D4','Eb4','F4','G4','Ab4','Bb4','Eb5','Db5','C5','Bb4','Ab4','G4','F4','Eb4'],
+  'Classical':['G4','A4','B4','C5','D5','E5','F#5','G5','G5','F#5','E5','D5','C5','B4','A4','G4','D5','E5','F#5','G5','A5','G5','F#5','E5','D5','C5','B4','A4','G4','A4','B4','D5'],
+  'EDM':      ['A3','A3','C4','A3','E4','C4','A3','G3','G3','G3','B3','G3','D4','B3','G3','F3','F3','F3','A3','F3','C4','A3','F3','E3','E3','E3','G3','E3','B3','G3','E3','A3'],
+  'Reggae':   [null,'D4',null,'F#4',null,'A4',null,'D5',null,'G4',null,'B4',null,'D5',null,'G5',null,'F#4',null,'A4',null,'C#5',null,'F#5',null,'A4',null,'D5',null,'F#5',null,'A5'],
+};
+
+let audioStarted = false;
+let synths = {};
+let sequences = {};
+let contactEffects = {};
+let masterVol;
+
+const contactFrames = Array.from({length:7}, () => new Array(7).fill(0));
+const contactActive = Array.from({length:7}, () => new Array(7).fill(false));
+let totalFrames = 1;
+
+const customers = [];
+const MAX_CUSTOMERS = 5;
+let customerSynths = [];
+let customerSeqs = [];
+
+function hsvColor(h, s, b) {
+  s /= 100; b /= 100;
+  const c = b * s, x = c * (1 - Math.abs((h/60) % 2 - 1)), m = b - c;
+  let r=0,g=0,bl=0;
+  if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;bl=x}else if(h<240){g=x;bl=c}else if(h<300){r=x;bl=c}else{r=c;bl=x}
+  return `rgb(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((bl+m)*255)})`;
+}
+
+function setRatio(mode) {
+  currentRatio = mode;
+  document.getElementById('btn-golden').classList.toggle('active', mode === 'golden');
+  document.getElementById('btn-yamato').classList.toggle('active', mode === 'yamato');
+  document.getElementById('mode-label').textContent = RATIOS[mode].label;
+}
+
+async function startAudio() {
+  if (audioStarted) return;
+  await Tone.start();
+  Tone.getTransport().bpm.value = 120;
+
+  masterVol = new Tone.Volume(-6).toDestination();
+
+  for (const c of CHARS) {
+    let synth;
+    switch(c.genre) {
+      case 'Pop':       synth = new Tone.Synth({ oscillator:{type:'triangle'}, envelope:{attack:0.02,decay:0.1,sustain:0.5,release:0.4} }); break;
+      case 'R&B':       synth = new Tone.FMSynth({ harmonicity:3, modulationIndex:8, envelope:{attack:0.04,decay:0.2,sustain:0.4,release:0.5} }); break;
+      case 'Rock':      synth = new Tone.MonoSynth({ oscillator:{type:'sawtooth'}, envelope:{attack:0.01,decay:0.05,sustain:0.6,release:0.2} }); break;
+      case 'Jazz':      synth = new Tone.PluckSynth({ attackNoise:1, dampening:3800, resonance:0.95 }); break;
+      case 'Classical': synth = new Tone.AMSynth({ harmonicity:2, oscillator:{type:'triangle'}, envelope:{attack:0.1,decay:0.2,sustain:0.5,release:0.8} }); break;
+      case 'EDM':       synth = new Tone.MonoSynth({ oscillator:{type:'square'}, envelope:{attack:0.005,decay:0.05,sustain:0.5,release:0.1} }); break;
+      case 'Reggae':    synth = new Tone.Synth({ oscillator:{type:'square'}, envelope:{attack:0.01,decay:0.15,sustain:0.3,release:0.3} }); break;
+    }
+    synth.volume.value = -12;
+    synth.connect(masterVol);
+    synths[c.id] = synth;
+
+    const pattern = PATTERNS[c.genre];
+    const seq = new Tone.Sequence((time, note) => {
+      if (note) synth.triggerAttackRelease(note, '8n', time);
+    }, pattern, '8n');
+    seq.loop = true;
+    seq.start(0);
+    sequences[c.id] = seq;
+  }
+
+  for (const c of CHARS) {
+    let fx;
+    switch(c.genre) {
+      case 'Pop':       fx = new Tone.Reverb({ decay:1.5, wet:0.3 }); break;
+      case 'R&B':       fx = new Tone.Chorus({ frequency:1.5, wet:0.4 }); break;
+      case 'Rock':      fx = new Tone.Distortion({ distortion:0.3, wet:0.4 }); break;
+      case 'Jazz':      fx = new Tone.Reverb({ decay:2.5, wet:0.35 }); break;
+      case 'Classical': fx = new Tone.Reverb({ decay:3.5, wet:0.45 }); break;
+      case 'EDM':       fx = new Tone.FeedbackDelay({ delayTime:'8n', feedback:0.35, wet:0.4 }); break;
+      case 'Reggae':    fx = new Tone.PingPongDelay({ delayTime:'4n', feedback:0.25, wet:0.35 }); break;
+    }
+    fx.connect(masterVol);
+    contactEffects[c.id] = { node: fx, active: false };
+  }
+
+  Tone.getTransport().start();
+  audioStarted = true;
+  document.getElementById('start-btn').textContent = '◼ LIVE';
+  document.getElementById('start-btn').style.background = 'rgba(79,195,247,0.2)';
+  document.getElementById('start-btn').style.color = 'var(--accent)';
+}
+
+function spawnCustomer(nx, ny, nz, genre) {
+  if (!audioStarted) return;
+  if (customers.length >= MAX_CUSTOMERS) {
+    const old = customers.shift();
+    if (customerSeqs[old.seqIdx]) { customerSeqs[old.seqIdx].stop(); customerSeqs[old.seqIdx].dispose(); }
+    if (customerSynths[old.synthIdx]) { customerSynths[old.synthIdx].dispose(); }
+  }
+  const g = genre || CHARS[Math.floor(Math.random()*7)].genre;
+  let synth = new Tone.Synth({ oscillator:{type:'sine'}, envelope:{attack:0.02,decay:0.1,sustain:0.4,release:0.4} });
+  synth.volume.value = -16;
+  synth.connect(masterVol);
+  const si = customerSynths.length;
+  customerSynths.push(synth);
+
+  const pattern = PATTERNS[g];
+  const seq = new Tone.Sequence((time, note) => {
+    if (note && synth) synth.triggerAttackRelease(note, '8n', time);
+  }, pattern, '8n');
+  seq.loop = true;
+  seq.start('+0.1');
+  const qi = customerSeqs.length;
+  customerSeqs.push(seq);
+
+  customers.push({ x:nx, y:ny, z:nz, genre:g, synthIdx:si, seqIdx:qi, life:0, hue: Math.random()*360 });
+}
+
+function buildCharCards() {
+  const container = document.getElementById('char-cards');
+  container.innerHTML = '';
+  CHARS.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'char-card';
+    div.id = `card-${c.id}`;
+    const color = hsvColor(c.h, c.s, c.b);
+    div.innerHTML = `<div class="cname">${c.name}</div><div class="cgenre">${c.genre}</div><div class="cbar" id="bar-${c.id}" style="background:${color};width:60%"></div>`;
+    container.appendChild(div);
+  });
+}
+
+function buildContactRows() {
+  const container = document.getElementById('contact-rows');
+  container.innerHTML = '';
+  const pairs = [];
+  for (let i=0;i<7;i++) for (let j=i+1;j<7;j++) pairs.push([i,j]);
+  pairs.slice(0,6).forEach(([i,j]) => {
+    const row = document.createElement('div');
+    row.className = 'contact-row';
+    row.id = `cr-${i}-${j}`;
+    row.innerHTML = `<span>${CHARS[i].name[0]}↔${CHARS[j].name[0]}</span><div class="contact-bar-wrap"><div class="contact-bar-fill" id="cf-${i}-${j}" style="width:0%"></div></div><span id="cp-${i}-${j}" style="font-size:9px;color:var(--muted);min-width:28px;text-align:right">0%</span>`;
+    container.appendChild(row);
+  });
+}
+
+function updateContactUI() {
+  for (let i=0;i<7;i++) for (let j=i+1;j<7;j++) {
+    const pct = Math.min(100, (contactFrames[i][j] / totalFrames) * 100);
+    const el = document.getElementById(`cf-${i}-${j}`);
+    const ep = document.getElementById(`cp-${i}-${j}`);
+    if (el) el.style.width = pct.toFixed(1) + '%';
+    if (ep) ep.textContent = pct.toFixed(0) + '%';
+  }
+}
+
+buildCharCards();
+buildContactRows();
+
+// p5.js sketch
+new p5(function(p) {
+  let W, H, stageH;
+  let rotY = 0, tiltX = 0.3;
+  let cubeSize = 200;
+  let charPos = CHARS.map(() => ({x:0,y:0,z:0}));
+  let charTrails = CHARS.map(() => []);
+  const TRAIL_LEN = 28;
+  let frameCount = 0;
+  let isDragging = false, lastMX = 0;
+  let autoRotate = true;
+  let contactFlash = Array.from({length:7}, () => new Array(7).fill(0));
+
+  function getRatio() { return RATIOS[currentRatio]; }
+
+  function getCharColor(id, alpha) {
+    const c = CHARS[id];
+    return `hsla(${c.h},${c.s}%,${c.b}%,${alpha??1})`;
+  }
+
+  function project3D(x, y, z) {
+    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+    let rx = x * cosY - z * sinY, ry = y, rz = x * sinY + z * cosY;
+    const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
+    let tx = rx, ty = ry * cosX - rz * sinX, tz = ry * sinX + rz * cosX;
+    const fov = 600;
+    const depth = tz + fov + cubeSize * 2.5;
+    const scale = fov / depth;
+    return { x: W/2 + tx * scale, y: stageH * 0.5 + ty * scale, s: scale, depth: tz };
+  }
+
+  function drawCubeWire(ratio) {
+    const hw = cubeSize * ratio.w * 0.5;
+    const hh = cubeSize * ratio.h * 0.5;
+    const hd = cubeSize * ratio.d * 0.5;
+    const corners = [
+      [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
+      [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd],
+    ].map(([x,y,z]) => project3D(x,y,z));
+    const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    p.drawingContext.save();
+    p.drawingContext.strokeStyle = `rgba(79,195,247,0.18)`;
+    p.drawingContext.lineWidth = 1;
+    edges.forEach(([a,b]) => {
+      p.drawingContext.beginPath();
+      p.drawingContext.moveTo(corners[a].x, corners[a].y);
+      p.drawingContext.lineTo(corners[b].x, corners[b].y);
+      p.drawingContext.stroke();
+    });
+    // Floor grid
+    const gy = hh;
+    p.drawingContext.strokeStyle = `rgba(79,195,247,0.07)`;
+    for (let i=-3;i<=3;i++) {
+      const gx = (hw/3)*i;
+      const a = project3D(gx, gy, -hd), b = project3D(gx, gy, hd);
+      const c2 = project3D(-hw, gy, (hd/3)*i), d = project3D(hw, gy, (hd/3)*i);
+      p.drawingContext.beginPath(); p.drawingContext.moveTo(a.x,a.y); p.drawingContext.lineTo(b.x,b.y); p.drawingContext.stroke();
+      p.drawingContext.beginPath(); p.drawingContext.moveTo(c2.x,c2.y); p.drawingContext.lineTo(d.x,d.y); p.drawingContext.stroke();
+    }
+    p.drawingContext.restore();
+  }
+
+  function updatePositions(t) {
+    const ratio = getRatio();
+    totalFrames++;
+    for (let i=0;i<CHARS.length;i++) {
+      const d = DANCE[i];
+      const spd = 0.6;
+      const x = Math.sin(d.fx * t * spd + d.px) * cubeSize * ratio.w * 0.42;
+      const y = Math.sin(d.fy * t * spd + d.py) * cubeSize * ratio.h * 0.42;
+      const z = Math.sin(d.fz * t * spd + d.pz) * cubeSize * ratio.d * 0.42;
+      charPos[i] = {x, y, z};
+      charTrails[i].push({x, y, z});
+      if (charTrails[i].length > TRAIL_LEN) charTrails[i].shift();
+    }
+    // Contact detection
+    const contactDist = cubeSize * Math.min(ratio.w, ratio.h, ratio.d) * 0.38;
+    for (let i=0;i<CHARS.length;i++) for (let j=i+1;j<CHARS.length;j++) {
+      const dx = charPos[i].x - charPos[j].x;
+      const dy = charPos[i].y - charPos[j].y;
+      const dz = charPos[i].z - charPos[j].z;
+      const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+      const inContact = dist < contactDist;
+      contactActive[i][j] = inContact;
+      if (inContact) {
+        contactFrames[i][j]++;
+        contactFlash[i][j] = 12;
+        if (audioStarted) {
+          if (!contactEffects[i].active) {
+            synths[i]?.connect(contactEffects[i].node);
+            contactEffects[i].active = true;
+          }
+          if (!contactEffects[j].active) {
+            synths[j]?.connect(contactEffects[j].node);
+            contactEffects[j].active = true;
+          }
+        }
+      } else {
+        if (contactFlash[i][j] > 0) contactFlash[i][j]--;
+        if (contactEffects[i]?.active && !inContact) {
+          contactEffects[i].active = false;
+        }
+      }
+    }
+    // Update customers
+    customers.forEach(cu => {
+      cu.life += 0.012;
+      cu.x = Math.sin(cu.life * 0.9) * cubeSize * ratio.w * 0.3;
+      cu.y = Math.cos(cu.life * 1.1) * cubeSize * ratio.h * 0.3;
+      cu.z = Math.sin(cu.life * 0.7) * cubeSize * ratio.d * 0.3;
+    });
+  }
+
+  function drawTrails() {
+    const ctx = p.drawingContext;
+    for (let i=0;i<CHARS.length;i++) {
+      const trail = charTrails[i];
+      if (trail.length < 2) continue;
+      for (let k=1;k<trail.length;k++) {
+        const alpha = (k/trail.length) * 0.4;
+        const pa = project3D(trail[k-1].x, trail[k-1].y, trail[k-1].z);
+        const pb = project3D(trail[k].x, trail[k].y, trail[k].z);
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.strokeStyle = `hsla(${CHARS[i].h},${CHARS[i].s}%,${CHARS[i].b}%,${alpha})`;
+        ctx.lineWidth = 1.5 * pb.s;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawContactBeams() {
+    const ctx = p.drawingContext;
+    for (let i=0;i<CHARS.length;i++) for (let j=i+1;j<CHARS.length;j++) {
+      if (contactFlash[i][j] <= 0) continue;
+      const a = project3D(charPos[i].x, charPos[i].y, charPos[i].z);
+      const b = project3D(charPos[j].x, charPos[j].y, charPos[j].z);
+      const alpha = (contactFlash[i][j]/12) * 0.5;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = `rgba(255,255,255,${alpha})`;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawCharacter(i, t) {
+    const c = CHARS[i];
+    const pos = charPos[i];
+    const proj = project3D(pos.x, pos.y, pos.z);
+    const r = 10 * proj.s;
+    const ctx = p.drawingContext;
+    ctx.save();
+    // Glow
+    ctx.shadowBlur = 20 * proj.s;
+    ctx.shadowColor = `hsl(${c.h},${c.s}%,${c.b}%)`;
+    // Body orb
+    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r * 1.6);
+    grad.addColorStop(0, `hsla(${c.h},${c.s}%,${c.b+15}%,0.9)`);
+    grad.addColorStop(0.5, `hsla(${c.h},${c.s}%,${c.b}%,0.6)`);
+    grad.addColorStop(1, `hsla(${c.h},${c.s}%,${c.b-10}%,0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, r * 1.6, 0, Math.PI*2);
+    ctx.fill();
+    // Core dot
+    ctx.fillStyle = `hsla(${c.h},${c.s}%,${Math.min(100,c.b+20)}%,1)`;
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, r * 0.45, 0, Math.PI*2);
+    ctx.fill();
+    // Tail fin below (animated)
+    const finSwing = Math.sin(t * 3 + i) * 0.3;
+    const fy = proj.y + r * 2.2;
+    ctx.beginPath();
+    ctx.moveTo(proj.x, proj.y + r * 0.6);
+    ctx.quadraticCurveTo(proj.x + finSwing * r*4, fy, proj.x + r*1.2, fy + r*0.8);
+    ctx.quadraticCurveTo(proj.x, fy + r*0.3, proj.x - r*1.2, fy + r*0.8);
+    ctx.quadraticCurveTo(proj.x - finSwing * r*4, fy, proj.x, proj.y + r * 0.6);
+    ctx.closePath();
+    ctx.fillStyle = `hsla(${c.h},${c.s}%,${c.b}%,0.55)`;
+    ctx.fill();
+    // Label
+    ctx.font = `${Math.max(8, 10 * proj.s)}px 'Space Grotesk', sans-serif`;
+    ctx.fillStyle = `hsla(${c.h},${c.s}%,95%,0.9)`;
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 6;
+    ctx.fillText(c.name, proj.x, proj.y - r * 2.1);
+    ctx.restore();
+  }
+
+  function drawCustomer(cu) {
+    const proj = project3D(cu.x, cu.y, cu.z);
+    const r = 7 * proj.s;
+    const ctx = p.drawingContext;
+    ctx.save();
+    ctx.shadowBlur = 14 * proj.s;
+    ctx.shadowColor = `hsla(${cu.hue},70%,70%,0.6)`;
+    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r * 1.4);
+    grad.addColorStop(0, `hsla(${cu.hue},60%,80%,0.85)`);
+    grad.addColorStop(1, `hsla(${cu.hue},60%,60%,0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(proj.x, proj.y, r*1.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = `${Math.max(7,8*proj.s)}px 'Inter', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('♪', proj.x, proj.y + r*0.4);
+    ctx.restore();
+  }
+
+  function updateHUD() {
+    if (frameCount % 20 !== 0) return;
+    updateContactUI();
+    // Update char activity bars
+    CHARS.forEach((c,i) => {
+      let activity = 0;
+      for (let j=0;j<7;j++) if (j!==i && contactActive[i][j]) activity++;
+      const bar = document.getElementById(`bar-${i}`);
+      if (bar) bar.style.width = (40 + activity * 20) + '%';
+    });
+  }
+
+  p.setup = function() {
+    W = p.windowWidth;
+    H = p.windowHeight;
+    stageH = H - 90;
+    const cnv = p.createCanvas(W, stageH);
+    cnv.parent('p5-container');
+    cubeSize = Math.min(W, stageH) * 0.28;
+    p.frameRate(60);
+  };
+
+  p.windowResized = function() {
+    W = p.windowWidth;
+    H = p.windowHeight;
+    stageH = H - 90;
+    p.resizeCanvas(W, stageH);
+    cubeSize = Math.min(W, stageH) * 0.28;
+  };
+
+  p.draw = function() {
+    const t = p.millis() * 0.001;
+    frameCount++;
+    p.clear();
+
+    if (autoRotate) rotY += 0.004;
+    tiltX = 0.28 + Math.sin(t * 0.1) * 0.04;
+
+    updatePositions(t);
+
+    // Sort characters by depth for painter's algo
+    const order = CHARS.map((c,i) => ({i, depth: project3D(charPos[i].x, charPos[i].y, charPos[i].z).depth}));
+    order.sort((a,b) => a.depth - b.depth);
+
+    const ratio = getRatio();
+    drawCubeWire(ratio);
+    drawTrails();
+    drawContactBeams();
+
+    // Draw chars in depth order
+    order.forEach(({i}) => drawCharacter(i, t));
+    customers.forEach(cu => drawCustomer(cu));
+
+    updateHUD();
+  };
+
+  p.mousePressed = function() {
+    if (p.mouseY < 0 || p.mouseY > stageH) return;
+    isDragging = true;
+    lastMX = p.mouseX;
+    autoRotate = false;
+    // Spawn customer
+    if (p.mouseButton === p.LEFT) {
+      const nx = (p.mouseX / W - 0.5) * cubeSize * getRatio().w * 0.8;
+      const ny = (p.mouseY / stageH - 0.5) * cubeSize * getRatio().h * 0.8;
+      const nz = (Math.random() - 0.5) * cubeSize * getRatio().d * 0.8;
+      const gidx = Math.floor((p.mouseX / W) * 7);
+      spawnCustomer(nx, ny, nz, CHARS[Math.min(6,gidx)].genre);
+    }
+  };
+
+  p.mouseDragged = function() {
+    if (!isDragging) return;
+    rotY += (p.mouseX - lastMX) * 0.012;
+    lastMX = p.mouseX;
+  };
+
+  p.mouseReleased = function() {
+    isDragging = false;
+    setTimeout(() => { autoRotate = true; }, 2000);
+  };
+
+  p.touchStarted = function() {
+    if (p.touches.length > 0) {
+      const tx = p.touches[0].x, ty = p.touches[0].y;
+      if (ty < 0 || ty > stageH) return false;
+      const nx = (tx / W - 0.5) * cubeSize * getRatio().w * 0.8;
+      const ny = (ty / stageH - 0.5) * cubeSize * getRatio().h * 0.8;
+      const nz = (Math.random() - 0.5) * cubeSize * getRatio().d * 0.8;
+      const gidx = Math.floor((tx / W) * 7);
+      spawnCustomer(nx, ny, nz, CHARS[Math.min(6,gidx)].genre);
+    }
+    return false;
+  };
+});
+</script>
+</body>
+</html>
