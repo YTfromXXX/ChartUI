@@ -1,0 +1,696 @@
+<title>Mermaid Fin Engine</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700;900&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#010a14;--surf:#041824;--surf2:#071e2e;
+  --border:#0a3050;--fg:#d8f0ff;--sub:#3a6888;
+  --cyan:#30d8d8;--teal:#20c0a0;--pink:#f060b0;--gold:#d4aa50;--purple:#a060f8;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:'JetBrains Mono',monospace;
+  overflow-x:hidden;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) 80px max(16px,env(safe-area-inset-left,0px));
+}
+#header{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 0 10px;border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.eng-title{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:900;letter-spacing:.1em;color:var(--cyan);}
+.eng-sub{font-size:.6rem;color:var(--sub);letter-spacing:.1em;flex:1;}
+.badge{font-size:.58rem;padding:2px 8px;border-radius:3px;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.badge.py{background:color-mix(in srgb,var(--gold) 15%,var(--surf2));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);}
+.badge.js{background:color-mix(in srgb,var(--cyan) 15%,var(--surf2));color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 30%,transparent);}
+
+#canvas-wrap{position:relative;width:100%;margin:12px 0;}
+canvas#scene{display:block;width:100%;border-radius:12px;border:1px solid var(--border);}
+
+/* Controls */
+#controls{
+  display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;
+  align-items:center;
+}
+.ctrl-group{display:flex;flex-direction:column;gap:4px;min-width:140px;}
+.ctrl-label{font-size:.58rem;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;}
+.ctrl-row{display:flex;gap:6px;align-items:center;}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  height:4px;border-radius:2px;
+  background:var(--surf2);border:1px solid var(--border);
+  outline:none;width:100px;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:12px;height:12px;border-radius:50%;
+  background:var(--cyan);cursor:pointer;
+}
+.val-display{font-size:.65rem;color:var(--cyan);min-width:30px;text-align:right;}
+.ctrl-btn{
+  font-family:'JetBrains Mono',monospace;font-size:.65rem;
+  padding:5px 12px;border-radius:5px;
+  background:var(--surf2);border:1px solid var(--border);
+  color:var(--fg);cursor:pointer;white-space:nowrap;transition:all .12s;
+}
+.ctrl-btn:hover{background:var(--surf);border-color:var(--cyan);color:var(--cyan);}
+.ctrl-btn.active{background:color-mix(in srgb,var(--cyan) 20%,var(--surf2));border-color:var(--cyan);color:var(--cyan);}
+
+/* Char selector */
+#char-select{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
+.char-btn{
+  width:32px;height:32px;border-radius:50%;border:2px solid transparent;
+  cursor:pointer;transition:all .15s;position:relative;
+}
+.char-btn.active{transform:scale(1.2);border-color:#fff;box-shadow:0 0 10px currentColor;}
+.char-btn .char-label{
+  position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);
+  font-size:.48rem;white-space:nowrap;color:var(--sub);
+}
+
+/* Physics debug panel */
+#debug{
+  background:var(--surf2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 14px;font-size:.65rem;line-height:1.9;
+  margin:8px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 16px;
+}
+.db-row{display:flex;justify-content:space-between;gap:8px;}
+.db-key{color:var(--sub);}
+.db-val{color:var(--cyan);font-weight:700;}
+
+/* Engine log */
+#eng-log{
+  background:var(--surf2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 14px;font-size:.62rem;line-height:1.8;max-height:120px;overflow-y:auto;
+  margin:8px 0;color:var(--sub);
+}
+.log-line{display:flex;gap:8px;}
+.log-ts{color:var(--border);}
+.log-msg{color:var(--teal);}
+</style>
+
+<div id="header">
+  <div class="eng-title">MERMAID FIN ENGINE</div>
+  <div class="eng-sub">マーメイドシアター · 自前ゲームエンジン · module 01</div>
+  <span class="badge js">JS Canvas</span>
+  <span class="badge py">Python ready</span>
+</div>
+
+<!-- Character selector -->
+<div id="char-select"></div>
+
+<div id="canvas-wrap">
+  <canvas id="scene"></canvas>
+</div>
+
+<!-- Controls -->
+<div id="controls">
+  <div class="ctrl-group">
+    <div class="ctrl-label">Swim Speed</div>
+    <div class="ctrl-row">
+      <input type="range" id="sl-speed" min="0.2" max="3" step="0.1" value="1">
+      <span class="val-display" id="v-speed">1.0</span>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <div class="ctrl-label">Wave Amplitude</div>
+    <div class="ctrl-row">
+      <input type="range" id="sl-amp" min="10" max="80" step="1" value="36">
+      <span class="val-display" id="v-amp">36</span>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <div class="ctrl-label">Fin Stiffness</div>
+    <div class="ctrl-row">
+      <input type="range" id="sl-stiff" min="0.05" max="0.95" step="0.01" value="0.42">
+      <span class="val-display" id="v-stiff">0.42</span>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <div class="ctrl-label">Segments</div>
+    <div class="ctrl-row">
+      <input type="range" id="sl-segs" min="4" max="16" step="1" value="10">
+      <span class="val-display" id="v-segs">10</span>
+    </div>
+  </div>
+  <button class="ctrl-btn active" id="btn-poles" onclick="togglePoles()">Poles ON</button>
+  <button class="ctrl-btn" id="btn-debug" onclick="toggleDebug()">Debug</button>
+  <button class="ctrl-btn" id="btn-all" onclick="toggleAll()">ALL SWIM</button>
+  <button class="ctrl-btn" onclick="addLog('engine reset');initEngine()">Reset</button>
+</div>
+
+<!-- Physics debug -->
+<div id="debug" style="display:none;"></div>
+
+<!-- Engine log -->
+<div id="eng-log">
+  <div class="log-line"><span class="log-ts">00:00</span><span class="log-msg">MermaidFinEngine v0.1 initialized</span></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  MERMAID FIN ENGINE — custom physics, no game engine
+//  Architecture:
+//    World  → holds all entities + physics step
+//    Mermaid → body chain (Verlet segments) + fin mesh
+//    Pole   → static vertical collider
+//    Renderer → canvas 2D draw calls
+// ════════════════════════════════════════════════════════
+
+// ── Character definitions (from reference images) ────────
+const CHARS = [
+  {name:'Ariel',    tail:'#28c8a0', hair:'#d43020', top:'#8899cc', accent:'#20f0c0'},
+  {name:'Andrina',  tail:'#c03060', hair:'#8b4513', top:'#c03060', accent:'#ff80a0'},
+  {name:'Arista',   tail:'#e04010', hair:'#602010', top:'#b03010', accent:'#ff6030'},
+  {name:'Aquata',   tail:'#4488cc', hair:'#3a2010', top:'#3366aa', accent:'#88bbff'},
+  {name:'Attina',   tail:'#d4a020', hair:'#601008', top:'#aa7010', accent:'#ffd060'},
+  {name:'Adella',   tail:'#9040e0', hair:'#1a1a1a', top:'#8030c0', accent:'#c080ff'},
+  {name:'Alana',    tail:'#c0a030', hair:'#8b2010', top:'#886020', accent:'#e8c860'},
+];
+
+// ── Engine config ────────────────────────────────────────
+const cfg = {
+  speed: 1.0,
+  amplitude: 36,
+  stiffness: 0.42,
+  segments: 10,
+  showPoles: true,
+  showDebug: false,
+  allSwim: false,
+};
+
+// ── World ────────────────────────────────────────────────
+class World {
+  constructor(W, H){
+    this.W = W; this.H = H;
+    this.mermaids = [];
+    this.poles = [];
+    this.time = 0;
+    this.dt = 1/60;
+  }
+
+  addMermaid(charDef, x, y, phase=0){
+    const m = new Mermaid(charDef, x, y, phase, this);
+    this.mermaids.push(m);
+    return m;
+  }
+
+  addPole(x){
+    this.poles.push({x, r:5});
+  }
+
+  step(){
+    this.time += this.dt * cfg.speed;
+    for(const m of this.mermaids){
+      if(m.active) m.step(this.time, this.poles);
+    }
+  }
+}
+
+// ── Verlet Particle ──────────────────────────────────────
+class Particle {
+  constructor(x, y){ this.x=x; this.y=y; this.px=x; this.py=y; }
+  verlet(gravity=0){
+    const vx=this.x-this.px, vy=this.y-this.py;
+    this.px=this.x; this.py=this.y;
+    this.x+=vx*0.98; this.y+=vy*0.98+gravity;
+  }
+}
+
+// ── Mermaid entity ───────────────────────────────────────
+class Mermaid {
+  constructor(def, x, y, phase, world){
+    this.def = def;
+    this.x = x; this.y = y;
+    this.phase = phase;
+    this.world = world;
+    this.active = true;
+    this.poleGrip = null; // {pole, side}
+    this._buildChain();
+  }
+
+  _buildChain(){
+    this.chain = [];
+    const n = cfg.segments;
+    const segLen = 10;
+    for(let i=0;i<n;i++){
+      this.chain.push(new Particle(this.x, this.y + i*segLen));
+    }
+  }
+
+  _swimTarget(t, i, n){
+    // Undulating spine: each segment offset by phase + position fraction
+    const frac = i / (n-1);
+    const wavePhase = t * 2.2 + this.phase - frac * Math.PI * 2.5;
+    const amp = cfg.amplitude * Math.pow(frac, 1.4); // grows toward tail
+    const baseY = this.y + i * (10 * cfg.segments / 10);
+    return {
+      tx: this.x + Math.sin(wavePhase) * amp * 0.5,
+      ty: baseY + Math.cos(wavePhase) * amp * 0.3,
+    };
+  }
+
+  step(t, poles){
+    const n = this.chain.length;
+
+    // 1. Verlet integrate
+    for(const p of this.chain) p.verlet(0);
+
+    // 2. Drive head (torso anchor)
+    const head = this.chain[0];
+    head.x = this.x + Math.sin(t * 1.1 + this.phase) * 8;
+    head.y = this.y + Math.sin(t * 0.7 + this.phase * 0.5) * 5;
+
+    // 3. Spring constraint — each follows the previous
+    for(let i=1;i<n;i++){
+      const p = this.chain[i];
+      const q = this.chain[i-1];
+      const target = this._swimTarget(t, i, n);
+      const k = cfg.stiffness;
+      p.x += (target.tx - p.x) * k * 0.6;
+      p.y += (target.ty - p.y) * k * 0.6;
+      // Distance constraint
+      const dx=p.x-q.x, dy=p.y-q.y;
+      const dist=Math.sqrt(dx*dx+dy*dy)||1;
+      const segLen=10;
+      const corr=(dist-segLen)/dist*0.5;
+      p.x-=dx*corr; p.y-=dy*corr;
+    }
+
+    // 4. Pole grip interaction
+    if(this.poleGrip !== null){
+      const pole = poles[this.poleGrip.poleIdx];
+      if(pole){
+        // Wrap upper chain around pole
+        for(let i=0;i<Math.min(5,n);i++){
+          const p = this.chain[i];
+          const dx=p.x-pole.x;
+          const dist=Math.abs(dx);
+          if(dist < pole.r + 20){
+            p.x += (pole.x + (this.poleGrip.side * (pole.r+8)) - p.x) * 0.15;
+          }
+        }
+      }
+    }
+
+    // 5. World boundary
+    for(const p of this.chain){
+      if(p.y < 20)  p.y=20;
+      if(p.y > this.world.H-20) p.y=this.world.H-20;
+    }
+  }
+
+  // Fin mesh: flare at tail end using 2 side points
+  finPoints(t){
+    const n = this.chain.length;
+    const tip  = this.chain[n-1];
+    const prev = this.chain[n-2];
+    const dx=tip.x-prev.x, dy=tip.y-prev.y;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=-dy/len, ny=dx/len; // normal
+    const frac = t * cfg.speed;
+    const spread = 28 + Math.sin(frac * 3.1 + this.phase) * 10;
+    const flap   =  8 + Math.sin(frac * 3.1 + this.phase + Math.PI) * 6;
+    return [
+      {x: tip.x + nx*spread + dx/len*flap, y: tip.y + ny*spread + dy/len*flap},
+      {x: tip.x - nx*spread + dx/len*flap, y: tip.y - ny*spread + dy/len*flap},
+      {x: tip.x + nx*(spread*0.3) + dx/len*(flap+12), y: tip.y + ny*(spread*0.3) + dy/len*(flap+12)},
+      {x: tip.x - nx*(spread*0.3) + dx/len*(flap+12), y: tip.y - ny*(spread*0.3) + dy/len*(flap+12)},
+    ];
+  }
+}
+
+// ── Renderer ─────────────────────────────────────────────
+class Renderer {
+  constructor(canvas, world){
+    this.canvas = canvas;
+    this.ctx    = canvas.getContext('2d');
+    this.world  = world;
+  }
+
+  drawBackground(){
+    const ctx=this.ctx, W=this.world.W, H=this.world.H;
+    // Ocean gradient
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#010a18');
+    bg.addColorStop(0.4,'#021828');
+    bg.addColorStop(1,'#000810');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+    // Caustic light rays
+    ctx.save();
+    for(let i=0;i<6;i++){
+      const rx=W*(0.1+i*0.16)+Math.sin(this.world.time*0.3+i)*20;
+      const grad=ctx.createLinearGradient(rx-20,0,rx+20,H*0.6);
+      grad.addColorStop(0,'rgba(48,216,216,.06)');
+      grad.addColorStop(1,'rgba(48,216,216,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.moveTo(rx-24,0); ctx.lineTo(rx+24,0);
+      ctx.lineTo(rx+10,H*0.6); ctx.lineTo(rx-10,H*0.6);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    // Bubbles
+    if(!this._bubbles){
+      this._bubbles=[];
+      for(let i=0;i<30;i++) this._bubbles.push({
+        x:Math.random()*W, y:Math.random()*H,
+        r:Math.random()*3+1, vy:-(Math.random()*.5+.3)
+      });
+    }
+    this._bubbles.forEach(b=>{
+      b.y+=b.vy;
+      if(b.y<-10) b.y=H+10;
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(180,230,255,.25)'; ctx.lineWidth=.8; ctx.stroke();
+    });
+  }
+
+  drawPole(pole, H){
+    const ctx=this.ctx;
+    // Seaweed pole
+    const grad=ctx.createLinearGradient(pole.x-pole.r,0,pole.x+pole.r,0);
+    grad.addColorStop(0,'#1a4a28');
+    grad.addColorStop(0.5,'#2a7a40');
+    grad.addColorStop(1,'#1a4a28');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.rect(pole.x-pole.r, 0, pole.r*2, H);
+    ctx.fill();
+    // shimmer
+    ctx.strokeStyle='rgba(80,180,100,.2)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pole.x-1,0); ctx.lineTo(pole.x-1,H); ctx.stroke();
+  }
+
+  drawMermaid(m, t){
+    const ctx=this.ctx;
+    const chain=m.chain;
+    const n=chain.length;
+    if(n<2) return;
+    const def=m.def;
+
+    // ── Tail body (thick bezier spine) ──
+    ctx.save();
+    ctx.lineWidth=14;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+
+    // Gradient along spine
+    const head=chain[0], tail=chain[n-1];
+    const spineGrad=ctx.createLinearGradient(head.x,head.y,tail.x,tail.y);
+    spineGrad.addColorStop(0, def.top);
+    spineGrad.addColorStop(0.35, def.tail+'cc');
+    spineGrad.addColorStop(1, def.tail);
+
+    ctx.beginPath();
+    ctx.moveTo(chain[0].x, chain[0].y);
+    for(let i=1;i<n;i++){
+      const p=chain[i], q=chain[i-1];
+      const mx=(p.x+q.x)/2, my=(p.y+q.y)/2;
+      ctx.quadraticCurveTo(q.x,q.y,mx,my);
+    }
+    ctx.quadraticCurveTo(chain[n-2].x,chain[n-2].y,chain[n-1].x,chain[n-1].y);
+
+    // Taper width via shadow trick
+    ctx.strokeStyle=spineGrad;
+    ctx.stroke();
+    ctx.restore();
+
+    // ── Tail taper overlay (narrows toward fin) ──
+    ctx.save();
+    for(let i=0;i<n-1;i++){
+      const p=chain[i], q=chain[i+1];
+      const frac=i/(n-1);
+      const w=Math.max(2, 13*(1-frac*0.75));
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y);
+      ctx.strokeStyle=def.tail+(frac>0.6?'dd':'ff');
+      ctx.lineWidth=w; ctx.lineCap='round'; ctx.stroke();
+    }
+    ctx.restore();
+
+    // ── Fin at tail end ──
+    const fins=m.finPoints(t);
+    const tipP=chain[n-1];
+    ctx.save();
+    ctx.globalAlpha=0.88;
+    // Left lobe
+    ctx.beginPath();
+    ctx.moveTo(tipP.x,tipP.y);
+    ctx.quadraticCurveTo(fins[0].x,fins[0].y,fins[2].x,fins[2].y);
+    ctx.quadraticCurveTo(fins[0].x,fins[0].y+10,tipP.x,tipP.y);
+    ctx.fillStyle=def.accent+'bb';
+    ctx.fill();
+    ctx.strokeStyle=def.accent; ctx.lineWidth=1; ctx.stroke();
+    // Right lobe
+    ctx.beginPath();
+    ctx.moveTo(tipP.x,tipP.y);
+    ctx.quadraticCurveTo(fins[1].x,fins[1].y,fins[3].x,fins[3].y);
+    ctx.quadraticCurveTo(fins[1].x,fins[1].y+10,tipP.x,tipP.y);
+    ctx.fillStyle=def.accent+'99';
+    ctx.fill();
+    ctx.strokeStyle=def.accent; ctx.lineWidth=1; ctx.stroke();
+    // Central spine line on fin
+    ctx.beginPath();
+    ctx.moveTo(tipP.x,tipP.y);
+    ctx.lineTo((fins[2].x+fins[3].x)/2,(fins[2].y+fins[3].y)/2);
+    ctx.strokeStyle=def.accent+'88'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.restore();
+
+    // ── Scales pattern on mid-tail ──
+    ctx.save();
+    ctx.globalAlpha=0.18;
+    for(let i=3;i<n-2;i+=2){
+      const p=chain[i];
+      const frac=i/(n-1);
+      const sr=5-frac*2;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,sr,0,Math.PI*2);
+      ctx.strokeStyle=def.accent; ctx.lineWidth=.8; ctx.stroke();
+    }
+    ctx.restore();
+
+    // ── Torso / upper body ──
+    ctx.save();
+    const torso=chain[0];
+    // Upper body glow
+    ctx.beginPath();
+    ctx.arc(torso.x, torso.y-10, 14, 0, Math.PI*2);
+    ctx.fillStyle=def.top+'33';
+    ctx.fill();
+    // Simple torso oval
+    ctx.beginPath();
+    ctx.ellipse(torso.x, torso.y-6, 7, 11, 0, 0, Math.PI*2);
+    ctx.fillStyle=def.top+'cc'; ctx.fill();
+    ctx.restore();
+
+    // ── Hair ──
+    ctx.save();
+    const hx=torso.x, hy=torso.y-18;
+    const hairFlow=Math.sin(t*cfg.speed*2.2+m.phase)*8;
+    // Hair mass
+    ctx.beginPath();
+    ctx.ellipse(hx,hy, 10,10, 0, 0, Math.PI*2);
+    ctx.fillStyle=def.hair; ctx.fill();
+    // Hair strands flowing
+    for(let s=0;s<5;s++){
+      const angle=-0.4+s*0.2+hairFlow*0.04;
+      const len=18+s*3;
+      ctx.beginPath();
+      ctx.moveTo(hx,hy+8);
+      ctx.quadraticCurveTo(
+        hx+Math.sin(angle+hairFlow*0.06)*len*0.5,
+        hy+8+len*0.4,
+        hx+Math.sin(angle+hairFlow*0.1)*len,
+        hy+8+len*0.85
+      );
+      ctx.strokeStyle=def.hair+(s===2?'ff':'99');
+      ctx.lineWidth=2.5-s*0.3; ctx.lineCap='round'; ctx.stroke();
+    }
+    ctx.restore();
+
+    // Name label
+    if(m.active && !cfg.allSwim){
+      ctx.save();
+      ctx.font='bold 9px Space Grotesk, sans-serif';
+      ctx.fillStyle=def.accent+'cc';
+      ctx.textAlign='center';
+      ctx.fillText(def.name, torso.x, torso.y-30);
+      ctx.restore();
+    }
+  }
+
+  draw(t){
+    this.drawBackground();
+    if(cfg.showPoles){
+      for(const pole of this.world.poles){
+        this.drawPole(pole, this.world.H);
+      }
+    }
+    for(const m of this.world.mermaids){
+      if(m.active) this.drawMermaid(m, t);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  ENGINE INIT
+// ════════════════════════════════════════════════════════
+let world, renderer;
+let activeChar = 0;
+const canvas = document.getElementById('scene');
+
+function initEngine(){
+  const W = canvas.clientWidth;
+  const H = Math.round(W * 0.52);
+  canvas.width  = W * (window.devicePixelRatio||1);
+  canvas.height = H * (window.devicePixelRatio||1);
+  canvas.getContext('2d').scale(window.devicePixelRatio||1, window.devicePixelRatio||1);
+  canvas.style.height = H+'px';
+
+  world = new World(W, H);
+
+  // Seaweed poles
+  const poleXs = [W*0.22, W*0.5, W*0.78];
+  poleXs.forEach(x=>world.addPole(x));
+
+  // Place all mermaids (initially only active one is shown)
+  const spacing = W / (CHARS.length + 1);
+  CHARS.forEach((def, i)=>{
+    const x = spacing*(i+1);
+    const y = H * 0.38 + (i%2)*20;
+    const m = world.addMermaid(def, x, y, i * (Math.PI*2/CHARS.length));
+    m.active = (i === activeChar) || cfg.allSwim;
+    // Assign pole grip to simulate pole wrapping
+    if(cfg.showPoles){
+      const pIdx = i % poleXs.length;
+      m.poleGrip = {poleIdx: pIdx, side: (i%2===0?1:-1)};
+    }
+  });
+
+  renderer = new Renderer(canvas, world);
+  addLog('engine init · W='+W+' H='+H);
+}
+
+// ── Loop ─────────────────────────────────────────────────
+let frameId;
+function loop(){
+  world.step();
+  renderer.draw(world.time);
+  if(cfg.showDebug) updateDebug();
+  frameId = requestAnimationFrame(loop);
+}
+
+function updateDebug(){
+  const m = world.mermaids[activeChar];
+  if(!m) return;
+  const tail = m.chain[m.chain.length-1];
+  const doc = document.getElementById('debug');
+  doc.innerHTML = `
+    <div class="db-row"><span class="db-key">time</span><span class="db-val">${world.time.toFixed(2)}</span></div>
+    <div class="db-row"><span class="db-key">speed</span><span class="db-val">${cfg.speed.toFixed(1)}</span></div>
+    <div class="db-row"><span class="db-key">amplitude</span><span class="db-val">${cfg.amplitude}</span></div>
+    <div class="db-row"><span class="db-key">stiffness</span><span class="db-val">${cfg.stiffness.toFixed(2)}</span></div>
+    <div class="db-row"><span class="db-key">segments</span><span class="db-val">${cfg.segments}</span></div>
+    <div class="db-row"><span class="db-key">head.x</span><span class="db-val">${m.chain[0].x.toFixed(1)}</span></div>
+    <div class="db-row"><span class="db-key">head.y</span><span class="db-val">${m.chain[0].y.toFixed(1)}</span></div>
+    <div class="db-row"><span class="db-key">tail.x</span><span class="db-val">${tail.x.toFixed(1)}</span></div>
+    <div class="db-row"><span class="db-key">tail.y</span><span class="db-val">${tail.y.toFixed(1)}</span></div>
+    <div class="db-row"><span class="db-key">char</span><span class="db-val">${CHARS[activeChar].name}</span></div>
+    <div class="db-row"><span class="db-key">poles</span><span class="db-val">${world.poles.length}</span></div>
+  `;
+}
+
+// ── UI setup ──────────────────────────────────────────────
+function buildCharSelect(){
+  const wrap=document.getElementById('char-select');
+  wrap.innerHTML='';
+  CHARS.forEach((def,i)=>{
+    const btn=document.createElement('button');
+    btn.className='char-btn'+(i===activeChar?' active':'');
+    btn.style.background=def.tail;
+    btn.style.color=def.tail;
+    btn.title=def.name;
+    btn.innerHTML=`<span class="char-label">${def.name}</span>`;
+    btn.onclick=()=>{
+      if(cfg.allSwim) return;
+      activeChar=i;
+      world.mermaids.forEach((m,j)=>m.active=(j===i));
+      document.querySelectorAll('.char-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
+      addLog('char → '+def.name+' ('+def.tail+')');
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function sliderSetup(id, valId, key, fmt=(v)=>v){
+  const sl=document.getElementById(id);
+  const vd=document.getElementById(valId);
+  sl.addEventListener('input',()=>{
+    cfg[key]=parseFloat(sl.value);
+    vd.textContent=fmt(cfg[key]);
+    // Rebuild chain if segments changed
+    if(key==='segments') initEngine();
+  });
+}
+
+sliderSetup('sl-speed','v-speed','speed',v=>v.toFixed(1));
+sliderSetup('sl-amp',  'v-amp',  'amplitude',v=>v);
+sliderSetup('sl-stiff','v-stiff','stiffness',v=>v.toFixed(2));
+sliderSetup('sl-segs', 'v-segs', 'segments', v=>v);
+
+function togglePoles(){
+  cfg.showPoles=!cfg.showPoles;
+  const btn=document.getElementById('btn-poles');
+  btn.textContent='Poles '+(cfg.showPoles?'ON':'OFF');
+  btn.classList.toggle('active',cfg.showPoles);
+  world.mermaids.forEach(m=>{m.poleGrip=cfg.showPoles?{poleIdx:0,side:1}:null;});
+  addLog('poles → '+(cfg.showPoles?'on':'off'));
+}
+
+function toggleDebug(){
+  cfg.showDebug=!cfg.showDebug;
+  document.getElementById('debug').style.display=cfg.showDebug?'grid':'none';
+  document.getElementById('btn-debug').classList.toggle('active',cfg.showDebug);
+}
+
+function toggleAll(){
+  cfg.allSwim=!cfg.allSwim;
+  world.mermaids.forEach((m,i)=>m.active=cfg.allSwim||(i===activeChar));
+  document.getElementById('btn-all').classList.toggle('active',cfg.allSwim);
+  document.querySelectorAll('.char-btn').forEach(b=>b.style.opacity=cfg.allSwim?'0.5':'1');
+  addLog('allSwim → '+cfg.allSwim+' ('+world.mermaids.length+' chars)');
+}
+
+function addLog(msg){
+  const log=document.getElementById('eng-log');
+  const now=new Date();
+  const ts=now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  const line=document.createElement('div');
+  line.className='log-line';
+  line.innerHTML=`<span class="log-ts">${ts}</span><span class="log-msg">${msg}</span>`;
+  log.insertBefore(line,log.firstChild);
+  if(log.children.length>20) log.removeChild(log.lastChild);
+}
+
+// ── Resize handling ───────────────────────────────────────
+let resizeTimer;
+window.addEventListener('resize',()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{
+    cancelAnimationFrame(frameId);
+    initEngine();
+    buildCharSelect();
+    loop();
+  },200);
+});
+
+// ── Boot ──────────────────────────────────────────────────
+initEngine();
+buildCharSelect();
+loop();
+addLog('renderer started · '+CHARS.length+' chars loaded');
+</script>
