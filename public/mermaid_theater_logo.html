@@ -1,0 +1,291 @@
+<title>マーメイドシアター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&display=swap">
+
+<style>
+:root { --bg: #030c18; color-scheme: dark }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #030c18 } }
+:root[data-theme="dark"] { --bg: #030c18 }
+
+body {
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 0 !important;
+  margin: 0;
+}
+
+#sketch-container canvas { display: block; }
+</style>
+
+<div id="sketch-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+const sketch = (p) => {
+  let scales = [];
+  let bubbles = [];
+  let pg;
+  let W, H, STEP;
+  let ready = false;
+
+  function buildScales() {
+    W = p.width; H = p.height;
+    STEP = Math.max(11, Math.round(W * 0.013));
+
+    const fSize = Math.round(W * (W < 480 ? 0.072 : W < 720 ? 0.082 : 0.090));
+    const tY = H * 0.44;
+
+    if (pg) pg.remove();
+    pg = p.createGraphics(W, H);
+    pg.pixelDensity(1);
+    pg.background(0);
+    pg.fill(255);
+    pg.noStroke();
+    pg.textAlign(p.CENTER, p.CENTER);
+    pg.textFont('Hiragino Mincho ProN, "Yu Mincho", "MS Mincho", "Noto Serif JP", serif');
+    pg.textSize(fSize);
+    pg.text('マーメイドシアター', W / 2, tY);
+    pg.loadPixels();
+
+    scales = [];
+    for (let x = 0; x < W; x += STEP) {
+      for (let y = 0; y < H; y += STEP) {
+        const idx = 4 * (Math.floor(x) + Math.floor(y) * W);
+        if (idx >= 0 && idx < pg.pixels.length && pg.pixels[idx] > 100) {
+          scales.push({
+            x: x + p.random(-1.5, 1.5),
+            y: y + p.random(-1.5, 1.5),
+            r: p.random(STEP * 0.47, STEP * 0.76),
+            phase: p.random(p.TWO_PI),
+            spd:   p.random(0.5, 1.7),
+            h:     p.random(165, 228),
+            s:     p.random(50, 88),
+          });
+        }
+      }
+    }
+
+    bubbles = Array.from({ length: 40 }, () => ({
+      x:  p.random(W),
+      y:  p.random(H),
+      r:  p.random(1.5, 7),
+      vy: p.random(-0.25, -0.75),
+      vx: 0,
+      ph: p.random(p.TWO_PI),
+    }));
+    ready = true;
+  }
+
+  p.setup = function () {
+    p.colorMode(p.HSB, 360, 100, 100, 1);
+    p.createCanvas(p.windowWidth, p.windowHeight).parent('sketch-container');
+    p.frameRate(60);
+    document.fonts.ready.then(() => buildScales());
+  };
+
+  p.draw = function () {
+    const t = p.millis() / 1000;
+    p.background(210, 72, 7);
+    drawBg(t);
+    if (ready) {
+      drawGlassScales(t);
+      drawBubbles(t);
+    }
+    drawCaustics(t);
+  };
+
+  /* ── Background: anatomy + fish scale texture ── */
+  function drawBg(t) {
+    const cy = H * 0.44;
+
+    // Fish scale arc texture (whole canvas)
+    p.noFill();
+    const ss = Math.round(W * 0.027);
+    p.stroke(188, 20, 60, 0.052);
+    p.strokeWeight(0.45);
+    for (let sx = -ss; sx < W + ss; sx += ss * 0.9) {
+      for (let sy = -ss; sy < H + ss; sy += ss * 0.65) {
+        const row = Math.round(sy / (ss * 0.65));
+        const ox = (row % 2) * ss * 0.45;
+        p.arc(sx + ox, sy, ss * 1.15, ss * 1.15, -p.PI, 0);
+      }
+    }
+
+    // Spine (sinusoidal horizontal center line)
+    p.stroke(185, 18, 68, 0.075);
+    p.strokeWeight(0.9);
+    p.noFill();
+    p.beginShape();
+    p.curveVertex(-15, cy);
+    for (let sx = 0; sx <= W + 15; sx += 18) {
+      p.curveVertex(sx, cy + Math.sin(sx * 0.009 + t * 0.22) * 3);
+    }
+    p.curveVertex(W + 20, cy);
+    p.endShape();
+
+    // Vertebrae discs along spine
+    const vCount = Math.round(W / 48);
+    p.stroke(185, 15, 65, 0.065);
+    p.strokeWeight(0.6);
+    for (let vi = 0; vi < vCount; vi++) {
+      const vx = W * (vi + 0.5) / vCount;
+      const vy = cy + Math.sin(vx * 0.009 + t * 0.22) * 3;
+      p.ellipse(vx, vy, 7, 5);
+      p.ellipse(vx, vy, 4, 3);
+    }
+
+    // Ribs (bilateral arcs from spine)
+    const rCount = Math.round(W / 60);
+    p.strokeWeight(0.6);
+    p.stroke(183, 14, 63, 0.062);
+    for (let ri = 0; ri < rCount; ri++) {
+      const rx = W * (ri + 0.5) / rCount;
+      const ry = cy + Math.sin(rx * 0.009 + t * 0.22) * 3;
+      const rLen = H * 0.15 + Math.sin(ri * 0.52) * H * 0.03;
+      // upper rib
+      p.bezier(rx, ry,
+               rx - rLen * 0.28, ry - rLen * 0.42,
+               rx - rLen * 0.08, ry - rLen * 0.86,
+               rx + rLen * 0.12, ry - rLen);
+      // lower rib
+      p.bezier(rx, ry,
+               rx - rLen * 0.28, ry + rLen * 0.42,
+               rx - rLen * 0.08, ry + rLen * 0.86,
+               rx + rLen * 0.12, ry + rLen);
+    }
+
+    // Fish head silhouette (left edge)
+    const hR = H * 0.17;
+    p.stroke(183, 14, 63, 0.065);
+    p.strokeWeight(0.65);
+    p.noFill();
+    p.ellipse(-hR * 0.15, cy, hR * 1.5, hR * 1.2);
+    p.ellipse(-hR * 0.4, cy - hR * 0.1, hR * 0.26, hR * 0.26);
+    p.fill(183, 14, 60, 0.065);
+    p.ellipse(-hR * 0.44, cy - hR * 0.12, hR * 0.12, hR * 0.12);
+    p.noFill();
+
+    // Fish tail fork (right edge)
+    const tR = H * 0.22;
+    p.stroke(183, 14, 63, 0.065);
+    p.bezier(W + hR * 0.1, cy,
+             W + tR * 0.35, cy - tR * 0.28,
+             W + tR * 0.78, cy - tR * 0.58,
+             W + tR * 1.1,  cy - tR * 0.65);
+    p.bezier(W + hR * 0.1, cy,
+             W + tR * 0.35, cy + tR * 0.28,
+             W + tR * 0.78, cy + tR * 0.58,
+             W + tR * 1.1,  cy + tR * 0.65);
+    p.bezier(W + tR * 0.6, cy - tR * 0.42,
+             W + tR * 0.75, cy - tR * 0.1,
+             W + tR * 0.75, cy + tR * 0.1,
+             W + tR * 0.6, cy + tR * 0.42);
+  }
+
+  /* ── Single glass-scale particle ── */
+  function glassScale(x, y, r, phase, h, s, t, hover) {
+    const shim = Math.sin(t * 2.1 + phase) * 0.5 + 0.5; // 0..1
+    const hh = h + shim * 24 + hover * 20;
+    const rr = r * (1 + hover * 0.38);
+
+    p.push();
+    p.translate(x, y);
+
+    // Soft outer glow
+    p.noStroke();
+    p.fill(hh, s, 100, 0.028 + shim * 0.018 + hover * 0.045);
+    p.ellipse(0, 0, rr * 3.3, rr * 3.3);
+
+    // Glass body
+    p.fill(hh, s * 0.28, 97, 0.085 + shim * 0.062 + hover * 0.045);
+    p.ellipse(0, 0, rr * 2, rr * 2);
+
+    // Iridescent rim
+    p.noFill();
+    p.stroke(hh + 18, s * 0.52, 100, 0.50 + shim * 0.34 + hover * 0.12);
+    p.strokeWeight(0.82 + hover * 0.5);
+    p.ellipse(0, 0, rr * 2, rr * 2);
+
+    // Inner caustic arc (refracted light at top)
+    p.stroke(195, 10, 100, 0.60 + shim * 0.22);
+    p.strokeWeight(1.08);
+    p.arc(0, -rr * 0.16, rr * 1.12, rr * 0.88, -p.PI * 0.84, -p.PI * 0.16);
+
+    // Growth rings (anatomical scale rings – bottom half)
+    p.stroke(hh, s * 0.26, 80, 0.10 + shim * 0.04);
+    p.strokeWeight(0.40);
+    p.arc(0, rr * 0.15, rr * 1.28, rr * 0.84, -p.PI * 0.92, -p.PI * 0.08);
+    p.arc(0, rr * 0.15, rr * 0.72, rr * 0.49, -p.PI * 0.92, -p.PI * 0.08);
+    p.arc(0, rr * 0.15, rr * 0.36, rr * 0.25, -p.PI * 0.92, -p.PI * 0.08);
+
+    // Focus point (radial lines from nucleus – cell anatomy)
+    p.stroke(hh + 30, s * 0.4, 90, 0.08 + shim * 0.04);
+    p.strokeWeight(0.32);
+    for (let a = 0; a < p.TWO_PI; a += p.PI / 4) {
+      p.line(0, 0, Math.cos(a) * rr * 0.28, Math.sin(a) * rr * 0.28);
+    }
+
+    // Specular highlight
+    p.noStroke();
+    p.fill(195, 7, 100, 0.40 + shim * 0.28);
+    p.ellipse(-rr * 0.27, -rr * 0.33, rr * 0.33, rr * 0.20);
+
+    p.pop();
+  }
+
+  function drawGlassScales(t) {
+    const mx = p.mouseX, my = p.mouseY;
+    const hd = STEP * 7;
+    for (const s of scales) {
+      const dist = p.dist(mx, my, s.x, s.y);
+      glassScale(s.x, s.y, s.r, s.phase, s.h, s.s, t,
+                 p.max(0, 1 - dist / hd));
+    }
+  }
+
+  function drawBubbles(t) {
+    for (const b of bubbles) {
+      b.y  += b.vy;
+      b.x  += Math.sin(t * 0.9 + b.ph) * 0.38;
+      if (b.y < -b.r) { b.y = H + b.r; b.x = p.random(W); }
+
+      const shim = Math.sin(t * 1.8 + b.ph) * 0.3 + 0.7;
+      p.noStroke();
+      p.fill(190, 28, 100, 0.055 * shim);
+      p.ellipse(b.x, b.y, b.r * 2, b.r * 2);
+      p.noFill();
+      p.stroke(195, 14, 100, 0.22 * shim);
+      p.strokeWeight(0.55);
+      p.ellipse(b.x, b.y, b.r * 2, b.r * 2);
+      p.noStroke();
+      p.fill(200, 5, 100, 0.38 * shim);
+      p.ellipse(b.x - b.r * 0.26, b.y - b.r * 0.32, b.r * 0.32, b.r * 0.20);
+    }
+  }
+
+  function drawCaustics(t) {
+    p.noStroke();
+    for (let i = 0; i < 9; i++) {
+      const cx  = W * (0.03 + i * 0.115) + Math.sin(t * 0.30 + i * 1.55) * W * 0.055;
+      const ccy = H * 0.5 + Math.sin(t * 0.50 + i * 0.98) * H * 0.32;
+      const br  = 0.020 + Math.sin(t * 0.72 + i) * 0.007;
+      p.fill(185, 44, 100, br);
+      p.ellipse(cx, ccy,
+                W * 0.11 + Math.sin(t + i)        * 32,
+                H * 0.09 + Math.cos(t * 1.4 + i)  * 18);
+    }
+  }
+
+  p.windowResized = function () {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+    buildScales();
+  };
+};
+
+new p5(sketch, 'sketch-container');
+</script>
