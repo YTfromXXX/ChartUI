@@ -9,625 +9,681 @@
 <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
 <style>
 :root {
-  --bg: #07080f;
-  --panel: rgba(10,14,28,0.88);
+  --bg: #04050e;
+  --panel: rgba(6,8,22,0.88);
   --accent: #4fc3f7;
-  --accent2: #ce93d8;
+  --accent2: #69f0ae;
   --text: #e8eaf6;
-  --muted: #7986cb;
-  --border: rgba(79,195,247,0.18);
-  --glow: rgba(79,195,247,0.35);
+  --muted: #546e7a;
+  --border: rgba(79,195,247,0.15);
   color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; }
+html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden; font-family: 'Inter', sans-serif; }
 
 #header {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px max(16px, env(safe-area-inset-left,0px));
-  background: linear-gradient(to bottom, rgba(7,8,15,0.95), transparent);
-  backdrop-filter: blur(4px);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 7px max(14px, env(safe-area-inset-left,0px));
+  background: linear-gradient(to bottom, rgba(4,5,14,0.96) 70%, transparent);
 }
 #header h1 {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: clamp(13px,2.2vw,18px); font-weight: 700;
-  letter-spacing: 0.08em; color: var(--accent);
-  text-shadow: 0 0 12px var(--glow);
-  flex: 1;
+  font-size: clamp(12px,2vw,16px); font-weight: 700; letter-spacing: .07em;
+  color: var(--accent); text-shadow: 0 0 14px rgba(79,195,247,.5); flex: 1;
 }
 .ratio-btn {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: clamp(11px,1.5vw,13px); font-weight: 600;
-  padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--border);
-  background: transparent; color: var(--muted); cursor: pointer; transition: all 0.25s;
+  font-size: clamp(10px,1.5vw,13px); font-weight: 700;
+  padding: 5px 13px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: transparent;
+  color: var(--muted); cursor: pointer; transition: all .2s;
+  letter-spacing: .05em;
 }
-.ratio-btn.active { background: var(--accent); color: #07080f; border-color: var(--accent); box-shadow: 0 0 10px var(--glow); }
-#bpm-label {
-  font-size: 11px; color: var(--muted); white-space: nowrap;
-  font-family: 'Space Grotesk', sans-serif;
+.ratio-btn.active {
+  background: var(--accent); color: #04050e;
+  border-color: var(--accent); box-shadow: 0 0 14px rgba(79,195,247,.5);
 }
 #start-btn {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 12px; font-weight: 700; padding: 5px 14px;
-  border-radius: 20px; border: none;
-  background: linear-gradient(135deg, #4fc3f7, #ce93d8);
-  color: #07080f; cursor: pointer; transition: opacity 0.2s;
+  font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
+  padding: 5px 16px; border-radius: 20px; border: none;
+  background: linear-gradient(135deg,#4fc3f7,#69f0ae); color: #04050e;
+  cursor: pointer; transition: opacity .2s;
 }
-#start-btn:hover { opacity: 0.85; }
+#bpm-info {
+  font-size: 10px; color: var(--muted);
+  font-family: 'Space Grotesk', sans-serif; white-space: nowrap;
+}
 
-#canvas-wrap {
-  position: fixed; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-}
+#canvas-wrap { position: fixed; inset: 0; }
 #canvas-wrap canvas { display: block; }
 
-#stats-panel {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
-  padding: 8px max(16px, env(safe-area-inset-left,0px)) max(8px,env(safe-area-inset-bottom,0px));
-  background: linear-gradient(to top, rgba(7,8,15,0.95), transparent);
-  backdrop-filter: blur(4px);
+#contact-panel {
+  position: fixed; top: 46px; right: max(10px,env(safe-area-inset-right,0px)); z-index: 20;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 12px; min-width: 148px;
+  backdrop-filter: blur(8px);
+}
+#contact-panel h3 {
+  font-family: 'Space Grotesk', sans-serif; font-size: 9px;
+  color: var(--muted); margin-bottom: 5px; letter-spacing: .1em; text-transform: uppercase;
+}
+.contact-row { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+.contact-row .lbl { font-size: 9px; color: var(--text); min-width: 36px; }
+.cbar-wrap { flex: 1; height: 3px; background: rgba(255,255,255,.07); border-radius: 2px; overflow: hidden; }
+.cbar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg,#69f0ae,#4fc3f7); transition: width .6s; }
+.cpct { font-size: 9px; color: var(--muted); min-width: 24px; text-align: right; }
+
+#mode-badge {
+  position: fixed; top: 46px; left: max(10px,env(safe-area-inset-left,0px)); z-index: 20;
+  font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 7px; padding: 4px 10px; backdrop-filter: blur(6px);
+}
+#hint {
+  position: fixed; top: 74px; left: max(10px,env(safe-area-inset-left,0px)); z-index: 20;
+  font-size: 9px; color: rgba(84,110,122,.8);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 7px; padding: 3px 9px; backdrop-filter: blur(6px);
 }
 #char-cards {
-  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+  position: fixed; bottom: max(8px,env(safe-area-inset-bottom,0px));
+  left: 0; right: 0; z-index: 20;
+  display: flex; gap: 5px; overflow-x: auto; padding: 0 max(14px,env(safe-area-inset-left,0px));
   scrollbar-width: none;
 }
 #char-cards::-webkit-scrollbar { display: none; }
 .char-card {
-  flex: 0 0 auto;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; padding: 5px 10px;
-  min-width: 80px; text-align: center;
+  flex: 0 0 auto; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 9px; padding: 4px 9px; text-align: center;
 }
-.char-card .cname { font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700; color: var(--accent); }
-.char-card .cgenre { font-size: 9px; color: var(--muted); margin-top: 1px; }
-.char-card .cbar { height: 3px; border-radius: 2px; margin-top: 4px; transition: width 0.4s; }
-
-#contact-panel {
-  position: fixed; top: 48px; right: max(12px,env(safe-area-inset-right,0px)); z-index: 20;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px 12px; min-width: 160px;
-  backdrop-filter: blur(8px);
-}
-#contact-panel h3 { font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
-.contact-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.contact-row span { font-size: 9px; color: var(--text); flex: 1; white-space: nowrap; }
-.contact-bar-wrap { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
-.contact-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
-
-#mode-label {
-  position: fixed; top: 48px; left: max(12px,env(safe-area-inset-left,0px)); z-index: 20;
-  font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--muted);
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 5px 10px; backdrop-filter: blur(6px);
-}
-#customer-hint {
-  position: fixed; top: 92px; left: max(12px,env(safe-area-inset-left,0px)); z-index: 20;
-  font-size: 10px; color: rgba(121,134,203,0.7);
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 4px 10px; backdrop-filter: blur(6px);
-}
+.cname { font-family: 'Space Grotesk', sans-serif; font-size: 9px; font-weight: 700; color: var(--accent); }
+.cgenre { font-size: 8px; color: var(--muted); margin-top: 1px; }
+.cact { height: 2px; border-radius: 1px; margin-top: 3px; transition: width .4s; }
 </style>
 </head>
 <body>
-
 <div id="header">
   <h1>🎼 Mermaid Dance Studio</h1>
   <button class="ratio-btn active" id="btn-golden" onclick="setRatio('golden')">黄金比 φ</button>
   <button class="ratio-btn" id="btn-yamato" onclick="setRatio('yamato')">大和比 √2</button>
-  <span id="bpm-label">120 BPM · 4/4</span>
+  <span id="bpm-info">— BPM</span>
   <button id="start-btn" onclick="startAudio()">▶ START</button>
 </div>
-
-<div id="mode-label" id="mode-label">φ² × φ × 1</div>
-<div id="customer-hint">Click / Tap → Join playlist</div>
-
-<div id="contact-panel">
-  <h3>Contact Rate</h3>
-  <div id="contact-rows"></div>
-</div>
-
-<div id="canvas-wrap">
-  <div id="p5-container"></div>
-</div>
-
-<div id="stats-panel">
-  <div id="char-cards"></div>
-</div>
+<div id="mode-badge">φ² × φ × 1</div>
+<div id="hint">Tap → shoot bubble &amp; spawn creature</div>
+<div id="contact-panel"><h3>Contact Rate</h3><div id="contact-rows"></div></div>
+<div id="canvas-wrap"><div id="p5host"></div></div>
+<div id="char-cards"></div>
 
 <script>
+/* ── constants ───────────────────────────────────────────── */
 const PHI = (1 + Math.sqrt(5)) / 2;
 const SQ2 = Math.sqrt(2);
 const RATIOS = {
-  golden: { w: PHI * PHI, h: PHI, d: 1, label: 'φ² × φ × 1' },
-  yamato: { w: 2, h: SQ2, d: 1, label: '2 × √2 × 1' }
+  golden: { w: PHI*PHI, h: PHI, d: 1, label:'φ² × φ × 1', bpm:124, style:'house'  },
+  yamato: { w: 2,       h: SQ2, d: 1, label:'2 × √2 × 1',  bpm:170, style:'jungle' },
 };
 let currentRatio = 'golden';
 
 const CHARS = [
-  { id:0, name:'Ariel',   genre:'Pop',       h:10,  s:85, b:85, hairStyle:'ariel'   },
-  { id:1, name:'Andrina', genre:'R&B',       h:30,  s:70, b:60, hairStyle:'andrina' },
-  { id:2, name:'Arista',  genre:'Rock',      h:15,  s:80, b:70, hairStyle:'arista'  },
-  { id:3, name:'Aquata',  genre:'Jazz',      h:215, s:65, b:72, hairStyle:'aquata'  },
-  { id:4, name:'Attina',  genre:'Classical', h:40,  s:75, b:75, hairStyle:'attina'  },
-  { id:5, name:'Adella',  genre:'EDM',       h:270, s:80, b:80, hairStyle:'adella'  },
-  { id:6, name:'Alana',   genre:'Reggae',    h:55,  s:70, b:72, hairStyle:'alana'   },
+  {id:0,name:'Ariel',   genre:'Pop',       h:10,  s:85,b:85},
+  {id:1,name:'Andrina', genre:'R&B',       h:30,  s:70,b:65},
+  {id:2,name:'Arista',  genre:'Rock',      h:15,  s:80,b:70},
+  {id:3,name:'Aquata',  genre:'Jazz',      h:215, s:65,b:72},
+  {id:4,name:'Attina',  genre:'Classical', h:40,  s:75,b:75},
+  {id:5,name:'Adella',  genre:'EDM',       h:270, s:80,b:80},
+  {id:6,name:'Alana',   genre:'Reggae',    h:55,  s:70,b:72},
 ];
 
 const DANCE = [
-  { fx:1.00, fy:0.618, fz:1.618, px:0.00, py:1.00, pz:2.00 },
-  { fx:1.50, fy:1.000, fz:0.500, px:1.00, py:0.00, pz:0.50 },
-  { fx:0.75, fy:1.400, fz:1.000, px:2.00, py:1.50, pz:0.00 },
-  { fx:2.00, fy:0.500, fz:1.500, px:0.50, py:2.00, pz:1.00 },
-  { fx:1.20, fy:1.800, fz:0.800, px:1.50, py:0.50, pz:2.50 },
-  { fx:0.90, fy:1.100, fz:2.000, px:2.50, py:1.80, pz:0.30 },
-  { fx:1.70, fy:0.900, fz:1.300, px:0.80, py:2.30, pz:1.70 },
+  {fx:1.00,fy:0.618,fz:1.618,px:0.00,py:1.00,pz:2.00},
+  {fx:1.50,fy:1.000,fz:0.500,px:1.00,py:0.00,pz:0.50},
+  {fx:0.75,fy:1.400,fz:1.000,px:2.00,py:1.50,pz:0.00},
+  {fx:2.00,fy:0.500,fz:1.500,px:0.50,py:2.00,pz:1.00},
+  {fx:1.20,fy:1.800,fz:0.800,px:1.50,py:0.50,pz:2.50},
+  {fx:0.90,fy:1.100,fz:2.000,px:2.50,py:1.80,pz:0.30},
+  {fx:1.70,fy:0.900,fz:1.300,px:0.80,py:2.30,pz:1.70},
 ];
 
-const PATTERNS = {
-  'Pop':      ['C5','E5','G5','A5','G5','E5','C5','E5','D5','F5','A5','C6','A5','F5','D5','F5','E5','G5','B5','D6','B5','G5','E5','G5','F5','A5','C6','E6','C6','A5','F5','G5'],
-  'R&B':      ['F4',null,'Ab4','C5',null,'Eb5',null,'F5','F4',null,'Ab4','C5',null,'Eb5','C5',null,'Eb4',null,'G4','Bb4',null,'Db5',null,'Eb5','F4',null,'Ab4','C5','Eb5',null,'C5',null],
-  'Rock':     ['E4','B3','E4','G4','E4','B3','G4','A4','A3','E4','A3','C4','E4','A3','C4','D4','B3','E4','B3','D4','G4','B3','D4','G4','G3','D4','G3','B3','D4','G3','B3','C4'],
-  'Jazz':     ['Bb4','Ab4','G4','F4','Eb4','D4','C4','Bb3','F4','Eb4','D4','C4','Bb3','Ab3','G3','F3','Bb3','C4','D4','Eb4','F4','G4','Ab4','Bb4','Eb5','Db5','C5','Bb4','Ab4','G4','F4','Eb4'],
-  'Classical':['G4','A4','B4','C5','D5','E5','F#5','G5','G5','F#5','E5','D5','C5','B4','A4','G4','D5','E5','F#5','G5','A5','G5','F#5','E5','D5','C5','B4','A4','G4','A4','B4','D5'],
-  'EDM':      ['A3','A3','C4','A3','E4','C4','A3','G3','G3','G3','B3','G3','D4','B3','G3','F3','F3','F3','A3','F3','C4','A3','F3','E3','E3','E3','G3','E3','B3','G3','E3','A3'],
-  'Reggae':   [null,'D4',null,'F#4',null,'A4',null,'D5',null,'G4',null,'B4',null,'D5',null,'G5',null,'F#4',null,'A4',null,'C#5',null,'F#5',null,'A4',null,'D5',null,'F#5',null,'A5'],
-};
+/* ── bass patterns ───────────────────────────────────────── */
+const HOUSE_KICK  = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]; // 4-on-floor
+const HOUSE_BASS  = ['C1','C1','F1','F1','G1','G1','Bb1','Bb1','C1','C1','G1','G1','F1','F1','Eb1','C1'];
+const HOUSE_SUB   = ['C0',null,null,null,'F0',null,null,null,'G0',null,null,null,'Bb0',null,null,null];
 
+const JUNGLE_KICK = [1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0]; // amen-ish
+const JUNGLE_BASS = ['E1','E1','G1','A1','C2','A1','G1','E1','D1','D1','F1','G1','Bb1','G1','F1','D1'];
+const JUNGLE_SUB  = ['E0',null,null,'A0',null,null,'C1',null,'E0',null,null,'G0',null,null,'B0',null];
+
+/* ── audio state ─────────────────────────────────────────── */
 let audioStarted = false;
-let synths = {};
-let sequences = {};
-let contactEffects = {};
-let masterVol;
-
-const contactFrames = Array.from({length:7}, () => new Array(7).fill(0));
-const contactActive = Array.from({length:7}, () => new Array(7).fill(false));
-let totalFrames = 1;
-
-const customers = [];
-const MAX_CUSTOMERS = 5;
-let customerSynths = [];
-let customerSeqs = [];
-
-function hsvColor(h, s, b) {
-  s /= 100; b /= 100;
-  const c = b * s, x = c * (1 - Math.abs((h/60) % 2 - 1)), m = b - c;
-  let r=0,g=0,bl=0;
-  if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;bl=x}else if(h<240){g=x;bl=c}else if(h<300){r=x;bl=c}else{r=c;bl=x}
-  return `rgb(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((bl+m)*255)})`;
-}
-
-function setRatio(mode) {
-  currentRatio = mode;
-  document.getElementById('btn-golden').classList.toggle('active', mode === 'golden');
-  document.getElementById('btn-yamato').classList.toggle('active', mode === 'yamato');
-  document.getElementById('mode-label').textContent = RATIOS[mode].label;
-}
+let kickSynth, bassSynth, subSynth;
+let kickSeq, bassSeq, subSeq;
+let masterLPF;
+let dropFilter; // sweepable filter for transitions
+let isDropping = false;
 
 async function startAudio() {
   if (audioStarted) return;
   await Tone.start();
-  Tone.getTransport().bpm.value = 120;
-
-  masterVol = new Tone.Volume(-6).toDestination();
-
-  for (const c of CHARS) {
-    let synth;
-    switch(c.genre) {
-      case 'Pop':       synth = new Tone.Synth({ oscillator:{type:'triangle'}, envelope:{attack:0.02,decay:0.1,sustain:0.5,release:0.4} }); break;
-      case 'R&B':       synth = new Tone.FMSynth({ harmonicity:3, modulationIndex:8, envelope:{attack:0.04,decay:0.2,sustain:0.4,release:0.5} }); break;
-      case 'Rock':      synth = new Tone.MonoSynth({ oscillator:{type:'sawtooth'}, envelope:{attack:0.01,decay:0.05,sustain:0.6,release:0.2} }); break;
-      case 'Jazz':      synth = new Tone.PluckSynth({ attackNoise:1, dampening:3800, resonance:0.95 }); break;
-      case 'Classical': synth = new Tone.AMSynth({ harmonicity:2, oscillator:{type:'triangle'}, envelope:{attack:0.1,decay:0.2,sustain:0.5,release:0.8} }); break;
-      case 'EDM':       synth = new Tone.MonoSynth({ oscillator:{type:'square'}, envelope:{attack:0.005,decay:0.05,sustain:0.5,release:0.1} }); break;
-      case 'Reggae':    synth = new Tone.Synth({ oscillator:{type:'square'}, envelope:{attack:0.01,decay:0.15,sustain:0.3,release:0.3} }); break;
-    }
-    synth.volume.value = -12;
-    synth.connect(masterVol);
-    synths[c.id] = synth;
-
-    const pattern = PATTERNS[c.genre];
-    const seq = new Tone.Sequence((time, note) => {
-      if (note) synth.triggerAttackRelease(note, '8n', time);
-    }, pattern, '8n');
-    seq.loop = true;
-    seq.start(0);
-    sequences[c.id] = seq;
-  }
-
-  for (const c of CHARS) {
-    let fx;
-    switch(c.genre) {
-      case 'Pop':       fx = new Tone.Reverb({ decay:1.5, wet:0.3 }); break;
-      case 'R&B':       fx = new Tone.Chorus({ frequency:1.5, wet:0.4 }); break;
-      case 'Rock':      fx = new Tone.Distortion({ distortion:0.3, wet:0.4 }); break;
-      case 'Jazz':      fx = new Tone.Reverb({ decay:2.5, wet:0.35 }); break;
-      case 'Classical': fx = new Tone.Reverb({ decay:3.5, wet:0.45 }); break;
-      case 'EDM':       fx = new Tone.FeedbackDelay({ delayTime:'8n', feedback:0.35, wet:0.4 }); break;
-      case 'Reggae':    fx = new Tone.PingPongDelay({ delayTime:'4n', feedback:0.25, wet:0.35 }); break;
-    }
-    fx.connect(masterVol);
-    contactEffects[c.id] = { node: fx, active: false };
-  }
-
-  Tone.getTransport().start();
-  audioStarted = true;
   document.getElementById('start-btn').textContent = '◼ LIVE';
-  document.getElementById('start-btn').style.background = 'rgba(79,195,247,0.2)';
-  document.getElementById('start-btn').style.color = 'var(--accent)';
+  document.getElementById('start-btn').style.cssText = 'background:rgba(79,195,247,.15);color:var(--accent);border:1px solid var(--border);padding:5px 16px;border-radius:20px;cursor:pointer;font-family:"Space Grotesk",sans-serif;font-size:12px;font-weight:700;';
+
+  masterLPF  = new Tone.Filter({ frequency:280, type:'lowpass', rolloff:-24 }).toDestination();
+  dropFilter = new Tone.Filter({ frequency:280, type:'lowpass', rolloff:-12 });
+  dropFilter.connect(masterLPF);
+
+  kickSynth = new Tone.MembraneSynth({ pitchDecay:.06, octaves:8,
+    envelope:{attack:.001,decay:.35,sustain:0,release:.1} });
+  kickSynth.volume.value = 2;
+  kickSynth.connect(dropFilter);
+
+  bassSynth = new Tone.MonoSynth({
+    oscillator:{type:'sawtooth'},
+    filter:{type:'lowpass',frequency:200,rolloff:-12},
+    envelope:{attack:.01,decay:.2,sustain:.6,release:.18},
+    filterEnvelope:{attack:.01,decay:.12,sustain:.4,release:.2,baseFrequency:80,octaves:2}
+  });
+  bassSynth.volume.value = -4;
+  bassSynth.connect(dropFilter);
+
+  subSynth = new Tone.Synth({
+    oscillator:{type:'sine'},
+    envelope:{attack:.04,decay:.4,sustain:.7,release:.5}
+  });
+  subSynth.volume.value = -2;
+  subSynth.connect(dropFilter);
+
+  audioStarted = true;
+  loadMode(currentRatio, false);
 }
 
-function spawnCustomer(nx, ny, nz, genre) {
+function loadMode(mode, withDrop) {
+  const cfg = RATIOS[mode];
   if (!audioStarted) return;
-  if (customers.length >= MAX_CUSTOMERS) {
-    const old = customers.shift();
-    if (customerSeqs[old.seqIdx]) { customerSeqs[old.seqIdx].stop(); customerSeqs[old.seqIdx].dispose(); }
-    if (customerSynths[old.synthIdx]) { customerSynths[old.synthIdx].dispose(); }
+
+  if (withDrop) {
+    isDropping = true;
+    // Filter sweep down then up = "drop" effect
+    dropFilter.frequency.cancelScheduledValues(Tone.now());
+    dropFilter.frequency.rampTo(40, 0.18, Tone.now());
+    dropFilter.frequency.rampTo(280, 0.5, Tone.now() + 0.22);
+    setTimeout(() => { isDropping = false; }, 700);
   }
-  const g = genre || CHARS[Math.floor(Math.random()*7)].genre;
-  let synth = new Tone.Synth({ oscillator:{type:'sine'}, envelope:{attack:0.02,decay:0.1,sustain:0.4,release:0.4} });
-  synth.volume.value = -16;
-  synth.connect(masterVol);
-  const si = customerSynths.length;
-  customerSynths.push(synth);
 
-  const pattern = PATTERNS[g];
-  const seq = new Tone.Sequence((time, note) => {
-    if (note && synth) synth.triggerAttackRelease(note, '8n', time);
-  }, pattern, '8n');
-  seq.loop = true;
-  seq.start('+0.1');
-  const qi = customerSeqs.length;
-  customerSeqs.push(seq);
+  Tone.getTransport().stop();
+  Tone.getTransport().cancel();
+  Tone.getTransport().bpm.value = cfg.bpm;
+  document.getElementById('bpm-info').textContent = cfg.bpm + ' BPM · Bass Drop';
 
-  customers.push({ x:nx, y:ny, z:nz, genre:g, synthIdx:si, seqIdx:qi, life:0, hue: Math.random()*360 });
+  const kicks = cfg.style === 'house' ? HOUSE_KICK  : JUNGLE_KICK;
+  const basses = cfg.style === 'house' ? HOUSE_BASS  : JUNGLE_BASS;
+  const subs   = cfg.style === 'house' ? HOUSE_SUB   : JUNGLE_SUB;
+
+  if (kickSeq)  { kickSeq.stop();  kickSeq.dispose();  }
+  if (bassSeq)  { bassSeq.stop();  bassSeq.dispose();  }
+  if (subSeq)   { subSeq.stop();   subSeq.dispose();   }
+
+  kickSeq = new Tone.Sequence((time, hit) => {
+    if (hit) kickSynth.triggerAttackRelease('C1','8n',time);
+  }, kicks, '16n');
+  kickSeq.loop = true;
+
+  bassSeq = new Tone.Sequence((time, note) => {
+    if (note) bassSynth.triggerAttackRelease(note,'16n',time);
+  }, basses, '16n');
+  bassSeq.loop = true;
+
+  subSeq = new Tone.Sequence((time, note) => {
+    if (note) subSynth.triggerAttackRelease(note,'4n',time);
+  }, subs, '16n');
+  subSeq.loop = true;
+
+  kickSeq.start(0); bassSeq.start(0); subSeq.start(0);
+  Tone.getTransport().start('+0.05');
+}
+
+function setRatio(mode) {
+  if (mode === currentRatio) return;
+  currentRatio = mode;
+  document.getElementById('btn-golden').classList.toggle('active', mode==='golden');
+  document.getElementById('btn-yamato').classList.toggle('active', mode==='yamato');
+  document.getElementById('mode-badge').textContent = RATIOS[mode].label;
+  if (audioStarted) loadMode(mode, true);
+  else document.getElementById('bpm-info').textContent = RATIOS[mode].bpm + ' BPM';
+}
+
+/* ── contact tracking ───────────────────────────────────── */
+const contactFrames = Array.from({length:7}, () => new Array(7).fill(0));
+const contactActive = Array.from({length:7}, () => new Array(7).fill(false));
+let totalFrames = 1;
+
+function buildContactUI() {
+  const c = document.getElementById('contact-rows'); c.innerHTML = '';
+  const pairs=[];
+  for(let i=0;i<7;i++) for(let j=i+1;j<7;j++) pairs.push([i,j]);
+  pairs.slice(0,6).forEach(([i,j]) => {
+    const r = document.createElement('div'); r.className='contact-row';
+    r.innerHTML = `<span class="lbl">${CHARS[i].name[0]}↔${CHARS[j].name[0]}</span><div class="cbar-wrap"><div class="cbar-fill" id="cf-${i}-${j}" style="width:0%"></div></div><span class="cpct" id="cp-${i}-${j}">0%</span>`;
+    c.appendChild(r);
+  });
+}
+function updateContactUI() {
+  for(let i=0;i<7;i++) for(let j=i+1;j<7;j++) {
+    const pct = Math.min(100,(contactFrames[i][j]/totalFrames)*100);
+    const e=document.getElementById(`cf-${i}-${j}`);
+    const ep=document.getElementById(`cp-${i}-${j}`);
+    if(e) e.style.width=pct.toFixed(1)+'%';
+    if(ep) ep.textContent=pct.toFixed(0)+'%';
+  }
 }
 
 function buildCharCards() {
-  const container = document.getElementById('char-cards');
-  container.innerHTML = '';
-  CHARS.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'char-card';
-    div.id = `card-${c.id}`;
-    const color = hsvColor(c.h, c.s, c.b);
-    div.innerHTML = `<div class="cname">${c.name}</div><div class="cgenre">${c.genre}</div><div class="cbar" id="bar-${c.id}" style="background:${color};width:60%"></div>`;
-    container.appendChild(div);
+  const c = document.getElementById('char-cards'); c.innerHTML='';
+  CHARS.forEach(ch => {
+    const d=document.createElement('div'); d.className='char-card'; d.id=`card-${ch.id}`;
+    d.innerHTML=`<div class="cname">${ch.name}</div><div class="cgenre">${ch.genre}</div><div class="cact" id="act-${ch.id}" style="background:hsl(${ch.h},${ch.s}%,${ch.b}%);width:50%"></div>`;
+    c.appendChild(d);
   });
 }
+buildContactUI(); buildCharCards();
+document.getElementById('bpm-info').textContent = RATIOS[currentRatio].bpm + ' BPM';
 
-function buildContactRows() {
-  const container = document.getElementById('contact-rows');
-  container.innerHTML = '';
-  const pairs = [];
-  for (let i=0;i<7;i++) for (let j=i+1;j<7;j++) pairs.push([i,j]);
-  pairs.slice(0,6).forEach(([i,j]) => {
-    const row = document.createElement('div');
-    row.className = 'contact-row';
-    row.id = `cr-${i}-${j}`;
-    row.innerHTML = `<span>${CHARS[i].name[0]}↔${CHARS[j].name[0]}</span><div class="contact-bar-wrap"><div class="contact-bar-fill" id="cf-${i}-${j}" style="width:0%"></div></div><span id="cp-${i}-${j}" style="font-size:9px;color:var(--muted);min-width:28px;text-align:right">0%</span>`;
-    container.appendChild(row);
-  });
-}
+/* ── bubble & creature pools ─────────────────────────────── */
+const bubbles   = [];
+const creatures = [];
+let creatureCount = 0;
+const MAX_BUBBLES   = 60;
+const MAX_CREATURES = 50;
 
-function updateContactUI() {
-  for (let i=0;i<7;i++) for (let j=i+1;j<7;j++) {
-    const pct = Math.min(100, (contactFrames[i][j] / totalFrames) * 100);
-    const el = document.getElementById(`cf-${i}-${j}`);
-    const ep = document.getElementById(`cp-${i}-${j}`);
-    if (el) el.style.width = pct.toFixed(1) + '%';
-    if (ep) ep.textContent = pct.toFixed(0) + '%';
+function spawnBubbles(mx, my) {
+  const count = 4 + Math.floor(Math.random()*4);
+  for(let i=0;i<count;i++) {
+    const angle = (i/count)*Math.PI*2 + Math.random()*0.5;
+    const speed = 1.5 + Math.random()*3;
+    bubbles.push({
+      x: mx, y: my,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed - 1.5,
+      r: 6 + Math.random()*10,
+      life: 1.0,
+      hue: 140 + Math.random()*60, // greenish
+      born: performance.now(),
+      popped: false,
+    });
+    if(bubbles.length > MAX_BUBBLES) bubbles.shift();
   }
 }
 
-buildCharCards();
-buildContactRows();
+function spawnCreature(x, y) {
+  const gen = creatureCount++;
+  const hue = 120 + Math.min(100, gen * 2.5); // 120=green → 220=blue
+  const type = gen % 5; // 0=amoeba,1=jellyfish,2=polyp,3=starfish,4=medusa
+  creatures.push({
+    x, y,
+    vx: (Math.random()-.5)*0.6,
+    vy: (Math.random()-.5)*0.6,
+    r: 14 + Math.random()*20,
+    hue, type, gen,
+    phase: Math.random()*Math.PI*2,
+    rotSpd: (Math.random()-.5)*0.012,
+    rot: Math.random()*Math.PI*2,
+    alpha: 0,
+    arms: 4 + Math.floor(Math.random()*4),
+    pts: Array.from({length:12}, (_,i) => ({
+      off: (Math.random()-.5)*0.4,
+      freq: 1+Math.random()*3,
+      ph: Math.random()*Math.PI*2,
+    })),
+  });
+  if(creatures.length > MAX_CREATURES) creatures.shift();
+}
 
-// p5.js sketch
+/* ── p5 sketch ───────────────────────────────────────────── */
 new p5(function(p) {
-  let W, H, stageH;
+  let W, H;
   let rotY = 0, tiltX = 0.3;
   let cubeSize = 200;
   let charPos = CHARS.map(() => ({x:0,y:0,z:0}));
   let charTrails = CHARS.map(() => []);
-  const TRAIL_LEN = 28;
-  let frameCount = 0;
-  let isDragging = false, lastMX = 0;
-  let autoRotate = true;
-  let contactFlash = Array.from({length:7}, () => new Array(7).fill(0));
+  const TRAIL = 24;
+  let fc = 0;
+  let dropPulse = 0; // visual pulse on drop
+  let isDrag = false, lastMX = 0;
+  let autoRot = true;
 
   function getRatio() { return RATIOS[currentRatio]; }
 
-  function getCharColor(id, alpha) {
-    const c = CHARS[id];
-    return `hsla(${c.h},${c.s}%,${c.b}%,${alpha??1})`;
+  function proj(x, y, z) {
+    const cosY=Math.cos(rotY),sinY=Math.sin(rotY);
+    let rx=x*cosY-z*sinY, ry=y, rz=x*sinY+z*cosY;
+    const cosX=Math.cos(tiltX),sinX=Math.sin(tiltX);
+    let tx=rx, ty=ry*cosX-rz*sinX, tz=ry*sinX+rz*cosX;
+    const fov=580, depth=tz+fov+cubeSize*2.5, s=fov/depth;
+    return { x:W/2+tx*s, y:H*0.46+ty*s, s, d:tz };
   }
 
-  function project3D(x, y, z) {
-    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
-    let rx = x * cosY - z * sinY, ry = y, rz = x * sinY + z * cosY;
-    const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
-    let tx = rx, ty = ry * cosX - rz * sinX, tz = ry * sinX + rz * cosX;
-    const fov = 600;
-    const depth = tz + fov + cubeSize * 2.5;
-    const scale = fov / depth;
-    return { x: W/2 + tx * scale, y: stageH * 0.5 + ty * scale, s: scale, depth: tz };
-  }
-
-  function drawCubeWire(ratio) {
-    const hw = cubeSize * ratio.w * 0.5;
-    const hh = cubeSize * ratio.h * 0.5;
-    const hd = cubeSize * ratio.d * 0.5;
-    const corners = [
-      [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
-      [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd],
-    ].map(([x,y,z]) => project3D(x,y,z));
-    const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
-    p.drawingContext.save();
-    p.drawingContext.strokeStyle = `rgba(79,195,247,0.18)`;
-    p.drawingContext.lineWidth = 1;
-    edges.forEach(([a,b]) => {
-      p.drawingContext.beginPath();
-      p.drawingContext.moveTo(corners[a].x, corners[a].y);
-      p.drawingContext.lineTo(corners[b].x, corners[b].y);
-      p.drawingContext.stroke();
-    });
+  function drawCube() {
+    const r=getRatio();
+    const hw=cubeSize*r.w*.5, hh=cubeSize*r.h*.5, hd=cubeSize*r.d*.5;
+    const C=[ [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
+              [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd] ].map(([x,y,z])=>proj(x,y,z));
+    const E=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    const ctx=p.drawingContext;
+    ctx.save();
+    // Pulse cube border on beat (approximated by frame modulo at BPM)
+    const bpmPulse = isDropping ? 0.5 : (Math.sin(fc*0.08)*0.5+0.5)*0.1+0.1;
+    ctx.strokeStyle=`rgba(79,195,247,${bpmPulse})`;
+    ctx.lineWidth=1;
+    E.forEach(([a,b])=>{ ctx.beginPath();ctx.moveTo(C[a].x,C[a].y);ctx.lineTo(C[b].x,C[b].y);ctx.stroke(); });
     // Floor grid
-    const gy = hh;
-    p.drawingContext.strokeStyle = `rgba(79,195,247,0.07)`;
-    for (let i=-3;i<=3;i++) {
-      const gx = (hw/3)*i;
-      const a = project3D(gx, gy, -hd), b = project3D(gx, gy, hd);
-      const c2 = project3D(-hw, gy, (hd/3)*i), d = project3D(hw, gy, (hd/3)*i);
-      p.drawingContext.beginPath(); p.drawingContext.moveTo(a.x,a.y); p.drawingContext.lineTo(b.x,b.y); p.drawingContext.stroke();
-      p.drawingContext.beginPath(); p.drawingContext.moveTo(c2.x,c2.y); p.drawingContext.lineTo(d.x,d.y); p.drawingContext.stroke();
+    ctx.strokeStyle=`rgba(105,240,174,0.05)`;
+    for(let i=-3;i<=3;i++){
+      const gx=(hw/3)*i;
+      const a=proj(gx,hh,-hd),b=proj(gx,hh,hd),c2=proj(-hw,hh,(hd/3)*i),d=proj(hw,hh,(hd/3)*i);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(c2.x,c2.y);ctx.lineTo(d.x,d.y);ctx.stroke();
     }
-    p.drawingContext.restore();
+    ctx.restore();
   }
 
-  function updatePositions(t) {
-    const ratio = getRatio();
-    totalFrames++;
-    for (let i=0;i<CHARS.length;i++) {
-      const d = DANCE[i];
-      const spd = 0.6;
-      const x = Math.sin(d.fx * t * spd + d.px) * cubeSize * ratio.w * 0.42;
-      const y = Math.sin(d.fy * t * spd + d.py) * cubeSize * ratio.h * 0.42;
-      const z = Math.sin(d.fz * t * spd + d.pz) * cubeSize * ratio.d * 0.42;
-      charPos[i] = {x, y, z};
-      charTrails[i].push({x, y, z});
-      if (charTrails[i].length > TRAIL_LEN) charTrails[i].shift();
+  function updateChars(t) {
+    const r=getRatio(); totalFrames++;
+    for(let i=0;i<7;i++){
+      const d=DANCE[i], spd=0.55+(isDropping?0.4:0);
+      charPos[i]={
+        x:Math.sin(d.fx*t*spd+d.px)*cubeSize*r.w*.42,
+        y:Math.sin(d.fy*t*spd+d.py)*cubeSize*r.h*.42,
+        z:Math.sin(d.fz*t*spd+d.pz)*cubeSize*r.d*.42,
+      };
+      charTrails[i].push({...charPos[i]});
+      if(charTrails[i].length>TRAIL) charTrails[i].shift();
     }
-    // Contact detection
-    const contactDist = cubeSize * Math.min(ratio.w, ratio.h, ratio.d) * 0.38;
-    for (let i=0;i<CHARS.length;i++) for (let j=i+1;j<CHARS.length;j++) {
-      const dx = charPos[i].x - charPos[j].x;
-      const dy = charPos[i].y - charPos[j].y;
-      const dz = charPos[i].z - charPos[j].z;
-      const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
-      const inContact = dist < contactDist;
-      contactActive[i][j] = inContact;
-      if (inContact) {
-        contactFrames[i][j]++;
-        contactFlash[i][j] = 12;
-        if (audioStarted) {
-          if (!contactEffects[i].active) {
-            synths[i]?.connect(contactEffects[i].node);
-            contactEffects[i].active = true;
-          }
-          if (!contactEffects[j].active) {
-            synths[j]?.connect(contactEffects[j].node);
-            contactEffects[j].active = true;
-          }
-        }
-      } else {
-        if (contactFlash[i][j] > 0) contactFlash[i][j]--;
-        if (contactEffects[i]?.active && !inContact) {
-          contactEffects[i].active = false;
-        }
-      }
+    const cDist=cubeSize*Math.min(getRatio().w,getRatio().h,getRatio().d)*0.36;
+    for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+      const dx=charPos[i].x-charPos[j].x,dy=charPos[i].y-charPos[j].y,dz=charPos[i].z-charPos[j].z;
+      const inContact=Math.sqrt(dx*dx+dy*dy+dz*dz)<cDist;
+      contactActive[i][j]=inContact;
+      if(inContact) contactFrames[i][j]++;
     }
-    // Update customers
-    customers.forEach(cu => {
-      cu.life += 0.012;
-      cu.x = Math.sin(cu.life * 0.9) * cubeSize * ratio.w * 0.3;
-      cu.y = Math.cos(cu.life * 1.1) * cubeSize * ratio.h * 0.3;
-      cu.z = Math.sin(cu.life * 0.7) * cubeSize * ratio.d * 0.3;
-    });
   }
 
   function drawTrails() {
-    const ctx = p.drawingContext;
-    for (let i=0;i<CHARS.length;i++) {
-      const trail = charTrails[i];
-      if (trail.length < 2) continue;
-      for (let k=1;k<trail.length;k++) {
-        const alpha = (k/trail.length) * 0.4;
-        const pa = project3D(trail[k-1].x, trail[k-1].y, trail[k-1].z);
-        const pb = project3D(trail[k].x, trail[k].y, trail[k].z);
-        ctx.beginPath();
-        ctx.moveTo(pa.x, pa.y);
-        ctx.lineTo(pb.x, pb.y);
-        ctx.strokeStyle = `hsla(${CHARS[i].h},${CHARS[i].s}%,${CHARS[i].b}%,${alpha})`;
-        ctx.lineWidth = 1.5 * pb.s;
-        ctx.stroke();
+    const ctx=p.drawingContext;
+    for(let i=0;i<7;i++){
+      const tr=charTrails[i]; if(tr.length<2) continue;
+      for(let k=1;k<tr.length;k++){
+        const al=(k/tr.length)*0.35;
+        const pa=proj(tr[k-1].x,tr[k-1].y,tr[k-1].z);
+        const pb=proj(tr[k].x,tr[k].y,tr[k].z);
+        ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+        ctx.strokeStyle=`hsla(${CHARS[i].h},${CHARS[i].s}%,${CHARS[i].b}%,${al})`;
+        ctx.lineWidth=1.4*pb.s; ctx.stroke();
       }
     }
   }
 
   function drawContactBeams() {
-    const ctx = p.drawingContext;
-    for (let i=0;i<CHARS.length;i++) for (let j=i+1;j<CHARS.length;j++) {
-      if (contactFlash[i][j] <= 0) continue;
-      const a = project3D(charPos[i].x, charPos[i].y, charPos[i].z);
-      const b = project3D(charPos[j].x, charPos[j].y, charPos[j].z);
-      const alpha = (contactFlash[i][j]/12) * 0.5;
+    const ctx=p.drawingContext;
+    for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+      if(!contactActive[i][j]) continue;
+      const a=proj(charPos[i].x,charPos[i].y,charPos[i].z);
+      const b=proj(charPos[j].x,charPos[j].y,charPos[j].z);
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-      ctx.lineWidth = 2;
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = `rgba(255,255,255,${alpha})`;
-      ctx.stroke();
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
+      ctx.shadowBlur=10;ctx.shadowColor='rgba(255,255,255,0.4)';
+      ctx.stroke();ctx.restore();
+    }
+  }
+
+  function drawChar(i, t) {
+    const c=CHARS[i], pp=proj(charPos[i].x,charPos[i].y,charPos[i].z);
+    const r=9*pp.s, ctx=p.drawingContext;
+    ctx.save();
+    ctx.shadowBlur=18*pp.s;ctx.shadowColor=`hsl(${c.h},${c.s}%,${c.b}%)`;
+    const g=ctx.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,r*1.7);
+    g.addColorStop(0,`hsla(${c.h},${c.s}%,${c.b+15}%,.9)`);
+    g.addColorStop(.5,`hsla(${c.h},${c.s}%,${c.b}%,.5)`);
+    g.addColorStop(1,`hsla(${c.h},${c.s}%,${c.b-10}%,0)`);
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(pp.x,pp.y,r*1.7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=`hsla(${c.h},${c.s}%,${Math.min(100,c.b+20)}%,1)`;
+    ctx.beginPath();ctx.arc(pp.x,pp.y,r*.4,0,Math.PI*2);ctx.fill();
+    // fin
+    const fs=Math.sin(t*3+i)*.28;
+    const fy=pp.y+r*2.1;
+    ctx.beginPath();ctx.moveTo(pp.x,pp.y+r*.5);
+    ctx.quadraticCurveTo(pp.x+fs*r*4,fy,pp.x+r*1.1,fy+r*.7);
+    ctx.quadraticCurveTo(pp.x,fy+r*.3,pp.x-r*1.1,fy+r*.7);
+    ctx.quadraticCurveTo(pp.x-fs*r*4,fy,pp.x,pp.y+r*.5);
+    ctx.closePath();ctx.fillStyle=`hsla(${c.h},${c.s}%,${c.b}%,.5)`;ctx.fill();
+    ctx.font=`${Math.max(7,9*pp.s)}px 'Space Grotesk',sans-serif`;
+    ctx.fillStyle=`hsla(${c.h},${c.s}%,95%,.85)`;ctx.textAlign='center';
+    ctx.shadowBlur=5;ctx.fillText(c.name,pp.x,pp.y-r*2);
+    ctx.restore();
+  }
+
+  /* ── BUBBLES ── */
+  function updateBubbles() {
+    const ctx=p.drawingContext;
+    for(let i=bubbles.length-1;i>=0;i--){
+      const b=bubbles[i];
+      b.x+=b.vx; b.y+=b.vy;
+      b.vy+=0.04; // gravity
+      b.vx*=0.99;
+      b.life-=0.014;
+      if(b.life<=0||b.y>H+40){
+        if(!b.popped){ b.popped=true; spawnCreature(b.x,b.y); }
+        bubbles.splice(i,1); continue;
+      }
+      // pop near top
+      if(b.y<60&&!b.popped){ b.popped=true; spawnCreature(b.x,b.y); }
+
+      const al=Math.min(1,b.life*2)*0.75;
+      ctx.save();
+      // bubble body
+      const bg=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,b.r*.05,b.x,b.y,b.r);
+      bg.addColorStop(0,`hsla(${b.hue},60%,90%,${al*.5})`);
+      bg.addColorStop(.6,`hsla(${b.hue},50%,70%,${al*.25})`);
+      bg.addColorStop(1,`hsla(${b.hue},40%,50%,${al*.5})`);
+      ctx.fillStyle=bg;
+      ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+      // rim
+      ctx.strokeStyle=`hsla(${b.hue+40},70%,80%,${al*.8})`;
+      ctx.lineWidth=1;ctx.stroke();
+      // highlight
+      ctx.fillStyle=`rgba(255,255,255,${al*.4})`;
+      ctx.beginPath();ctx.ellipse(b.x-b.r*.3,b.y-b.r*.3,b.r*.3,b.r*.18,-.5,0,Math.PI*2);ctx.fill();
       ctx.restore();
     }
   }
 
-  function drawCharacter(i, t) {
-    const c = CHARS[i];
-    const pos = charPos[i];
-    const proj = project3D(pos.x, pos.y, pos.z);
-    const r = 10 * proj.s;
-    const ctx = p.drawingContext;
-    ctx.save();
-    // Glow
-    ctx.shadowBlur = 20 * proj.s;
-    ctx.shadowColor = `hsl(${c.h},${c.s}%,${c.b}%)`;
-    // Body orb
-    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r * 1.6);
-    grad.addColorStop(0, `hsla(${c.h},${c.s}%,${c.b+15}%,0.9)`);
-    grad.addColorStop(0.5, `hsla(${c.h},${c.s}%,${c.b}%,0.6)`);
-    grad.addColorStop(1, `hsla(${c.h},${c.s}%,${c.b-10}%,0)`);
-    ctx.fillStyle = grad;
+  /* ── CREATURES ── */
+  function drawAmoeba(ctx, cr, t) {
+    const n=12, hue=cr.hue;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r * 1.6, 0, Math.PI*2);
-    ctx.fill();
-    // Core dot
-    ctx.fillStyle = `hsla(${c.h},${c.s}%,${Math.min(100,c.b+20)}%,1)`;
-    ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r * 0.45, 0, Math.PI*2);
-    ctx.fill();
-    // Tail fin below (animated)
-    const finSwing = Math.sin(t * 3 + i) * 0.3;
-    const fy = proj.y + r * 2.2;
-    ctx.beginPath();
-    ctx.moveTo(proj.x, proj.y + r * 0.6);
-    ctx.quadraticCurveTo(proj.x + finSwing * r*4, fy, proj.x + r*1.2, fy + r*0.8);
-    ctx.quadraticCurveTo(proj.x, fy + r*0.3, proj.x - r*1.2, fy + r*0.8);
-    ctx.quadraticCurveTo(proj.x - finSwing * r*4, fy, proj.x, proj.y + r * 0.6);
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2;
+      const off=cr.pts[i%cr.pts.length];
+      const rr=cr.r*(0.7+0.25*Math.sin(off.freq*t+off.ph)+off.off);
+      const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
     ctx.closePath();
-    ctx.fillStyle = `hsla(${c.h},${c.s}%,${c.b}%,0.55)`;
-    ctx.fill();
-    // Label
-    ctx.font = `${Math.max(8, 10 * proj.s)}px 'Space Grotesk', sans-serif`;
-    ctx.fillStyle = `hsla(${c.h},${c.s}%,95%,0.9)`;
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 6;
-    ctx.fillText(c.name, proj.x, proj.y - r * 2.1);
-    ctx.restore();
+    ctx.fillStyle=`hsla(${hue},60%,52%,${cr.alpha*.65})`;
+    ctx.strokeStyle=`hsla(${hue},70%,75%,${cr.alpha*.9})`;
+    ctx.lineWidth=1.5; ctx.fill(); ctx.stroke();
+    // nucleus
+    ctx.beginPath();ctx.arc(cr.r*.15,cr.r*.1,cr.r*.22,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue+20},70%,70%,${cr.alpha*.5})`;ctx.fill();
   }
 
-  function drawCustomer(cu) {
-    const proj = project3D(cu.x, cu.y, cu.z);
-    const r = 7 * proj.s;
-    const ctx = p.drawingContext;
+  function drawJellyfish(ctx, cr, t) {
+    const hue=cr.hue, puls=0.08*Math.sin(t*2.5+cr.phase);
+    // dome
+    ctx.beginPath();
+    ctx.arc(0,-cr.r*.1,cr.r*(1+puls),Math.PI,0);
+    ctx.closePath();
+    ctx.fillStyle=`hsla(${hue},55%,55%,${cr.alpha*.5})`;
+    ctx.strokeStyle=`hsla(${hue},70%,78%,${cr.alpha*.85})`;
+    ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+    // inner dome
+    ctx.beginPath();ctx.arc(0,0,cr.r*(0.6+puls),Math.PI,0);
+    ctx.fillStyle=`hsla(${hue+15},60%,65%,${cr.alpha*.25})`;ctx.fill();
+    // tentacles
+    for(let i=0;i<6;i++){
+      const tx=(i/5-0.5)*cr.r*1.6;
+      const wave=Math.sin(t*2+i*1.1+cr.phase)*cr.r*.5;
+      ctx.beginPath();ctx.moveTo(tx,0);
+      ctx.quadraticCurveTo(tx+wave,cr.r*.9,tx+wave*.5,cr.r*1.6);
+      ctx.strokeStyle=`hsla(${hue},60%,70%,${cr.alpha*.5})`;
+      ctx.lineWidth=1.5; ctx.stroke();
+    }
+  }
+
+  function drawPolyp(ctx, cr, t) {
+    const hue=cr.hue, arms=cr.arms;
+    ctx.beginPath();ctx.arc(0,0,cr.r*.38,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue},65%,50%,${cr.alpha*.7})`;ctx.fill();
+    for(let i=0;i<arms;i++){
+      const a=(i/arms)*Math.PI*2+t*.3;
+      const len=cr.r*(0.9+0.15*Math.sin(t*1.8+i));
+      ctx.beginPath();ctx.moveTo(Math.cos(a)*cr.r*.35,Math.sin(a)*cr.r*.35);
+      const ex=Math.cos(a)*len, ey=Math.sin(a)*len;
+      ctx.quadraticCurveTo((ex+Math.cos(a+.4)*len*.6),(ey+Math.sin(a+.4)*len*.6),ex,ey);
+      ctx.strokeStyle=`hsla(${hue},65%,68%,${cr.alpha*.75})`;
+      ctx.lineWidth=2.5-i*.15;ctx.lineCap='round';ctx.stroke();
+      ctx.beginPath();ctx.arc(ex,ey,2.5,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${hue+30},70%,80%,${cr.alpha*.9})`;ctx.fill();
+    }
+  }
+
+  function drawStarfish(ctx, cr, t) {
+    const hue=cr.hue, arms=5;
+    ctx.beginPath();
+    for(let i=0;i<arms*2;i++){
+      const a=(i/arms/2)*Math.PI*2+t*.12;
+      const rr=i%2===0?cr.r:cr.r*.42;
+      const off=i%2===0?cr.pts[i%cr.pts.length].off*cr.r*.2:0;
+      const x=Math.cos(a)*(rr+off), y=Math.sin(a)*(rr+off);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.fillStyle=`hsla(${hue},60%,52%,${cr.alpha*.65})`;
+    ctx.strokeStyle=`hsla(${hue},70%,75%,${cr.alpha*.85})`;
+    ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.arc(0,0,cr.r*.28,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue+15},70%,70%,${cr.alpha*.7})`;ctx.fill();
+  }
+
+  function drawMedusa(ctx, cr, t) {
+    const hue=cr.hue;
+    // bell
     ctx.save();
-    ctx.shadowBlur = 14 * proj.s;
-    ctx.shadowColor = `hsla(${cu.hue},70%,70%,0.6)`;
-    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r * 1.4);
-    grad.addColorStop(0, `hsla(${cu.hue},60%,80%,0.85)`);
-    grad.addColorStop(1, `hsla(${cu.hue},60%,60%,0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(proj.x, proj.y, r*1.4, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = `${Math.max(7,8*proj.s)}px 'Inter', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('♪', proj.x, proj.y + r*0.4);
+    ctx.scale(1,0.6);
+    ctx.beginPath();ctx.arc(0,0,cr.r,0,Math.PI*2);
     ctx.restore();
+    ctx.beginPath();
+    ctx.ellipse(0,-cr.r*.15, cr.r, cr.r*(0.55+0.07*Math.sin(t*2+cr.phase)),0,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue},50%,55%,${cr.alpha*.45})`;
+    ctx.strokeStyle=`hsla(${hue},65%,75%,${cr.alpha*.8})`;
+    ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+    // oral arms
+    for(let i=0;i<4;i++){
+      const a=(i/4)*Math.PI*2+cr.phase;
+      const bx=Math.cos(a)*cr.r*.3, by=Math.sin(a)*cr.r*.3+cr.r*.3;
+      ctx.beginPath();ctx.moveTo(bx,by);
+      const ex=bx+Math.cos(a+Math.sin(t+i)*.5)*cr.r*.8;
+      const ey=by+cr.r*(0.7+.3*Math.sin(t*1.2+i));
+      ctx.quadraticCurveTo(bx+Math.cos(a)*cr.r*.5,by+cr.r*.5,ex,ey);
+      ctx.strokeStyle=`hsla(${hue},60%,70%,${cr.alpha*.45})`;
+      ctx.lineWidth=1.8;ctx.stroke();
+    }
   }
 
-  function updateHUD() {
-    if (frameCount % 20 !== 0) return;
-    updateContactUI();
-    // Update char activity bars
-    CHARS.forEach((c,i) => {
-      let activity = 0;
-      for (let j=0;j<7;j++) if (j!==i && contactActive[i][j]) activity++;
-      const bar = document.getElementById(`bar-${i}`);
-      if (bar) bar.style.width = (40 + activity * 20) + '%';
-    });
+  function updateCreatures(t) {
+    const ctx=p.drawingContext;
+    for(const cr of creatures){
+      cr.alpha=Math.min(1,cr.alpha+0.025);
+      cr.x+=cr.vx; cr.y+=cr.vy;
+      cr.rot+=cr.rotSpd;
+      cr.vx*=0.995; cr.vy*=0.995;
+      // soft boundary bounce
+      if(cr.x<cr.r||cr.x>W-cr.r) cr.vx*=-1;
+      if(cr.y<80+cr.r||cr.y>H-50-cr.r) cr.vy*=-1;
+      ctx.save();
+      ctx.translate(cr.x,cr.y);ctx.rotate(cr.rot);
+      switch(cr.type){
+        case 0: drawAmoeba(ctx,cr,t);    break;
+        case 1: drawJellyfish(ctx,cr,t); break;
+        case 2: drawPolyp(ctx,cr,t);     break;
+        case 3: drawStarfish(ctx,cr,t);  break;
+        case 4: drawMedusa(ctx,cr,t);    break;
+      }
+      ctx.restore();
+    }
+  }
+
+  /* ── beat flash ── */
+  function drawBeatFlash(t) {
+    if(!isDropping) return;
+    const ctx=p.drawingContext;
+    const a=Math.max(0,0.18-((t%0.1)/0.1)*0.18);
+    ctx.save();
+    ctx.fillStyle=`rgba(79,195,247,${a})`;
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
   }
 
   p.setup = function() {
-    W = p.windowWidth;
-    H = p.windowHeight;
-    stageH = H - 90;
-    const cnv = p.createCanvas(W, stageH);
-    cnv.parent('p5-container');
-    cubeSize = Math.min(W, stageH) * 0.28;
+    W=p.windowWidth; H=p.windowHeight;
+    const cv=p.createCanvas(W,H); cv.parent('p5host');
+    cubeSize=Math.min(W,H)*0.26;
     p.frameRate(60);
   };
-
   p.windowResized = function() {
-    W = p.windowWidth;
-    H = p.windowHeight;
-    stageH = H - 90;
-    p.resizeCanvas(W, stageH);
-    cubeSize = Math.min(W, stageH) * 0.28;
+    W=p.windowWidth; H=p.windowHeight;
+    p.resizeCanvas(W,H);
+    cubeSize=Math.min(W,H)*0.26;
   };
 
   p.draw = function() {
-    const t = p.millis() * 0.001;
-    frameCount++;
+    const t=p.millis()*.001; fc++;
     p.clear();
+    if(autoRot) rotY+=0.0035+(isDropping?.006:0);
+    tiltX=0.28+Math.sin(t*.09)*.04;
 
-    if (autoRotate) rotY += 0.004;
-    tiltX = 0.28 + Math.sin(t * 0.1) * 0.04;
+    updateChars(t);
+    const order=CHARS.map((c,i)=>({i,d:proj(charPos[i].x,charPos[i].y,charPos[i].z).d})).sort((a,b)=>a.d-b.d);
 
-    updatePositions(t);
-
-    // Sort characters by depth for painter's algo
-    const order = CHARS.map((c,i) => ({i, depth: project3D(charPos[i].x, charPos[i].y, charPos[i].z).depth}));
-    order.sort((a,b) => a.depth - b.depth);
-
-    const ratio = getRatio();
-    drawCubeWire(ratio);
+    drawCube();
     drawTrails();
     drawContactBeams();
+    order.forEach(({i})=>drawChar(i,t));
 
-    // Draw chars in depth order
-    order.forEach(({i}) => drawCharacter(i, t));
-    customers.forEach(cu => drawCustomer(cu));
+    // creatures behind glass (draw first)
+    updateCreatures(t);
+    updateBubbles();
+    drawBeatFlash(t);
 
-    updateHUD();
+    if(fc%24===0){ updateContactUI(); CHARS.forEach((_,i)=>{ let a=0; for(let j=0;j<7;j++) if(j!==i&&contactActive[i][j])a++; const el=document.getElementById(`act-${i}`); if(el)el.style.width=(40+a*20)+'%'; }); }
   };
 
   p.mousePressed = function() {
-    if (p.mouseY < 0 || p.mouseY > stageH) return;
-    isDragging = true;
-    lastMX = p.mouseX;
-    autoRotate = false;
-    // Spawn customer
-    if (p.mouseButton === p.LEFT) {
-      const nx = (p.mouseX / W - 0.5) * cubeSize * getRatio().w * 0.8;
-      const ny = (p.mouseY / stageH - 0.5) * cubeSize * getRatio().h * 0.8;
-      const nz = (Math.random() - 0.5) * cubeSize * getRatio().d * 0.8;
-      const gidx = Math.floor((p.mouseX / W) * 7);
-      spawnCustomer(nx, ny, nz, CHARS[Math.min(6,gidx)].genre);
-    }
+    if(p.mouseButton===p.RIGHT) return;
+    spawnBubbles(p.mouseX, p.mouseY);
+    isDrag=true; lastMX=p.mouseX; autoRot=false;
   };
-
   p.mouseDragged = function() {
-    if (!isDragging) return;
-    rotY += (p.mouseX - lastMX) * 0.012;
-    lastMX = p.mouseX;
+    if(!isDrag) return;
+    rotY+=(p.mouseX-lastMX)*.011; lastMX=p.mouseX;
   };
-
   p.mouseReleased = function() {
-    isDragging = false;
-    setTimeout(() => { autoRotate = true; }, 2000);
+    isDrag=false; setTimeout(()=>{autoRot=true;},2000);
   };
-
   p.touchStarted = function() {
-    if (p.touches.length > 0) {
-      const tx = p.touches[0].x, ty = p.touches[0].y;
-      if (ty < 0 || ty > stageH) return false;
-      const nx = (tx / W - 0.5) * cubeSize * getRatio().w * 0.8;
-      const ny = (ty / stageH - 0.5) * cubeSize * getRatio().h * 0.8;
-      const nz = (Math.random() - 0.5) * cubeSize * getRatio().d * 0.8;
-      const gidx = Math.floor((tx / W) * 7);
-      spawnCustomer(nx, ny, nz, CHARS[Math.min(6,gidx)].genre);
+    if(p.touches.length>0){
+      spawnBubbles(p.touches[0].x, p.touches[0].y);
     }
     return false;
   };
