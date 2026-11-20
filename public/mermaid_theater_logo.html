@@ -1,81 +1,90 @@
-<title>マーメイドシアター</title>
+<title>Mermaids Theater</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap">
 
 <style>
 :root { --bg: #030c18; color-scheme: dark }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #030c18 } }
 :root[data-theme="dark"] { --bg: #030c18 }
-
 body {
   background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  overflow: hidden;
-  padding: 0 !important;
-  margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; overflow: hidden;
+  padding: 0 !important; margin: 0;
 }
-
-#sketch-container canvas { display: block; }
+#c canvas { display: block; }
 </style>
 
-<div id="sketch-container"></div>
+<div id="c"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 <script>
 const sketch = (p) => {
-  let scales = [];
-  let bubbles = [];
-  let pg;
-  let W, H, STEP;
-  let ready = false;
+  let scales = [], bubbles = [], pg;
+  let W, H, STEP, ready = false;
 
+  /* ── Timeline ───────────────────────────────────────────── */
+  const T_MAX   = 2.4;   // title fully in
+  const T_FADE  = 0.55;  // per-scale fade
+  const T_SUB   = 2.1;   // subtitle start
+  const T_HP    = 3.1;   // headphone rise start
+  const T_HP_D  = 1.65;  // rise duration
+
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+  const clamp   = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  /* ── Build glass-scale particles from text ──────────────── */
   function buildScales() {
     W = p.width; H = p.height;
-    STEP = Math.max(11, Math.round(W * 0.013));
-
-    const fSize = Math.round(W * (W < 480 ? 0.072 : W < 720 ? 0.082 : 0.090));
-    const tY = H * 0.44;
+    STEP = Math.max(12, Math.round(W * 0.0135));
 
     if (pg) pg.remove();
     pg = p.createGraphics(W, H);
     pg.pixelDensity(1);
     pg.background(0);
-    pg.fill(255);
-    pg.noStroke();
+    pg.fill(255); pg.noStroke();
     pg.textAlign(p.CENTER, p.CENTER);
-    pg.textFont('Hiragino Mincho ProN, "Yu Mincho", "MS Mincho", "Noto Serif JP", serif');
+    pg.textFont('Cinzel, Georgia, "Times New Roman", serif');
+
+    let fSize = Math.round(W * 0.062);
     pg.textSize(fSize);
-    pg.text('マーメイドシアター', W / 2, tY);
+    while (pg.textWidth('MermaidsTheater') > W * 0.87 && fSize > 16) {
+      fSize -= 2; pg.textSize(fSize);
+    }
+    pg.text('MermaidsTheater', W / 2, H * 0.36);
     pg.loadPixels();
 
     scales = [];
+    let minX = W, maxX = 0;
+    const cands = [];
     for (let x = 0; x < W; x += STEP) {
       for (let y = 0; y < H; y += STEP) {
-        const idx = 4 * (Math.floor(x) + Math.floor(y) * W);
-        if (idx >= 0 && idx < pg.pixels.length && pg.pixels[idx] > 100) {
-          scales.push({
-            x: x + p.random(-1.5, 1.5),
-            y: y + p.random(-1.5, 1.5),
-            r: p.random(STEP * 0.47, STEP * 0.76),
-            phase: p.random(p.TWO_PI),
-            spd:   p.random(0.5, 1.7),
-            h:     p.random(165, 228),
-            s:     p.random(50, 88),
-          });
+        const i = 4 * (~~x + ~~y * W);
+        if (i >= 0 && i < pg.pixels.length && pg.pixels[i] > 100) {
+          cands.push({ x: x + p.random(-1.5, 1.5), y: y + p.random(-1.5, 1.5) });
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
         }
       }
     }
+    const xR = maxX - minX || 1;
+    for (const c of cands) {
+      scales.push({
+        x: c.x, y: c.y,
+        r:    p.random(STEP * 0.46, STEP * 0.76),
+        ph:   p.random(p.TWO_PI),
+        spd:  p.random(0.5, 1.7),
+        h:    p.random(162, 230),
+        s:    p.random(50, 88),
+        born: (c.x - minX) / xR * T_MAX,
+      });
+    }
 
     bubbles = Array.from({ length: 40 }, () => ({
-      x:  p.random(W),
-      y:  p.random(H),
-      r:  p.random(1.5, 7),
-      vy: p.random(-0.25, -0.75),
-      vx: 0,
+      x: p.random(W), y: p.random(H),
+      r: p.random(1.5, 6.5),
+      vy: p.random(-0.22, -0.72),
       ph: p.random(p.TWO_PI),
     }));
     ready = true;
@@ -83,7 +92,7 @@ const sketch = (p) => {
 
   p.setup = function () {
     p.colorMode(p.HSB, 360, 100, 100, 1);
-    p.createCanvas(p.windowWidth, p.windowHeight).parent('sketch-container');
+    p.createCanvas(p.windowWidth, p.windowHeight).parent('c');
     p.frameRate(60);
     document.fonts.ready.then(() => buildScales());
   };
@@ -92,192 +101,270 @@ const sketch = (p) => {
     const t = p.millis() / 1000;
     p.background(210, 72, 7);
     drawBg(t);
-    if (ready) {
-      drawGlassScales(t);
-      drawBubbles(t);
-    }
+    if (ready) { drawGlassScales(t); drawSubtitle(t); drawBubbles(t); }
+    drawHeadphone(t);
     drawCaustics(t);
   };
 
-  /* ── Background: anatomy + fish scale texture ── */
+  /* ── Background: anatomy + fish-scale texture ───────────── */
   function drawBg(t) {
-    const cy = H * 0.44;
-
-    // Fish scale arc texture (whole canvas)
-    p.noFill();
+    const cy = H * 0.36;
     const ss = Math.round(W * 0.027);
-    p.stroke(188, 20, 60, 0.052);
-    p.strokeWeight(0.45);
+
+    p.noFill(); p.stroke(188, 20, 60, 0.05); p.strokeWeight(0.45);
     for (let sx = -ss; sx < W + ss; sx += ss * 0.9) {
       for (let sy = -ss; sy < H + ss; sy += ss * 0.65) {
         const row = Math.round(sy / (ss * 0.65));
-        const ox = (row % 2) * ss * 0.45;
-        p.arc(sx + ox, sy, ss * 1.15, ss * 1.15, -p.PI, 0);
+        p.arc(sx + (row % 2) * ss * 0.45, sy, ss * 1.15, ss * 1.15, -p.PI, 0);
       }
     }
 
-    // Spine (sinusoidal horizontal center line)
-    p.stroke(185, 18, 68, 0.075);
-    p.strokeWeight(0.9);
-    p.noFill();
+    p.stroke(185, 18, 68, 0.07); p.strokeWeight(0.85); p.noFill();
     p.beginShape();
     p.curveVertex(-15, cy);
-    for (let sx = 0; sx <= W + 15; sx += 18) {
+    for (let sx = 0; sx <= W + 15; sx += 18)
       p.curveVertex(sx, cy + Math.sin(sx * 0.009 + t * 0.22) * 3);
-    }
     p.curveVertex(W + 20, cy);
     p.endShape();
 
-    // Vertebrae discs along spine
-    const vCount = Math.round(W / 48);
-    p.stroke(185, 15, 65, 0.065);
-    p.strokeWeight(0.6);
-    for (let vi = 0; vi < vCount; vi++) {
-      const vx = W * (vi + 0.5) / vCount;
-      const vy = cy + Math.sin(vx * 0.009 + t * 0.22) * 3;
-      p.ellipse(vx, vy, 7, 5);
-      p.ellipse(vx, vy, 4, 3);
-    }
-
-    // Ribs (bilateral arcs from spine)
     const rCount = Math.round(W / 60);
-    p.strokeWeight(0.6);
-    p.stroke(183, 14, 63, 0.062);
+    p.strokeWeight(0.6); p.stroke(183, 14, 63, 0.058);
     for (let ri = 0; ri < rCount; ri++) {
       const rx = W * (ri + 0.5) / rCount;
       const ry = cy + Math.sin(rx * 0.009 + t * 0.22) * 3;
-      const rLen = H * 0.15 + Math.sin(ri * 0.52) * H * 0.03;
-      // upper rib
-      p.bezier(rx, ry,
-               rx - rLen * 0.28, ry - rLen * 0.42,
-               rx - rLen * 0.08, ry - rLen * 0.86,
-               rx + rLen * 0.12, ry - rLen);
-      // lower rib
-      p.bezier(rx, ry,
-               rx - rLen * 0.28, ry + rLen * 0.42,
-               rx - rLen * 0.08, ry + rLen * 0.86,
-               rx + rLen * 0.12, ry + rLen);
+      const rL = H * 0.14 + Math.sin(ri * 0.52) * H * 0.03;
+      p.bezier(rx, ry, rx - rL * 0.28, ry - rL * 0.42, rx - rL * 0.08, ry - rL * 0.86, rx, ry - rL);
+      p.bezier(rx, ry, rx - rL * 0.28, ry + rL * 0.42, rx - rL * 0.08, ry + rL * 0.86, rx, ry + rL);
     }
 
-    // Fish head silhouette (left edge)
-    const hR = H * 0.17;
-    p.stroke(183, 14, 63, 0.065);
-    p.strokeWeight(0.65);
-    p.noFill();
-    p.ellipse(-hR * 0.15, cy, hR * 1.5, hR * 1.2);
-    p.ellipse(-hR * 0.4, cy - hR * 0.1, hR * 0.26, hR * 0.26);
-    p.fill(183, 14, 60, 0.065);
-    p.ellipse(-hR * 0.44, cy - hR * 0.12, hR * 0.12, hR * 0.12);
-    p.noFill();
-
-    // Fish tail fork (right edge)
+    const hR = H * 0.16;
+    p.stroke(183, 14, 63, 0.062); p.strokeWeight(0.65);
+    p.ellipse(-hR * 0.12, cy, hR * 1.5, hR * 1.2);
+    p.ellipse(-hR * 0.38, cy - hR * 0.1, hR * 0.26, hR * 0.26);
     const tR = H * 0.22;
-    p.stroke(183, 14, 63, 0.065);
-    p.bezier(W + hR * 0.1, cy,
-             W + tR * 0.35, cy - tR * 0.28,
-             W + tR * 0.78, cy - tR * 0.58,
-             W + tR * 1.1,  cy - tR * 0.65);
-    p.bezier(W + hR * 0.1, cy,
-             W + tR * 0.35, cy + tR * 0.28,
-             W + tR * 0.78, cy + tR * 0.58,
-             W + tR * 1.1,  cy + tR * 0.65);
-    p.bezier(W + tR * 0.6, cy - tR * 0.42,
-             W + tR * 0.75, cy - tR * 0.1,
-             W + tR * 0.75, cy + tR * 0.1,
-             W + tR * 0.6, cy + tR * 0.42);
+    p.bezier(W + hR * 0.1, cy, W + tR * 0.35, cy - tR * 0.28, W + tR * 0.78, cy - tR * 0.58, W + tR * 1.1, cy - tR * 0.65);
+    p.bezier(W + hR * 0.1, cy, W + tR * 0.35, cy + tR * 0.28, W + tR * 0.78, cy + tR * 0.58, W + tR * 1.1, cy + tR * 0.65);
   }
 
-  /* ── Single glass-scale particle ── */
-  function glassScale(x, y, r, phase, h, s, t, hover) {
-    const shim = Math.sin(t * 2.1 + phase) * 0.5 + 0.5; // 0..1
+  /* ── Single glass scale ─────────────────────────────────── */
+  function glassScale(x, y, r, ph, h, s, t, hover, alpha) {
+    if (alpha <= 0) return;
+    const shim = Math.sin(t * 2.1 + ph) * 0.5 + 0.5;
     const hh = h + shim * 24 + hover * 20;
     const rr = r * (1 + hover * 0.38);
+    const a  = alpha;
 
-    p.push();
-    p.translate(x, y);
+    p.push(); p.translate(x, y);
 
-    // Soft outer glow
     p.noStroke();
-    p.fill(hh, s, 100, 0.028 + shim * 0.018 + hover * 0.045);
+    p.fill(hh, s, 100, a * (0.025 + shim * 0.016 + hover * 0.04));
     p.ellipse(0, 0, rr * 3.3, rr * 3.3);
 
-    // Glass body
-    p.fill(hh, s * 0.28, 97, 0.085 + shim * 0.062 + hover * 0.045);
+    p.fill(hh, s * 0.28, 97, a * (0.085 + shim * 0.06 + hover * 0.04));
     p.ellipse(0, 0, rr * 2, rr * 2);
 
-    // Iridescent rim
     p.noFill();
-    p.stroke(hh + 18, s * 0.52, 100, 0.50 + shim * 0.34 + hover * 0.12);
+    p.stroke(hh + 18, s * 0.52, 100, a * (0.50 + shim * 0.32 + hover * 0.1));
     p.strokeWeight(0.82 + hover * 0.5);
     p.ellipse(0, 0, rr * 2, rr * 2);
 
-    // Inner caustic arc (refracted light at top)
-    p.stroke(195, 10, 100, 0.60 + shim * 0.22);
+    p.stroke(195, 10, 100, a * (0.58 + shim * 0.22));
     p.strokeWeight(1.08);
     p.arc(0, -rr * 0.16, rr * 1.12, rr * 0.88, -p.PI * 0.84, -p.PI * 0.16);
 
-    // Growth rings (anatomical scale rings – bottom half)
-    p.stroke(hh, s * 0.26, 80, 0.10 + shim * 0.04);
+    p.stroke(hh, s * 0.26, 80, a * (0.10 + shim * 0.04));
     p.strokeWeight(0.40);
     p.arc(0, rr * 0.15, rr * 1.28, rr * 0.84, -p.PI * 0.92, -p.PI * 0.08);
     p.arc(0, rr * 0.15, rr * 0.72, rr * 0.49, -p.PI * 0.92, -p.PI * 0.08);
     p.arc(0, rr * 0.15, rr * 0.36, rr * 0.25, -p.PI * 0.92, -p.PI * 0.08);
 
-    // Focus point (radial lines from nucleus – cell anatomy)
-    p.stroke(hh + 30, s * 0.4, 90, 0.08 + shim * 0.04);
-    p.strokeWeight(0.32);
-    for (let a = 0; a < p.TWO_PI; a += p.PI / 4) {
-      p.line(0, 0, Math.cos(a) * rr * 0.28, Math.sin(a) * rr * 0.28);
-    }
+    p.stroke(hh + 30, s * 0.4, 90, a * (0.07 + shim * 0.03));
+    p.strokeWeight(0.30);
+    for (let a2 = 0; a2 < p.TWO_PI; a2 += p.PI / 4)
+      p.line(0, 0, Math.cos(a2) * rr * 0.28, Math.sin(a2) * rr * 0.28);
 
-    // Specular highlight
     p.noStroke();
-    p.fill(195, 7, 100, 0.40 + shim * 0.28);
+    p.fill(195, 7, 100, a * (0.38 + shim * 0.26));
     p.ellipse(-rr * 0.27, -rr * 0.33, rr * 0.33, rr * 0.20);
-
     p.pop();
   }
 
   function drawGlassScales(t) {
-    const mx = p.mouseX, my = p.mouseY;
-    const hd = STEP * 7;
+    const mx = p.mouseX, my = p.mouseY, hd = STEP * 7;
     for (const s of scales) {
-      const dist = p.dist(mx, my, s.x, s.y);
-      glassScale(s.x, s.y, s.r, s.phase, s.h, s.s, t,
-                 p.max(0, 1 - dist / hd));
+      const alpha = clamp((t - s.born) / T_FADE, 0, 1);
+      const dist  = p.dist(mx, my, s.x, s.y);
+      glassScale(s.x, s.y, s.r, s.ph, s.h, s.s, t,
+                 clamp(1 - dist / hd, 0, 1), alpha);
     }
   }
 
+  /* ── "Set To Devises" subtitle ──────────────────────────── */
+  function drawSubtitle(t) {
+    const text = 'SET  TO  DEVISES';
+    const ls   = W * 0.023;
+    const startX = W / 2 - ((text.length - 1) * ls) / 2;
+    const sy   = H * 0.52;
+
+    p.textFont('Cinzel, Georgia, serif');
+    p.textSize(Math.max(10, W * 0.017));
+    p.textAlign(p.CENTER, p.CENTER);
+
+    for (let i = 0; i < text.length; i++) {
+      const ca = clamp((t - T_SUB - i * 0.07) / 0.45, 0, 1);
+      if (ca <= 0) continue;
+      const shim = Math.sin(t * 2.5 + i * 0.4) * 0.12 + 0.88;
+      p.noStroke();
+      // glow halo
+      p.fill(185, 50, 100, ca * 0.08 * shim);
+      p.text(text[i], startX + i * ls, sy);
+      // main character
+      p.fill(185, 35, 92, ca * 0.72 * shim);
+      p.text(text[i], startX + i * ls, sy);
+    }
+  }
+
+  /* ── Glass tube helpers ─────────────────────────────────── */
+  function tubeBezier(x1, y1, cx1, cy1, cx2, cy2, x2, y2, tw, h, s, shim, a) {
+    p.noFill(); p.strokeCap(p.ROUND);
+    p.stroke(h, s * 0.5, 100, a * (0.040 + shim * 0.014));
+    p.strokeWeight(tw * 3.6);
+    p.bezier(x1, y1, cx1, cy1, cx2, cy2, x2, y2);
+
+    p.stroke(h, s * 0.22, 96, a * (0.11 + shim * 0.045));
+    p.strokeWeight(tw);
+    p.bezier(x1, y1, cx1, cy1, cx2, cy2, x2, y2);
+
+    p.stroke(h + 20, s * 0.48, 100, a * (0.52 + shim * 0.24));
+    p.strokeWeight(1.5);
+    p.bezier(x1, y1, cx1, cy1, cx2, cy2, x2, y2);
+
+    p.stroke(195, 8, 100, a * (0.36 + shim * 0.18));
+    p.strokeWeight(0.7);
+    p.bezier(x1, y1, cx1, cy1, cx2, cy2, x2, y2);
+  }
+
+  function tubeCircle(cx, cy, r, tw, h, s, shim, a) {
+    p.noFill(); p.strokeCap(p.ROUND);
+    p.stroke(h, s * 0.5, 100, a * (0.038 + shim * 0.014));
+    p.strokeWeight(tw * 3.6);
+    p.ellipse(cx, cy, r * 2, r * 2);
+
+    p.stroke(h, s * 0.22, 96, a * (0.11 + shim * 0.045));
+    p.strokeWeight(tw);
+    p.ellipse(cx, cy, r * 2, r * 2);
+
+    p.stroke(h + 20, s * 0.48, 100, a * (0.52 + shim * 0.24));
+    p.strokeWeight(1.5);
+    p.ellipse(cx, cy, r * 2, r * 2);
+
+    p.stroke(195, 8, 100, a * (0.36 + shim * 0.18));
+    p.strokeWeight(0.7);
+    p.arc(cx, cy, r * 2, r * 2, -p.PI * 0.78, -p.PI * 0.12);
+  }
+
+  /* ── Headphone rising from bottom ───────────────────────── */
+  function drawHeadphone(t) {
+    const prog  = clamp((t - T_HP) / T_HP_D, 0, 1);
+    if (prog <= 0) return;
+    const eased = easeOut(prog);
+    const alpha = clamp(eased * 1.8, 0, 1);
+
+    const shim  = Math.sin(t * 2.0) * 0.5 + 0.5;
+    const hue   = 185 + shim * 22;
+    const sat   = 65;
+
+    // Headphone geometry
+    const earR  = clamp(Math.min(W * 0.062, H * 0.11), 24, 70);
+    const hw    = clamp(W * 0.165, 80, 220);
+    const tw    = clamp(W * 0.011, 5, 11);     // tube wall thickness
+    const bandH = earR * 2.0;                   // height of arc above ear top
+
+    // Rise from below canvas
+    const restY = H * 0.74;
+    const startY = H + earR * 2 + bandH + 20;
+    const oy    = startY + (restY - startY) * eased;
+    const cx    = W / 2;
+
+    const lx = cx - hw, rx = cx + hw;
+    const bandPeakY = oy - earR - bandH;
+
+    // Band arc
+    tubeBezier(
+      lx, oy - earR,
+      lx, bandPeakY,
+      rx, bandPeakY,
+      rx, oy - earR,
+      tw, hue, sat, shim, alpha
+    );
+
+    // Band → ear cup connectors (small vertical stubs)
+    const sliderLen = earR * 0.45;
+    tubeBezier(lx, oy - earR, lx, oy - earR + sliderLen * 0.4, lx, oy - earR + sliderLen * 0.8, lx, oy - earR + sliderLen,
+               tw * 0.9, hue, sat, shim, alpha);
+    tubeBezier(rx, oy - earR, rx, oy - earR + sliderLen * 0.4, rx, oy - earR + sliderLen * 0.8, rx, oy - earR + sliderLen,
+               tw * 0.9, hue, sat, shim, alpha);
+
+    // Outer ear cup shells
+    tubeCircle(lx, oy, earR, tw, hue, sat, shim, alpha);
+    tubeCircle(rx, oy, earR, tw, hue, sat, shim, alpha);
+
+    // Inner cushion rings
+    tubeCircle(lx, oy, earR * 0.64, tw * 0.65, hue + 15, sat * 0.7, shim, alpha * 0.80);
+    tubeCircle(rx, oy, earR * 0.64, tw * 0.65, hue + 15, sat * 0.7, shim, alpha * 0.80);
+
+    // Ear cup glass fill + center glow
+    p.noStroke();
+    p.fill(hue, sat * 0.25, 95, alpha * (0.07 + shim * 0.04));
+    p.ellipse(lx, oy, earR * 2, earR * 2);
+    p.ellipse(rx, oy, earR * 2, earR * 2);
+
+    // Speaker grille dots (3×3 grid in center)
+    const dotR = earR * 0.08;
+    const dotSpacing = earR * 0.3;
+    p.fill(hue, sat * 0.4, 92, alpha * (0.22 + shim * 0.1));
+    for (const ex of [lx, rx]) {
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          p.ellipse(ex + di * dotSpacing, oy + dj * dotSpacing, dotR * 2, dotR * 2);
+        }
+      }
+    }
+
+    // Central glow (backlighting from driver)
+    p.fill(hue + 10, sat * 0.5, 100, alpha * (0.06 + shim * 0.06));
+    p.ellipse(lx, oy, earR * 0.9, earR * 0.9);
+    p.ellipse(rx, oy, earR * 0.9, earR * 0.9);
+  }
+
+  /* ── Bubbles ────────────────────────────────────────────── */
   function drawBubbles(t) {
     for (const b of bubbles) {
-      b.y  += b.vy;
-      b.x  += Math.sin(t * 0.9 + b.ph) * 0.38;
+      b.y += b.vy;
+      b.x += Math.sin(t * 0.9 + b.ph) * 0.38;
       if (b.y < -b.r) { b.y = H + b.r; b.x = p.random(W); }
-
       const shim = Math.sin(t * 1.8 + b.ph) * 0.3 + 0.7;
       p.noStroke();
-      p.fill(190, 28, 100, 0.055 * shim);
+      p.fill(190, 28, 100, 0.052 * shim);
       p.ellipse(b.x, b.y, b.r * 2, b.r * 2);
       p.noFill();
-      p.stroke(195, 14, 100, 0.22 * shim);
-      p.strokeWeight(0.55);
+      p.stroke(195, 14, 100, 0.20 * shim);
+      p.strokeWeight(0.52);
       p.ellipse(b.x, b.y, b.r * 2, b.r * 2);
       p.noStroke();
-      p.fill(200, 5, 100, 0.38 * shim);
+      p.fill(200, 5, 100, 0.36 * shim);
       p.ellipse(b.x - b.r * 0.26, b.y - b.r * 0.32, b.r * 0.32, b.r * 0.20);
     }
   }
 
+  /* ── Caustic light pools ────────────────────────────────── */
   function drawCaustics(t) {
     p.noStroke();
     for (let i = 0; i < 9; i++) {
       const cx  = W * (0.03 + i * 0.115) + Math.sin(t * 0.30 + i * 1.55) * W * 0.055;
-      const ccy = H * 0.5 + Math.sin(t * 0.50 + i * 0.98) * H * 0.32;
-      const br  = 0.020 + Math.sin(t * 0.72 + i) * 0.007;
-      p.fill(185, 44, 100, br);
-      p.ellipse(cx, ccy,
-                W * 0.11 + Math.sin(t + i)        * 32,
-                H * 0.09 + Math.cos(t * 1.4 + i)  * 18);
+      const cy  = H * 0.5 + Math.sin(t * 0.50 + i * 0.98) * H * 0.32;
+      p.fill(185, 44, 100, 0.019 + Math.sin(t * 0.72 + i) * 0.007);
+      p.ellipse(cx, cy, W * 0.11 + Math.sin(t + i) * 32, H * 0.09 + Math.cos(t * 1.4 + i) * 18);
     }
   }
 
