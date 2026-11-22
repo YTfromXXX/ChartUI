@@ -1,0 +1,212 @@
+/* ── MENTE RESEARCH Vol.7 — 記号の砂 ── */
+
+/* Vol.1–7 color system */
+:root {
+  --bg: #040d1c;
+  --bg2: #071428;
+  --bg3: #0a1a30;
+  --fg: #e8eaf6;
+  --muted: #8899b8;
+  --subtle: #4a5a7a;
+
+  /* Vol.1–6 inherited colors */
+  --gold:    #e8b84b;
+  --blue:    #4fc3f7;
+  --teal:    #26c6da;
+  --manga:   #ffcc80;
+  --aerial:  #f48fb1;
+  --luna:    #ce93d8;
+  --neuro:   #80deea;
+  --retro:   #f9a825;
+  --body:    #ef9a9a;
+  --profile: #c5e1a5;
+  --green:   #69f0ae;
+
+  /* Vol.7 new: 古代算術装置 */
+  --sand:    #c8966a;
+  --line-c:  #5bbdce;
+  --groove:  #a78ed0;
+  --stick:   #e8907a;
+  --punch:   #f5c842;
+}
+
+/* Base slide */
+section {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 128px;
+}
+
+/* Typography */
+h1 {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 96px;
+  font-weight: 800;
+  line-height: 1.0;
+  color: var(--fg);
+}
+h2 {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--fg);
+}
+h3 {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--fg);
+}
+p {
+  font-size: 32px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+/* Utility */
+.eyebrow {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.muted  { color: var(--muted); }
+.subtle { color: var(--subtle); }
+
+/* Device color classes */
+.sand-c   { color: var(--sand); }
+.line-cc  { color: var(--line-c); }
+.groove-c { color: var(--groove); }
+.stick-c  { color: var(--stick); }
+.punch-c  { color: var(--punch); }
+.xv-c     { color: var(--green); }
+
+/* Chip styles */
+.chip {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 24px;
+  padding: 4px 16px;
+  border-radius: 20px;
+  display: inline-block;
+}
+.chip-sand   { background: rgba(200,150,106,.12); color: var(--sand);   border: 1px solid rgba(200,150,106,.35); }
+.chip-line   { background: rgba(91,189,206,.12);  color: var(--line-c); border: 1px solid rgba(91,189,206,.35); }
+.chip-groove { background: rgba(167,142,208,.12); color: var(--groove); border: 1px solid rgba(167,142,208,.35); }
+.chip-stick  { background: rgba(232,144,122,.12); color: var(--stick);  border: 1px solid rgba(232,144,122,.35); }
+.chip-punch  { background: rgba(245,200,66,.12);  color: var(--punch);  border: 1px solid rgba(245,200,66,.35); }
+.chip-xv     { background: rgba(105,240,174,.12); color: var(--green);  border: 1px solid rgba(105,240,174,.35); }
+
+/* Info row */
+.irow {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.ico {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+/* Card grid */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.card {
+  padding: 32px;
+  border-radius: 12px;
+  border: 1px solid rgba(100,120,180,.2);
+  background: rgba(255,255,255,.03);
+}
+
+/* Gradient accent bar */
+.vol7-bar {
+  height: 4px;
+  width: 560px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--sand), var(--line-c), var(--groove), var(--stick), var(--green));
+  margin-bottom: 28px;
+}
+
+/* Watermark */
+.watermark {
+  position: absolute;
+  bottom: 56px;
+  right: 128px;
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 20px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.08);
+}
+
+/* Peirce table */
+.peirce-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 28px;
+}
+.peirce-tbl th {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 24px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid rgba(100,120,180,.25);
+}
+.peirce-tbl td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(100,120,180,.1);
+  vertical-align: top;
+  line-height: 1.4;
+}
+.peirce-tbl tr:last-child td { border-bottom: none; }
+
+/* Z-layer block */
+.z-block {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 24px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.z-label {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 24px;
+  letter-spacing: .1em;
+  min-width: 80px;
+  opacity: .55;
+}
+.z-name {
+  font-family: 'Space Grotesk', Arial, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  min-width: 260px;
+}
+.z-desc {
+  font-size: 26px;
+  color: var(--muted);
+}
+
+/* JSON display */
+.json-line { font-family: 'Courier New', monospace; font-size: 26px; line-height: 1.65; }
+.jk  { color: #7ec8e3; }
+.jvs { color: #a3d9a5; }
+.jv  { color: #f9b97a; }
+.jc  { color: rgba(136,153,184,.6); font-style: italic; }
