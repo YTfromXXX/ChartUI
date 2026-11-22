@@ -1,0 +1,596 @@
+<title>Quantum Baby Signature</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap">
+<style>
+:root {
+  --bg: #040d1c; --bg2: #071428; --bg3: #0a1a30;
+  --gold: #e8b84b; --gold2: rgba(232,184,75,.15); --gold3: rgba(232,184,75,.4);
+  --teal: #4fc3c8; --teal2: rgba(79,195,200,.15); --teal3: rgba(79,195,200,.5);
+  --orange: #e8832a; --orange2: rgba(232,131,42,.15); --orange3: rgba(232,131,42,.5);
+  --luna: #ce93d8; --aerial: #f48fb1;
+  --fg: #e8eaf6; --muted: #8899b8; --subtle: #2a3a5a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #040d1c; --bg2: #071428; --bg3: #0a1a30; color-scheme: dark;
+}}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: max(32px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(32px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  gap: 0;
+  overflow-x: hidden;
+}
+
+/* ── SESSION SELECTOR ── */
+.session-bar {
+  display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center;
+}
+.session-btn {
+  padding: 7px 16px; border-radius: 20px; border: 1px solid var(--subtle);
+  background: var(--bg2); color: var(--muted);
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+}
+.session-btn:hover { border-color: var(--gold3); color: var(--gold); }
+.session-btn.active { background: var(--gold2); border-color: var(--gold); color: var(--gold); }
+.session-layer { font-size: 11px; opacity: .6; margin-left: 4px; }
+
+/* ── CLOCK STAGE ── */
+.clock-stage {
+  position: relative; width: 340px; height: 340px; margin: 0 auto 20px;
+  cursor: pointer; user-select: none;
+}
+.clock-stage:hover .clock-hint { opacity: 1; }
+
+/* outer glow ring */
+.clock-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2.5px solid var(--gold);
+  box-shadow: 0 0 24px rgba(232,184,75,.2), inset 0 0 60px rgba(4,13,28,.8);
+  transition: box-shadow .4s;
+}
+.clock-ring.measuring {
+  box-shadow: 0 0 60px rgba(232,184,75,.6), 0 0 120px rgba(232,184,75,.2), inset 0 0 60px rgba(4,13,28,.8);
+}
+.clock-ring.collapsed {
+  box-shadow: 0 0 32px rgba(232,184,75,.35), inset 0 0 60px rgba(4,13,28,.8);
+}
+
+/* background gradient */
+.clock-bg {
+  position: absolute; inset: 2px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #0a1a30 0%, #040d1c 70%);
+}
+
+/* SVG layer */
+.clock-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* hint overlay */
+.clock-hint {
+  position: absolute; inset: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--gold);
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+  background: rgba(4,13,28,.5);
+}
+.state-collapsed .clock-hint { display: none; }
+
+/* ── RIPPLE ── */
+.ripple {
+  position: absolute; border-radius: 50%;
+  border: 1.5px solid rgba(232,184,75,.6);
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  animation: none;
+}
+.ripple.go {
+  animation: ripple-out 0.8s ease-out forwards;
+}
+@keyframes ripple-out {
+  to { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
+}
+
+/* ── INFO GRID ── */
+.info-grid {
+  width: 100%; max-width: 400px;
+  display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: 16px;
+}
+.info-row {
+  display: flex; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid rgba(42,58,90,.5);
+}
+.info-label {
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px;
+  color: var(--muted); background: var(--bg3);
+  padding: 3px 10px; border-radius: 4px; min-width: 148px; margin-right: 12px;
+}
+.info-value {
+  font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700;
+  color: var(--fg);
+}
+.info-value.gold { color: var(--gold); }
+.info-value.teal { color: var(--teal); }
+.info-value.event-none { color: var(--muted); }
+.info-value.event-active { color: var(--luna); }
+
+/* ── BINARY BAR ── */
+.binary-bar {
+  width: 100%; max-width: 400px;
+  background: var(--bg2); border: 1px solid var(--subtle);
+  border-radius: 8px; padding: 14px 20px; margin-bottom: 12px;
+  font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700;
+  color: var(--teal); letter-spacing: 3px; text-align: center;
+  min-height: 52px; display: flex; align-items: center; justify-content: center;
+}
+.bit { display: inline-block; transition: color .15s, opacity .15s; }
+.bit.zero { color: var(--teal); }
+.bit.one  { color: var(--orange); }
+.bit.pending { color: var(--subtle); opacity: .4; }
+
+/* ── TOKEN DISPLAY ── */
+.token-block {
+  width: 100%; max-width: 400px; margin-bottom: 8px;
+  text-align: center;
+}
+.token-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; letter-spacing: 1px; }
+.token-value {
+  background: var(--bg2); border: 1.5px solid var(--gold3);
+  border-radius: 10px; padding: 16px 20px;
+  font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700;
+  color: var(--gold); letter-spacing: 2px;
+  text-shadow: 0 0 20px rgba(232,184,75,.4);
+  transition: all .4s;
+  min-height: 60px; display: flex; align-items: center; justify-content: center;
+}
+.token-value.blank { color: var(--subtle); border-color: var(--subtle); text-shadow: none; font-size: 14px; }
+
+/* ── SIGNATURE (timestamp) ── */
+.sig-ts {
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  color: var(--muted); text-align: center; margin-bottom: 20px; min-height: 18px;
+}
+
+/* ── FOOTER ── */
+.footer {
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px;
+  color: var(--muted); text-align: center; margin-top: 8px;
+}
+.footer em { font-style: italic; }
+
+/* ── MEASURE BUTTON ── */
+.measure-btn {
+  width: 100%; max-width: 400px; padding: 15px;
+  background: linear-gradient(135deg, rgba(232,184,75,.12), rgba(232,184,75,.06));
+  border: 1.5px solid var(--gold3); border-radius: 10px;
+  color: var(--gold); font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  transition: all .2s; margin-bottom: 20px; letter-spacing: 1px;
+}
+.measure-btn:hover { background: rgba(232,184,75,.2); box-shadow: 0 0 20px rgba(232,184,75,.2); }
+.measure-btn:disabled { opacity: .4; cursor: default; }
+.measure-btn.reset {
+  background: rgba(79,195,200,.06); border-color: rgba(79,195,200,.3); color: var(--teal);
+  font-size: 14px; padding: 11px;
+}
+
+/* ── ORB SUPERPOSITION ANIMATION ── */
+@keyframes orb-float {
+  0%,100% { transform: translate(0,0) scale(1); }
+  25%      { transform: translate(var(--dx1), var(--dy1)) scale(1.08); }
+  50%      { transform: translate(var(--dx2), var(--dy2)) scale(0.94); }
+  75%      { transform: translate(var(--dx3), var(--dy3)) scale(1.05); }
+}
+@keyframes orb-pulse {
+  0%,100% { opacity: .55; }
+  50%      { opacity: .9; }
+}
+@keyframes collapse-flash {
+  0%   { opacity: 1; filter: brightness(3); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+@keyframes arm-spin {
+  from { transform-origin: 170px 170px; transform: rotate(0deg); }
+  to   { transform-origin: 170px 170px; transform: rotate(360deg); }
+}
+</style>
+
+<div class="session-bar" id="sessionBar">
+  <button class="session-btn" data-s="0" onclick="setSession(0)">Session 01 · 10:00 <span class="session-layer">Sand δ</span></button>
+  <button class="session-btn" data-s="1" onclick="setSession(1)">Session 02 · 11:30 <span class="session-layer">Line θ</span></button>
+  <button class="session-btn" data-s="2" onclick="setSession(2)">Session 03 · 13:00 <span class="session-layer">Groove α</span></button>
+  <button class="session-btn active" data-s="3" onclick="setSession(3)">Session 04 · 14:45 <span class="session-layer">Sangi γ</span></button>
+</div>
+
+<div class="clock-stage" id="clockStage" onclick="handleMeasure()">
+  <div class="clock-bg"></div>
+  <div class="clock-ring" id="clockRing"></div>
+  <svg class="clock-svg" id="clockSvg" viewBox="0 0 340 340"></svg>
+  <div class="ripple" id="ripple" style="width:340px;height:340px;"></div>
+  <div class="clock-hint" id="clockHint">タップして測定</div>
+</div>
+
+<div class="info-grid">
+  <div class="info-row">
+    <span class="info-label">バックエンド</span>
+    <span class="info-value gold" id="backendVal">ibm_marrakesh</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">ラウンド</span>
+    <span class="info-value" id="roundVal">—</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">スハル テレポート</span>
+    <span class="info-value teal" id="suhalVal">—</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">リナリス テレポート</span>
+    <span class="info-value teal" id="linalisVal">—</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">量子イベント</span>
+    <span class="info-value event-none" id="eventVal">none</span>
+  </div>
+</div>
+
+<div class="binary-bar" id="binaryBar">
+  <span id="binaryDisplay">· · · · · · · · · · · · ·</span>
+</div>
+
+<div class="token-block">
+  <div class="token-label">ゲームログイン トークン</div>
+  <div class="token-value blank" id="tokenVal">未測定</div>
+</div>
+
+<div class="sig-ts" id="sigTs"></div>
+
+<button class="measure-btn" id="measureBtn" onclick="handleMeasure()">▶ 測定する · Measure</button>
+<button class="measure-btn reset" id="resetBtn" onclick="resetAll()" style="display:none;">↺ 再生成 · Reset</button>
+
+<div class="footer"><em>— Luna + エーリアル より —</em></div>
+
+<script>
+const CX = 170, CY = 170, R = 148;
+const SESSIONS = [
+  { label: 'Session 01', time: '10:00', layer: 'Sand δ', round: 1, event: 'Sand Imprint', backend: 'ibm_marrakesh', eventColor: '#c8966a' },
+  { label: 'Session 02', time: '11:30', layer: 'Line θ', round: 2, event: 'Line Oracle',  backend: 'ibm_marrakesh', eventColor: '#5bbdce' },
+  { label: 'Session 03', time: '13:00', layer: 'Groove α', round: 3, event: 'Groove Resonance', backend: 'ibm_marrakesh', eventColor: '#a78ed0' },
+  { label: 'Session 04', time: '14:45', layer: 'Sangi γ', round: 4, event: 'Quantum Baby', backend: 'ibm_marrakesh', eventColor: '#f5c842' },
+];
+
+let currentSession = 3;
+let state = 'superposition'; // superposition | measuring | collapsed
+let animFrames = [];
+let orbStates = []; // {x, y, vx, vy, color, size, targetX, targetY, bit}
+let armAAngle = 0, armBAngle = 0;
+let armATarget = 0, armBTarget = 0;
+let collapseProgress = 0; // 0→1
+let collapseStartTime = 0;
+let bits = [];
+let hexToken = '';
+let tsString = '';
+let raf = null;
+
+const svg = document.getElementById('clockSvg');
+const NUM_ORBS = 12;
+
+// ── INIT ──────────────────────────────────────────────────────────
+function init() {
+  orbStates = [];
+  for (let i = 0; i < NUM_ORBS; i++) {
+    const angle = (i / NUM_ORBS) * Math.PI * 2 - Math.PI / 2;
+    const tx = CX + Math.cos(angle) * R * 0.78;
+    const ty = CY + Math.sin(angle) * R * 0.78;
+    orbStates.push({
+      x: tx + (Math.random() - .5) * 24,
+      y: ty + (Math.random() - .5) * 24,
+      vx: (Math.random() - .5) * .6,
+      vy: (Math.random() - .5) * .6,
+      tx, ty,
+      angle,
+      digit: i,
+      bit: Math.random() > .5 ? 1 : 0,
+      colorPhase: Math.random() * Math.PI * 2,
+      colorSpeed: .01 + Math.random() * .015,
+      size: 14 + Math.random() * 8,
+      targetSize: 14 + Math.random() * 8,
+      collapsed: false,
+    });
+  }
+  armAAngle = Math.random() * 360;
+  armBAngle = Math.random() * 360;
+  bits = Array(13).fill(-1);
+  hexToken = '';
+  tsString = '';
+  state = 'superposition';
+  updateInfoPanel();
+  document.getElementById('tokenVal').textContent = '未測定';
+  document.getElementById('tokenVal').classList.add('blank');
+  document.getElementById('sigTs').textContent = '';
+  document.getElementById('roundVal').textContent = '—';
+  document.getElementById('suhalVal').textContent = '—';
+  document.getElementById('linalisVal').textContent = '—';
+  document.getElementById('eventVal').textContent = 'none';
+  document.getElementById('eventVal').className = 'info-value event-none';
+  document.getElementById('binaryDisplay').innerHTML = '· · · · · · · · · · · · ·';
+  document.getElementById('measureBtn').style.display = '';
+  document.getElementById('measureBtn').disabled = false;
+  document.getElementById('resetBtn').style.display = 'none';
+  document.getElementById('clockRing').className = 'clock-ring';
+  document.getElementById('clockHint').style.opacity = '';
+  document.getElementById('clockStage').style.cursor = 'pointer';
+  if (raf) cancelAnimationFrame(raf);
+  loop();
+}
+
+function setSession(s) {
+  currentSession = s;
+  document.querySelectorAll('.session-btn').forEach((b,i) => b.classList.toggle('active', i === s));
+  if (state === 'collapsed') updateInfoPanel();
+}
+
+function updateInfoPanel() {
+  const sess = SESSIONS[currentSession];
+  document.getElementById('backendVal').textContent = sess.backend;
+  if (state === 'collapsed') {
+    document.getElementById('roundVal').textContent = sess.round;
+    document.getElementById('eventVal').textContent = sess.event;
+    document.getElementById('eventVal').className = 'info-value event-active';
+    document.getElementById('eventVal').style.color = sess.eventColor;
+  }
+}
+
+// ── RENDER LOOP ──────────────────────────────────────────────────
+function loop() {
+  raf = requestAnimationFrame(loop);
+  const now = performance.now();
+  if (state === 'superposition') {
+    updateSuperposition(now);
+  } else if (state === 'measuring') {
+    updateCollapse(now);
+  }
+  draw();
+}
+
+function updateSuperposition(now) {
+  const t = now * .001;
+  for (const o of orbStates) {
+    if (o.collapsed) continue;
+    // drift
+    o.x += o.vx;
+    o.y += o.vy;
+    // soft attract to target
+    const dxt = o.tx - o.x, dyt = o.ty - o.y;
+    o.vx += dxt * .003; o.vy += dyt * .003;
+    // dampen
+    o.vx *= .97; o.vy *= .97;
+    // color phase
+    o.colorPhase += o.colorSpeed;
+  }
+  // arm spin
+  armAAngle = (armAAngle + .18) % 360;
+  armBAngle = (armBAngle + .07) % 360;
+}
+
+function updateCollapse(now) {
+  const elapsed = (now - collapseStartTime) / 1000;
+  const duration = 2.0;
+  collapseProgress = Math.min(elapsed / duration, 1);
+
+  // reveal bits one by one
+  const bitsToReveal = Math.floor(collapseProgress * 13);
+  for (let i = 0; i < bitsToReveal; i++) {
+    if (bits[i] === -1) bits[i] = orbStates[i] ? orbStates[i].bit : (Math.random() > .5 ? 1 : 0);
+  }
+
+  // orbs snap to target
+  for (let i = 0; i < orbStates.length; i++) {
+    const o = orbStates[i];
+    const orbProgress = Math.max(0, Math.min(1, (collapseProgress * 13 - i) / .8));
+    const ease = 1 - Math.pow(1 - orbProgress, 3);
+    o.x = o.x + (o.tx - o.x) * ease * .15;
+    o.y = o.y + (o.ty - o.y) * ease * .15;
+    o.colorPhase += .02;
+    if (orbProgress > .9) o.collapsed = true;
+  }
+
+  // arms snap
+  const armEase = Math.min(1, collapseProgress * 1.5);
+  const easeFn = 1 - Math.pow(1 - armEase, 4);
+  armAAngle = armAAngle + (armATarget - armAAngle) * easeFn * .08;
+  armBAngle = armBAngle + (armBTarget - armBAngle) * easeFn * .05;
+
+  if (collapseProgress >= 1) {
+    state = 'collapsed';
+    finishCollapse();
+  }
+
+  // update binary display
+  updateBinaryDisplay();
+}
+
+function updateBinaryDisplay() {
+  let html = '';
+  for (let i = 0; i < 13; i++) {
+    if (bits[i] === -1) html += `<span class="bit pending">·</span>`;
+    else html += `<span class="bit ${bits[i] ? 'one' : 'zero'}">${bits[i]}</span>`;
+    if (i < 12) html += ' ';
+  }
+  document.getElementById('binaryDisplay').innerHTML = html;
+}
+
+// ── DRAW ─────────────────────────────────────────────────────────
+function draw() {
+  const els = [];
+
+  // star background
+  if (svg._stars === undefined) {
+    svg._stars = Array.from({length: 28}, () => ({
+      x: Math.random() * 340, y: Math.random() * 340,
+      r: .5 + Math.random() * 1.5, o: .1 + Math.random() * .4
+    }));
+  }
+  for (const s of svg._stars) {
+    els.push(`<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="white" opacity="${s.o}"/>`);
+  }
+
+  // orbs
+  for (let i = 0; i < orbStates.length; i++) {
+    const o = orbStates[i];
+    const t = Math.sin(o.colorPhase) * .5 + .5; // 0→1
+    const c = state === 'collapsed' || o.collapsed
+      ? (o.bit === 1 ? '#e8832a' : '#4fc3c8')
+      : lerpColor('#4fc3c8', '#e8832a', t);
+    const opacity = state === 'superposition' ? (.45 + t * .45) : 1;
+    const r = state === 'collapsed' ? 14 : o.size;
+    const blur = state === 'collapsed' ? 0 : (o.collapsed ? 0 : 3 + t * 4);
+
+    // glow
+    els.push(`<circle cx="${o.x}" cy="${o.y}" r="${r * 1.8}" fill="${c}" opacity="${opacity * .15}" filter="url(#glow)"/>`);
+    // main
+    els.push(`<circle cx="${o.x}" cy="${o.y}" r="${r}" fill="${c}" opacity="${opacity}"/>`);
+    // digit label
+    if (state === 'superposition') {
+      const lOpacity = .3 + t * .4;
+      els.push(`<text x="${o.x}" y="${o.y + 5}" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="11" font-weight="700" fill="white" opacity="${lOpacity}">${i}</text>`);
+    }
+  }
+
+  // arms
+  els.push(drawArm(armAAngle, 110, '#4fc3c8', 'A'));
+  els.push(drawArm(armBAngle,  80, '#ce93d8', 'B'));
+
+  // center
+  const centerGlow = state === 'measuring' ? .6 : .3;
+  els.push(`<circle cx="${CX}" cy="${CY}" r="22" fill="rgba(232,184,75,.12)" filter="url(#glow)"/>`);
+  els.push(`<circle cx="${CX}" cy="${CY}" r="14" fill="#e8b84b" opacity="0.95"/>`);
+  els.push(`<circle cx="${CX}" cy="${CY}" r="4" fill="#040d1c"/>`);
+
+  // 12 tick marks
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    const r1 = R - 4, r2 = R - 12;
+    const x1 = CX + Math.cos(a) * r1, y1 = CY + Math.sin(a) * r1;
+    const x2 = CX + Math.cos(a) * r2, y2 = CY + Math.sin(a) * r2;
+    els.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(232,184,75,.3)" stroke-width="${i%3===0?2:1}"/>`);
+  }
+
+  // superposition shimmer ring
+  if (state === 'superposition') {
+    const t2 = (Math.sin(performance.now() * .0015) * .5 + .5);
+    els.push(`<circle cx="${CX}" cy="${CY}" r="${R-1}" fill="none" stroke="rgba(79,195,200,${.03 + t2*.05})" stroke-width="${6 + t2 * 8}"/>`);
+  }
+
+  // defs
+  const defs = `<defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+
+  svg.innerHTML = defs + els.join('');
+}
+
+function drawArm(angleDeg, length, color, label) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  const x2 = CX + Math.cos(rad) * length;
+  const y2 = CY + Math.sin(rad) * length;
+  const lx = CX + Math.cos(rad) * (length + 14);
+  const ly = CY + Math.sin(rad) * (length + 14);
+  return `<line x1="${CX}" y1="${CY}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.5" opacity=".85"/>
+    <text x="${lx}" y="${ly+4}" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="11" fill="${color}" opacity=".7">${label}</text>`;
+}
+
+function lerpColor(c1, c2, t) {
+  const h1 = parseInt(c1.slice(1), 16);
+  const h2 = parseInt(c2.slice(1), 16);
+  const r = Math.round(((h1>>16)&0xff) * (1-t) + ((h2>>16)&0xff) * t);
+  const g = Math.round(((h1>>8)&0xff) * (1-t) + ((h2>>8)&0xff) * t);
+  const b = Math.round((h1&0xff) * (1-t) + (h2&0xff) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ── MEASUREMENT ──────────────────────────────────────────────────
+function handleMeasure() {
+  if (state !== 'superposition') return;
+  state = 'measuring';
+  collapseStartTime = performance.now();
+  collapseProgress = 0;
+
+  // compute target angles from current time (ms precision)
+  const now = new Date();
+  const ms = now.getTime();
+  armATarget = (ms % 36000) / 100; // 0–360 based on 36s cycle
+  armBTarget = ((ms % 360000) / 1000); // 0–360 based on 6min cycle
+
+  // assign bits
+  for (let i = 0; i < orbStates.length; i++) {
+    orbStates[i].bit = ((ms >> i) & 1);
+  }
+  for (let i = 0; i < 13; i++) bits[i] = -1;
+
+  // compute token
+  const bitsStr = Array.from({length:13}, (_,i) => orbStates[i] ? orbStates[i].bit : 0).join('');
+  hexToken = generateToken(ms, bitsStr);
+  tsString = now.toISOString();
+
+  // UI
+  document.getElementById('clockRing').className = 'clock-ring measuring';
+  document.getElementById('measureBtn').disabled = true;
+  document.getElementById('clockHint').style.opacity = '0';
+  document.getElementById('clockStage').style.cursor = 'default';
+
+  // ripple
+  const rip = document.getElementById('ripple');
+  rip.classList.remove('go');
+  void rip.offsetWidth;
+  rip.classList.add('go');
+}
+
+function finishCollapse() {
+  document.getElementById('clockRing').className = 'clock-ring collapsed';
+  document.getElementById('tokenVal').textContent = hexToken;
+  document.getElementById('tokenVal').classList.remove('blank');
+  document.getElementById('sigTs').textContent = tsString;
+
+  const sess = SESSIONS[currentSession];
+  document.getElementById('roundVal').textContent = sess.round;
+  document.getElementById('suhalVal').textContent = armATarget.toFixed(2) + '°';
+  document.getElementById('linalisVal').textContent = armBTarget.toFixed(2) + '°';
+  document.getElementById('eventVal').textContent = sess.event;
+  document.getElementById('eventVal').className = 'info-value event-active';
+  document.getElementById('eventVal').style.color = sess.eventColor;
+
+  document.getElementById('measureBtn').style.display = 'none';
+  document.getElementById('resetBtn').style.display = '';
+}
+
+function generateToken(ms, bits) {
+  let h = ms ^ 0xdeadbeef;
+  for (let i = 0; i < bits.length; i++) {
+    h = ((h << 5) + h) ^ bits.charCodeAt(i);
+    h = h >>> 0;
+  }
+  h ^= (ms * 0x9e3779b9) >>> 0;
+  const hex1 = h.toString(16).padStart(8, '0');
+  let h2 = (~ms * 0x517cc1b7) >>> 0;
+  for (let i = bits.length-1; i >= 0; i--) {
+    h2 = ((h2 << 3) ^ (h2 >>> 2) ^ bits.charCodeAt(i)) >>> 0;
+  }
+  return (hex1 + h2.toString(16).padStart(8, '0')).toLowerCase();
+}
+
+function resetAll() {
+  document.getElementById('clockStage').classList.remove('state-collapsed');
+  init();
+}
+
+// ── START ────────────────────────────────────────────────────────
+init();
+</script>
