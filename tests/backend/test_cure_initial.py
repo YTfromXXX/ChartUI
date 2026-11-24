@@ -191,3 +191,112 @@ class TestQToSigEndpoints:
     def test_batch_max_4_triangles(self):
         payload = {"triangles": [{"label": str(i), "q": 0.5} for i in range(5)]}
         assert self.c.post("/api/v1/cure/meshmeta-to-sig", json=payload).status_code == 422
+
+
+class TestSigReceipt:
+    CERT = {
+        "certificate_id": "eec6d63c3dba2b2e",
+        "game_token":     "eec6d63c3dba2b2e",
+        "born_at":        "2026-11-18T19:47:43+00:00",
+        "backend":        "ibm_sherbrooke",
+        "bitstring":      "1010110011011",
+        "teleport_angle_a": 42.0,
+        "teleport_angle_b": 137.5,
+        "active_guides_a":  [],
+        "active_guides_b":  [],
+        "events":         {},
+        "qpu_seconds":    1.23,
+        "midwife":        "Luna + エーリアル",
+        "round":          1,
+    }
+
+    def setup_method(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from cure_initial import router
+        app = FastAPI(); app.include_router(router)
+        self.c = TestClient(app)
+
+    # ── make_sig_receipt unit tests ────────────────────────────────────────
+    def test_receipt_has_correct_structure(self):
+        from cure_oracle.birth import make_sig_receipt
+        r = make_sig_receipt(self.CERT, "CUBE-φ.618-ε.023", 0.023, 14.0)
+        assert r["version"] == "sig-receipt/1"
+        assert r["cert_id"] == self.CERT["certificate_id"]
+        assert r["sig"] == "CUBE-φ.618-ε.023"
+        assert r["merkle"]["hash"] == "keccak256"
+        assert r["merkle"]["sig_index"] == 3
+        assert r["merkle"]["claims"] == 8
+        assert r["merkle"]["root"].startswith("0x")
+        assert len(r["merkle"]["root"]) == 66  # 0x + 64 hex chars
+        assert r["proof"]["index"] == 3
+        assert all(p.startswith("0x") for p in r["proof"]["path"])
+        assert r["proof"]["leaf"].startswith("0x")
+
+    def test_proof_is_verifiable(self):
+        from cure_oracle.birth import (
+            make_sig_receipt, _receipt_leaf, _receipt_pair,
+            _claim_record, _SIG_INDEX,
+        )
+        r = make_sig_receipt(self.CERT, "CUBE-φ.618-ε.023", 0.023, 14.0)
+        # Reconstruct leaf from the SIG claim
+        rec = _claim_record(3, "CUBE-φ.618-ε.023")
+        leaf = _receipt_leaf(_SIG_INDEX, rec)
+        assert "0x" + leaf.hex() == r["proof"]["leaf"]
+        # Walk the proof path and arrive at root
+        h = leaf
+        for p_hex in r["proof"]["path"]:
+            p = bytes.fromhex(p_hex[2:])
+            h = _receipt_pair(h, p)
+        assert "0x" + h.hex() == r["merkle"]["root"]
+
+    def test_different_certs_produce_different_roots(self):
+        from cure_oracle.birth import make_sig_receipt
+        cert2 = {**self.CERT, "certificate_id": "aaaa0000bbbb1111"}
+        r1 = make_sig_receipt(self.CERT,  "CUBE-φ.618-ε.023", 0.023, 14.0)
+        r2 = make_sig_receipt(cert2,       "CUBE-φ.618-ε.023", 0.023, 14.0)
+        assert r1["merkle"]["root"] != r2["merkle"]["root"]
+
+    def test_no_signature_by_default(self):
+        from cure_oracle.birth import make_sig_receipt
+        r = make_sig_receipt(self.CERT, "TRI-π.785-ε.028", 0.028, 3.0)
+        assert "signature" not in r
+
+    # ── /api/v1/cure/sig-receipt endpoint ──────────────────────────────────
+    def test_endpoint_with_q(self):
+        payload = {"cert": self.CERT, "q": 0.9, "label": "A"}
+        res = self.c.post("/api/v1/cure/sig-receipt", json=payload)
+        assert res.status_code == 200
+        body = res.json()
+        assert body["sig"] == "CUBE-π.785-ε.019"
+        assert body["backend"] == "ibm_sherbrooke"
+        assert body["merkle"]["root"].startswith("0x")
+        assert len(body["proof"]["path"]) > 0
+
+    def test_endpoint_with_explicit_sig(self):
+        payload = {"cert": self.CERT, "sig": "OCT-φ.618-ε.023"}
+        res = self.c.post("/api/v1/cure/sig-receipt", json=payload)
+        assert res.status_code == 200
+        assert res.json()["sig"] == "OCT-φ.618-ε.023"
+
+    def test_endpoint_requires_q_or_sig(self):
+        res = self.c.post("/api/v1/cure/sig-receipt", json={"cert": self.CERT})
+        assert res.status_code == 422
+
+    # ── receipt_html_section ───────────────────────────────────────────────
+    def test_receipt_html_contains_key_elements(self):
+        from cure_oracle.birth import make_sig_receipt, receipt_html_section
+        r = make_sig_receipt(self.CERT, "CUBE-φ.618-ε.023", 0.023, 14.0)
+        html = receipt_html_section(r)
+        assert "Merkle証明付き SIG 領収証" in html
+        assert "CUBE-φ.618-ε.023" in html
+        assert r["merkle"]["root"] in html
+        assert r["proof"]["leaf"] in html
+
+    def test_certificate_html_includes_receipt_section(self):
+        from cure_oracle.birth import make_sig_receipt, certificate_html
+        r = make_sig_receipt(self.CERT, "CUBE-φ.618-ε.023", 0.023, 14.0)
+        html_with    = certificate_html(self.CERT, receipt=r)
+        html_without = certificate_html(self.CERT)
+        assert "Merkle証明付き SIG 領収証" in html_with
+        assert "Merkle証明付き SIG 領収証" not in html_without

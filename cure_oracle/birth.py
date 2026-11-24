@@ -8,6 +8,13 @@ Flow:
 
 The certificate is unique per QPU run:
   certificate_id = SHA-256( born_at + backend + bitstring )[:16]
+
+Merkle proof–backed SIG receipt
+---------------------------------
+``make_sig_receipt()`` commits 8 cert claims into a Keccak-256 Merkle tree
+(OpenZeppelin compatible, same double-hash leaf formula as meshmeta_v2.py).
+Claim index 3 is always the SIG code; its Merkle proof lets a third party
+verify the SIG inclusion without seeing the other 7 claims.
 """
 
 from __future__ import annotations
@@ -145,7 +152,225 @@ def _ring_svg(cert: dict, size: int = 320) -> str:
 
 # ── HTML birth certificate ────────────────────────────────────────────────────
 
-def certificate_html(cert: dict) -> str:
+# ── Merkle proof–backed SIG receipt ─────────────────────────────────────────
+
+SIG_RECEIPT_VERSION = "sig-receipt/1"
+_CLAIM_VALUE_LEN = 48   # bytes of value per 50-byte record (2-byte type prefix)
+_SIG_INDEX       = 3    # claim index that holds the SIG code
+
+_CLAIM_TYPES = {
+    "cert_id": 0, "born_at": 1, "backend": 2, "sig_code": 3,
+    "epsilon": 4, "mente":   5, "qpu_seconds": 6, "bitstring": 7,
+}
+
+
+def _claim_record(claim_type: int, value: str) -> bytes:
+    """50-byte record: uint16(claim_type, big-endian) || UTF-8 value, null-padded to 48 B."""
+    return claim_type.to_bytes(2, "big") + value.encode("utf-8")[:_CLAIM_VALUE_LEN].ljust(_CLAIM_VALUE_LEN, b"\x00")
+
+
+def _k256(data: bytes) -> bytes:
+    from meshmeta_v2 import keccak256
+    return keccak256(data)
+
+
+def _receipt_leaf(index: int, record: bytes) -> bytes:
+    """keccak256(keccak256(uint256(index) ‖ record50)) — identical to meshmeta_v2.leaf."""
+    return _k256(_k256(index.to_bytes(32, "big") + record))
+
+
+def _receipt_pair(a: bytes, b: bytes) -> bytes:
+    return _k256(a + b if a <= b else b + a)
+
+
+def _receipt_tree(claim_records: list[bytes]) -> list[list[bytes]]:
+    """Keccak-256 Merkle tree (OpenZeppelin sorted-pair nodes)."""
+    level = [_receipt_leaf(i, r) for i, r in enumerate(claim_records)]
+    levels = [level]
+    while len(level) > 1:
+        level = [
+            _receipt_pair(level[i], level[i + 1]) if i + 1 < len(level) else level[i]
+            for i in range(0, len(level), 2)
+        ]
+        levels.append(level)
+    return levels
+
+
+def _receipt_proof(levels: list[list[bytes]], index: int) -> list[bytes]:
+    out: list[bytes] = []
+    for level in levels[:-1]:
+        sib = index ^ 1
+        if sib < len(level):
+            out.append(level[sib])
+        index //= 2
+    return out
+
+
+def make_sig_receipt(
+    cert: dict,
+    sig_code: str,
+    epsilon: float,
+    mente: float,
+    private_key=None,
+) -> dict:
+    """Build a Merkle proof–backed SIG receipt from a birth certificate.
+
+    Commits 8 claims into a Keccak-256 Merkle tree (OpenZeppelin compatible).
+    Returns the receipt dict with ``merkle.root`` and ``proof.path`` for the
+    SIG code (claim index 3).  Pass an Ed25519 private key to attach a
+    signature over the canonical (RFC 8785 JCS) receipt body.
+    """
+    cid      = cert.get("certificate_id", "")
+    born_at  = cert.get("born_at", "")
+    backend  = cert.get("backend", "")
+    qpu_sec  = str(cert.get("qpu_seconds") or "0")
+    bitstring= cert.get("bitstring", "")
+
+    ordered_claims = [
+        (0, cid),
+        (1, born_at),
+        (2, backend),
+        (3, sig_code),
+        (4, str(epsilon)),
+        (5, f"{mente:.6f}"),
+        (6, qpu_sec),
+        (7, bitstring),
+    ]
+    recs   = [_claim_record(ct, val) for ct, val in ordered_claims]
+    levels = _receipt_tree(recs)
+    root   = levels[-1][0]
+    path   = _receipt_proof(levels, _SIG_INDEX)
+    sig_leaf = _receipt_leaf(_SIG_INDEX, recs[_SIG_INDEX])
+
+    receipt: dict = {
+        "version": SIG_RECEIPT_VERSION,
+        "cert_id": cid,
+        "born_at": born_at,
+        "backend": backend,
+        "sig":     sig_code,
+        "epsilon": epsilon,
+        "mente":   round(mente, 6),
+        "merkle": {
+            "hash":  "keccak256",
+            "leaf":  "keccak256(keccak256(uint256(index) ‖ uint16(type) ‖ value48))",
+            "node":  "sorted-pair",
+            "root":  "0x" + root.hex(),
+            "claims":    len(recs),
+            "sig_index": _SIG_INDEX,
+        },
+        "proof": {
+            "index": _SIG_INDEX,
+            "path":  ["0x" + p.hex() for p in path],
+            "leaf":  "0x" + sig_leaf.hex(),
+        },
+    }
+
+    if private_key is not None:
+        from cryptography.hazmat.primitives import serialization
+        from meshmeta_v2 import canonical
+        body = {k: v for k, v in receipt.items() if k != "signature"}
+        pub  = private_key.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        receipt["signature"] = {
+            "alg":    "Ed25519",
+            "signer": pub.hex(),
+            "sig":    private_key.sign(canonical(body)).hex(),
+        }
+
+    return receipt
+
+
+def receipt_html_section(receipt: dict) -> str:
+    """HTML fragment for embedding a Merkle receipt inside the birth certificate page."""
+    root  = receipt.get("merkle", {}).get("root", "")
+    path  = receipt.get("proof", {}).get("path", [])
+    leaf  = receipt.get("proof", {}).get("leaf", "")
+    sig   = _html.escape(receipt.get("sig", ""))
+    idx   = receipt.get("merkle", {}).get("sig_index", 3)
+    eps   = receipt.get("epsilon", "")
+    mente = receipt.get("mente", "")
+    ed    = receipt.get("signature", {})
+    ed_html = ""
+    if ed:
+        ed_html = f"""
+  <tr><td>Ed25519署名</td><td style="word-break:break-all;font-size:.7em">{_html.escape(ed.get('sig','')[:32])}…</td></tr>
+  <tr><td>公開鍵</td><td style="word-break:break-all;font-size:.7em">{_html.escape(ed.get('signer','')[:32])}…</td></tr>"""
+
+    path_steps = "".join(
+        f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        f'<span style="color:var(--dim);font-size:.7em;width:18px">h{i}</span>'
+        f'<span style="color:var(--cyan);font-size:.68em;word-break:break-all;flex:1">{_html.escape(p)}</span>'
+        f'</div>'
+        for i, p in enumerate(path)
+    )
+
+    proof_json    = _html.escape(json.dumps(receipt.get("proof", {}), ensure_ascii=False))
+    claims_count  = receipt.get("merkle", {}).get("claims", 8)
+
+    return f"""
+<div class="receipt-box" style="
+  margin-top:28px;border:1px solid #22b8c840;border-radius:10px;
+  padding:18px 16px;background:#0a0d30;text-align:left">
+  <div style="color:var(--gold);font-size:.75em;letter-spacing:.12em;margin-bottom:12px">
+    ◈ Merkle証明付き SIG 領収証
+  </div>
+
+  <div style="margin-bottom:14px">
+    <div style="font-size:.7em;color:var(--dim);margin-bottom:3px">SIG コード</div>
+    <div style="font-size:1em;color:var(--gold);font-weight:700;letter-spacing:.1em">{sig}</div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px">
+      <div style="font-size:.7em;color:var(--dim);margin-bottom:2px">ε ノイズ率</div>
+      <div style="font-size:.85em;color:var(--cyan)">{_html.escape(str(eps))}</div>
+    </div>
+    <div style="flex:1;min-width:120px">
+      <div style="font-size:.7em;color:var(--dim);margin-bottom:2px">MENTE値</div>
+      <div style="font-size:.85em;color:var(--orange)">{_html.escape(str(mente))}</div>
+    </div>
+    <div style="flex:1;min-width:120px">
+      <div style="font-size:.7em;color:var(--dim);margin-bottom:2px">クレームindex</div>
+      <div style="font-size:.85em;color:var(--luna)">{idx} / 7</div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:12px">
+    <div style="font-size:.7em;color:var(--dim);margin-bottom:3px">Merkle Root (Keccak-256)</div>
+    <div style="font-size:.68em;color:var(--cyan);word-break:break-all;border:1px solid #22b8c830;
+         padding:6px 8px;border-radius:5px;background:#060918">{_html.escape(root)}</div>
+  </div>
+
+  <div style="margin-bottom:12px">
+    <div style="font-size:.7em;color:var(--dim);margin-bottom:6px">証明パス (Proof Path)</div>
+    {path_steps if path_steps else '<div style="color:var(--dim);font-size:.7em">— 単一クレーム（パスなし） —</div>'}
+  </div>
+
+  <div style="margin-bottom:12px">
+    <div style="font-size:.7em;color:var(--dim);margin-bottom:3px">SIG リーフ</div>
+    <div style="font-size:.68em;color:var(--luna);word-break:break-all;border:1px solid #c084fc30;
+         padding:6px 8px;border-radius:5px;background:#060918">{_html.escape(leaf)}</div>
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:.75em;margin-bottom:10px">
+    <tr><td style="color:var(--dim);padding:3px 6px;border-bottom:1px solid #1e2060">ハッシュアルゴリズム</td>
+        <td style="padding:3px 6px;border-bottom:1px solid #1e2060">Keccak-256 (Ethereum)</td></tr>
+    <tr><td style="color:var(--dim);padding:3px 6px;border-bottom:1px solid #1e2060">ノード結合</td>
+        <td style="padding:3px 6px;border-bottom:1px solid #1e2060">sorted-pair (OpenZeppelin互換)</td></tr>
+    <tr><td style="color:var(--dim);padding:3px 6px;border-bottom:1px solid #1e2060">クレーム総数</td>
+        <td style="padding:3px 6px;border-bottom:1px solid #1e2060">{claims_count}</td></tr>{ed_html}
+  </table>
+
+  <details style="margin-top:8px">
+    <summary style="font-size:.7em;color:var(--dim);cursor:pointer">証明JSON (コピー用)</summary>
+    <pre style="font-size:.62em;color:var(--cyan);overflow-x:auto;padding:8px;background:#060918;
+         border-radius:5px;margin-top:6px;white-space:pre-wrap;word-break:break-all">{proof_json}</pre>
+  </details>
+</div>"""
+
+
+def certificate_html(cert: dict, receipt: dict | None = None) -> str:
     """Full HTML birth certificate page — cobalt blue, gold cap, Niki de Saint Phalle style."""
     cid     = cert.get("certificate_id", "")
     born_at = cert.get("born_at", "")
@@ -224,6 +449,7 @@ def certificate_html(cert: dict) -> str:
     このトークンは量子測定の一意な指紋です。<br>
     cure-oracle · 誕生証明書は投資助言ではありません。
   </div>
+  {receipt_html_section(receipt) if receipt else ""}
 </div>
 </body>
 </html>"""

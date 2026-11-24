@@ -274,6 +274,95 @@ def q_to_sig(req: QToSigRequest) -> SIGCode:
     return SIGCode(**_q_to_sig_parts(req.q, req.label))
 
 
+class SigReceiptRequest(BaseModel):
+    """Generate a Merkle proof–backed SIG receipt from a birth certificate + q value."""
+
+    cert: dict = Field(description="Birth certificate dict (from cure_oracle.birth.make_certificate or the JSON file)")
+    q: float | None = Field(None, ge=0.0, le=1.0, description="Triangle quality q=2r/R — used to derive sig/epsilon/mente when sig is not supplied")
+    sig: str | None = Field(None, description="Explicit SIG code (e.g. CUBE-φ.618-ε.019); overrides q")
+    label: str | None = Field(None, description="Meshmeta rank label A/B/C/D attached to this q value")
+
+
+class MerkleInfo(BaseModel):
+    hash: str
+    leaf: str
+    node: str
+    root: str
+    claims: int
+    sig_index: int
+
+
+class ProofInfo(BaseModel):
+    index: int
+    path: list[str]
+    leaf: str
+
+
+class SigReceiptResponse(BaseModel):
+    version: str
+    cert_id: str
+    born_at: str
+    backend: str
+    sig: str
+    epsilon: float
+    mente: float
+    merkle: MerkleInfo
+    proof: ProofInfo
+    signature: dict | None = None
+
+
+@router.post("/api/v1/cure/sig-receipt", response_model=SigReceiptResponse)
+def sig_receipt(req: SigReceiptRequest) -> SigReceiptResponse:
+    """Attach a Merkle proof–backed SIG receipt to a birth certificate.
+
+    Provide either ``q`` (derives the SIG from meshmeta quality score) or an
+    explicit ``sig`` string.  Returns the receipt with the Keccak-256 Merkle
+    root over all 8 cert claims and a proof path for the SIG code (claim
+    index 3), compatible with OpenZeppelin MerkleProof.verify.
+    """
+    from cure_oracle.birth import make_sig_receipt
+
+    if req.sig:
+        # Explicit SIG: parse epsilon from the code (e.g. "CUBE-φ.618-ε.023")
+        try:
+            eps_str = req.sig.split("-")[-1].replace("ε.", "0.")
+            epsilon = float(eps_str)
+        except (IndexError, ValueError):
+            raise HTTPException(status_code=422, detail="cannot parse epsilon from sig string")
+        # Derive mente from shape_pts (last segment maps to shape) and epsilon
+        try:
+            shape = req.sig.split("-")[0]
+            pts_map = {"LINE": 2, "TRI": 3, "TET": 4, "PYR": 5, "OCT": 6, "CUBE": 7}
+            pts = pts_map.get(shape, 4)
+        except Exception:
+            pts = 4
+        q_eff = 1.0 - epsilon * 10  # rough q from epsilon for mente
+        mente = round(q_eff * pts * _MENTE_CONST, 6)
+        sig_code = req.sig
+    elif req.q is not None:
+        parts = _q_to_sig_parts(req.q, req.label)
+        sig_code = parts["sig"]
+        epsilon  = parts["epsilon"]
+        mente    = parts["mente"]
+    else:
+        raise HTTPException(status_code=422, detail="supply either q or sig")
+
+    receipt = make_sig_receipt(req.cert, sig_code, epsilon, mente)
+
+    return SigReceiptResponse(
+        version=receipt["version"],
+        cert_id=receipt["cert_id"],
+        born_at=receipt["born_at"],
+        backend=receipt["backend"],
+        sig=receipt["sig"],
+        epsilon=receipt["epsilon"],
+        mente=receipt["mente"],
+        merkle=MerkleInfo(**receipt["merkle"]),
+        proof=ProofInfo(**receipt["proof"]),
+        signature=receipt.get("signature"),
+    )
+
+
 @router.post("/api/v1/cure/meshmeta-to-sig", response_model=MeshBatchResponse)
 def meshmeta_to_sig(req: MeshBatchRequest) -> MeshBatchResponse:
     """Map a meshmeta Top_Triangles list (1–4 entries, labels A–D) to SIG codes.
