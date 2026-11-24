@@ -141,3 +141,152 @@ def initial_analysis(signals: InitialSignals) -> InitialAnalysis:
     if not signals.consent:
         raise HTTPException(status_code=422, detail="consent is required")
     return analyse(signals)
+
+
+# ══ meshmeta q → SIG dual-encryption conversion ════════════════════════════════
+# q = mesh_meta.triangle_quality() = 2r/R (normalised radius ratio, 0 degenerate → 1 equilateral)
+#
+# Shape bands (6 equal bands of width 1/6):
+#   q ∈ [5/6, 1]   → CUBE  (7 pts, highest quality)
+#   q ∈ [4/6, 5/6) → OCT   (6 pts)
+#   q ∈ [3/6, 4/6) → PYR   (5 pts)
+#   q ∈ [2/6, 3/6) → TET   (4 pts)
+#   q ∈ [1/6, 2/6) → TRI   (3 pts)
+#   q ∈ [0,   1/6) → LINE  (2 pts, near-degenerate)
+#
+# Backend bands (high q = low noise = best backend):
+#   q ∈ [0.75, 1]   → ibm_marrakesh  ε=0.019  S4 広目天⟐  π.785
+#   q ∈ [0.50, 0.75)→ ibm_sherbrooke ε=0.023  S1 多聞天♔  φ.618
+#   q ∈ [0.25, 0.50)→ ibm_kyoto      ε=0.028  S3 持国天♘  π.785
+#   q ∈ [0,    0.25)→ ibm_brisbane   ε=0.031  S2 増長天♕  √.414
+#
+# MENTE constant: φ × √2 = 1.618 × 1.41421… ≈ 2.2882  (BOX geometry convergence)
+
+_SHAPE_BANDS: tuple[tuple[float, str, int], ...] = (
+    (5 / 6, "CUBE", 7),
+    (4 / 6, "OCT",  6),
+    (3 / 6, "PYR",  5),
+    (2 / 6, "TET",  4),
+    (1 / 6, "TRI",  3),
+    (0.0,   "LINE", 2),
+)
+
+_BACKEND_BANDS: tuple[tuple[float, str], ...] = (
+    (0.75, "ibm_marrakesh"),
+    (0.50, "ibm_sherbrooke"),
+    (0.25, "ibm_kyoto"),
+    (0.0,  "ibm_brisbane"),
+)
+
+_BACKEND_META: dict[str, dict] = {
+    "ibm_sherbrooke": {"eps": 0.023, "theta_disp": "φ.618", "theta_val": 1.618, "slot": "S1", "lap": "LAP8",  "qubits": 27},
+    "ibm_brisbane":   {"eps": 0.031, "theta_disp": "√.414", "theta_val": 1.414, "slot": "S2", "lap": "LAP9",  "qubits": 127},
+    "ibm_kyoto":      {"eps": 0.028, "theta_disp": "π.785", "theta_val": 0.785, "slot": "S3", "lap": "LAP10", "qubits": 27},
+    "ibm_marrakesh":  {"eps": 0.019, "theta_disp": "π.785", "theta_val": 0.785, "slot": "S4", "lap": "LAP11", "qubits": 156},
+}
+
+_MENTE_CONST: float = 1.618 * math.sqrt(2)  # φ × √2 ≈ 2.2882
+
+
+def _q_to_sig_parts(q: float, label: str | None = None) -> dict:
+    """Core conversion: q ∈ [0,1] → shape / backend / epsilon / theta / SIG string / mente."""
+    q = max(0.0, min(1.0, float(q)))
+    shape, pts = "LINE", 2
+    for threshold, s, p in _SHAPE_BANDS:
+        if q >= threshold:
+            shape, pts = s, p
+            break
+    backend = "ibm_brisbane"
+    for threshold, b in _BACKEND_BANDS:
+        if q >= threshold:
+            backend = b
+            break
+    meta = _BACKEND_META[backend]
+    eps_disp = f"ε.{int(meta['eps'] * 1000):03d}"
+    sig = f"{shape}-{meta['theta_disp']}-{eps_disp}"
+    mente = round(q * pts * _MENTE_CONST, 6)
+    return {
+        "q": round(q, 9),
+        "label": label,
+        "shape": shape,
+        "shape_pts": pts,
+        "backend": backend,
+        "epsilon": meta["eps"],
+        "theta": meta["theta_val"],
+        "theta_disp": meta["theta_disp"],
+        "sig": sig,
+        "slot": meta["slot"],
+        "lap": meta["lap"],
+        "qubits": meta["qubits"],
+        "mente": mente,
+    }
+
+
+class QToSigRequest(BaseModel):
+    """Single meshmeta triangle quality value."""
+
+    q: float = Field(..., ge=0.0, le=1.0, description="Triangle quality q=2r/R from mesh_meta.triangle_quality()")
+    label: str | None = Field(None, description="Rank label from meshmeta Top_Triangles (A/B/C/D)")
+
+
+class SIGCode(BaseModel):
+    q: float
+    label: str | None
+    shape: str = Field(description="SIG shape code: LINE TRI TET PYR OCT CUBE")
+    shape_pts: int = Field(description="Canonical point count for the shape (2–7)")
+    backend: str = Field(description="IBM Quantum backend id")
+    epsilon: float = Field(description="Backend gate error rate ε")
+    theta: float = Field(description="SIG angular parameter θ (1.618 / 1.414 / 0.785)")
+    theta_disp: str = Field(description="θ display code: φ.618 / √.414 / π.785")
+    sig: str = Field(description="SIG dual-encryption code e.g. CUBE-φ.618-ε.019")
+    slot: str = Field(description="四天王 slot: S1 多聞天 / S2 増長天 / S3 持国天 / S4 広目天")
+    lap: str = Field(description="IBM Quantum campaign lap identifier")
+    qubits: int = Field(description="Backend qubit count")
+    mente: float = Field(description="MENTE value: q × shape_pts × (φ×√2)")
+
+
+class MeshTriangle(BaseModel):
+    label: str = Field(description="Rank label A/B/C/D from meshmeta Top_Triangles")
+    q: float = Field(..., ge=0.0, le=1.0, description="Triangle quality score")
+
+
+class MeshBatchRequest(BaseModel):
+    """Up to four ranked triangles from a meshmeta Top_Triangles output."""
+
+    triangles: list[MeshTriangle] = Field(..., min_length=1, max_length=4)
+
+
+class MeshBatchResponse(BaseModel):
+    sigs: list[SIGCode]
+    mente_total: float = Field(description="Sum of all mente values across the batch")
+    mente_achieved: bool = Field(description="True when mente_total ≥ φ×√2 ≈ 2.2882 (四天王全顕現)")
+    mente_const: float = Field(description="Reference constant φ×√2")
+
+
+@router.post("/api/v1/cure/q-to-sig", response_model=SIGCode)
+def q_to_sig(req: QToSigRequest) -> SIGCode:
+    """Map a single meshmeta triangle quality score q to its SIG dual-encryption code.
+
+    q is the normalised radius ratio 2r/R returned by ``mesh_meta.triangle_quality()``.
+    Returns the SIG shape code, the IBM Quantum backend, the ε noise rate, the θ parameter,
+    and a MENTE value. Stateless — no data is stored.
+    """
+    return SIGCode(**_q_to_sig_parts(req.q, req.label))
+
+
+@router.post("/api/v1/cure/meshmeta-to-sig", response_model=MeshBatchResponse)
+def meshmeta_to_sig(req: MeshBatchRequest) -> MeshBatchResponse:
+    """Map a meshmeta Top_Triangles list (1–4 entries, labels A–D) to SIG codes.
+
+    Pass the ranked triangles from a ``.meshmeta`` JSON's ``Top_Triangles`` array.
+    Returns one SIGCode per triangle plus an aggregate MENTE score; when
+    ``mente_achieved`` is True the BOX geometry has converged (四天王全顕現).
+    """
+    sigs = [SIGCode(**_q_to_sig_parts(t.q, t.label)) for t in req.triangles]
+    total = round(sum(s.mente for s in sigs), 6)
+    return MeshBatchResponse(
+        sigs=sigs,
+        mente_total=total,
+        mente_achieved=total >= _MENTE_CONST,
+        mente_const=round(_MENTE_CONST, 6),
+    )
