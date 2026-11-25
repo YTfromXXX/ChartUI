@@ -17,7 +17,7 @@ __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
     "birth", "bmi", "space_sensor", "verify", "resonance",
-    "round_circuit", "cli",
+    "round_circuit", "cli", "ibm_setup", "mail",
     # resonance
     "run", "circuit", "best_cut", "cut_value", "bits_of",
     "export_qasm", "ideal", "tune", "load",
@@ -27,6 +27,10 @@ __all__ = [
     "EVENT_NAMES", "GUIDES", "N_EVENT", "N_GUIDE", "N_TOTAL",
     # cli
     "main",
+    # ibm_setup
+    "credentials_status", "verify_instance",
+    # mail
+    "deliver",
     # birth
     "make_certificate", "save_certificate", "load_certificate",
     "make_sig_receipt", "certificate_html", "receipt_html_section",
@@ -106,11 +110,16 @@ _LAZY_MODULES = {
     "birth":          "cure_oracle.birth",
     "bmi":            "cure_oracle.bmi",
     "cli":            "cure_oracle.cli",
+    "ibm_setup":      "cure_oracle.ibm_setup",
+    "mail":           "cure_oracle.mail",
     "resonance":      "cure_oracle.resonance",
     "round_circuit":  "cure_oracle.round_circuit",
     "space_sensor":   "cure_oracle.space_sensor",
     "verify":         "cure_oracle.verify",
 }
+
+_IBM_SETUP_EXPORTS = frozenset({"credentials_status", "verify_instance"})
+_MAIL_EXPORTS      = frozenset({"deliver"})
 
 _ROUND_CIRCUIT_EXPORTS = frozenset({
     "round_circuit", "guide_angles", "spiral_preview",
@@ -151,5 +160,11 @@ def __getattr__(name: str):
         return getattr(mod, name)
     if name in _CLI_EXPORTS:
         mod = importlib.import_module("cure_oracle.cli")
+        return getattr(mod, name)
+    if name in _IBM_SETUP_EXPORTS:
+        mod = importlib.import_module("cure_oracle.ibm_setup")
+        return getattr(mod, name)
+    if name in _MAIL_EXPORTS:
+        mod = importlib.import_module("cure_oracle.mail")
         return getattr(mod, name)
     raise AttributeError(name)
