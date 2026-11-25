@@ -14,8 +14,27 @@ import importlib
 
 __version__ = "0.3.2"
 __all__ = [
+    # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
     "bmi", "space_sensor", "verify",
+    # knot_crossings
+    "find_crossings", "writhe", "segment_intersection",
+    # mesh_meta
+    "build_meshmeta", "dumps_meshmeta", "sign_meshmeta", "verify_meshmeta",
+    "read_stl", "write_stl", "parse_data", "format_data",
+    # verify
+    "VerifyResult", "KNOWN_VERSIONS", "SIG_RECEIPT_VERSION",
+    "verify_receipt", "verify_sig_code", "verify_proof", "verify_disclosed",
+    # cure_initial (lazy via __getattr__)
+    "initial_analysis", "analyse", "q_to_sig", "meshmeta_to_sig",
+    "sig_receipt", "scores_of",
+    "InitialAnalysis", "InitialSignals", "SIGCode", "Grade",
+    "SigReceiptRequest", "SigReceiptResponse",
+    "QToSigRequest", "MerkleInfo", "ProofInfo",
+    "MeshBatchRequest", "MeshBatchResponse", "MeshTriangle",
+    "SyncDirective", "SplitPart",
+    "SCHEMA_VERSION", "GRADE_INFO", "COMPONENT_OF", "SPLIT", "SPLIT_TOTAL",
+    "router",
     "__version__",
 ]
 
@@ -58,8 +77,28 @@ _LAZY_MODULES = {
     "verify":         "cure_oracle.verify",
 }
 
+# cure_initial names exported lazily (FastAPI optional dependency)
+_CURE_INITIAL_EXPORTS = frozenset({
+    # core functions
+    "initial_analysis", "analyse", "q_to_sig", "meshmeta_to_sig",
+    "sig_receipt", "scores_of",
+    # Pydantic models / request-response
+    "InitialAnalysis", "InitialSignals", "SIGCode", "Grade",
+    "SigReceiptRequest", "SigReceiptResponse",
+    "QToSigRequest", "MerkleInfo", "ProofInfo",
+    "MeshBatchRequest", "MeshBatchResponse", "MeshTriangle",
+    "SyncDirective", "SplitPart",
+    # constants
+    "SCHEMA_VERSION", "GRADE_INFO", "COMPONENT_OF", "SPLIT", "SPLIT_TOTAL",
+    # FastAPI router (optional)
+    "router",
+})
+
 
 def __getattr__(name: str):
     if name in _LAZY_MODULES:
         return importlib.import_module(_LAZY_MODULES[name])
+    if name in _CURE_INITIAL_EXPORTS:
+        mod = importlib.import_module("cure_initial")
+        return getattr(mod, name)
     raise AttributeError(name)
