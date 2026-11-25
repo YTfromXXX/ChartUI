@@ -16,7 +16,11 @@ __version__ = "0.3.2"
 __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
-    "bmi", "space_sensor", "verify", "birth",
+    "birth", "bmi", "space_sensor", "verify", "resonance",
+    # resonance
+    "run", "circuit", "best_cut", "cut_value", "bits_of",
+    "export_qasm", "ideal", "tune", "load",
+    "CONFIRM",
     # birth
     "make_certificate", "save_certificate", "load_certificate",
     "make_sig_receipt", "certificate_html", "receipt_html_section",
@@ -41,6 +45,12 @@ __all__ = [
     "router",
     "__version__",
 ]
+
+# resonance public API (Qiskit optional dependency — lazy)
+_RESONANCE_EXPORTS = frozenset({
+    "run", "circuit", "best_cut", "cut_value", "bits_of",
+    "export_qasm", "ideal", "tune", "load", "CONFIRM",
+})
 
 # birth public API
 from cure_oracle.birth import (  # noqa: E402
@@ -89,6 +99,7 @@ _LAZY_MODULES = {
     "cure_initial":   "cure_initial",
     "birth":          "cure_oracle.birth",
     "bmi":            "cure_oracle.bmi",
+    "resonance":      "cure_oracle.resonance",
     "space_sensor":   "cure_oracle.space_sensor",
     "verify":         "cure_oracle.verify",
 }
@@ -116,5 +127,8 @@ def __getattr__(name: str):
         return importlib.import_module(_LAZY_MODULES[name])
     if name in _CURE_INITIAL_EXPORTS:
         mod = importlib.import_module("cure_initial")
+        return getattr(mod, name)
+    if name in _RESONANCE_EXPORTS:
+        mod = importlib.import_module("cure_oracle.resonance")
         return getattr(mod, name)
     raise AttributeError(name)
