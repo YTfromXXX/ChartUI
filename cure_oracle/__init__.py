@@ -16,7 +16,11 @@ __version__ = "0.3.2"
 __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
-    "bmi", "space_sensor", "verify",
+    "bmi", "space_sensor", "verify", "birth",
+    # birth
+    "make_certificate", "save_certificate", "load_certificate",
+    "make_sig_receipt", "certificate_html", "receipt_html_section",
+    "CERT_FILENAME",
     # knot_crossings
     "find_crossings", "writhe", "segment_intersection",
     # mesh_meta
@@ -37,6 +41,17 @@ __all__ = [
     "router",
     "__version__",
 ]
+
+# birth public API
+from cure_oracle.birth import (  # noqa: E402
+    make_certificate,
+    save_certificate,
+    load_certificate,
+    make_sig_receipt,
+    certificate_html,
+    receipt_html_section,
+    CERT_FILENAME,
+)
 
 # knot_crossings public API
 from knot_crossings import (  # noqa: E402
@@ -72,6 +87,7 @@ _LAZY_MODULES = {
     "knot_crossings": "knot_crossings",
     "mesh_meta":      "mesh_meta",
     "cure_initial":   "cure_initial",
+    "birth":          "cure_oracle.birth",
     "bmi":            "cure_oracle.bmi",
     "space_sensor":   "cure_oracle.space_sensor",
     "verify":         "cure_oracle.verify",
