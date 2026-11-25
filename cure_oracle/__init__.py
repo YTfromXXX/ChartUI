@@ -19,7 +19,26 @@ __all__ = [
     "__version__",
 ]
 
-# verify public API re-exported at package level
+# knot_crossings public API
+from knot_crossings import (  # noqa: E402
+    find_crossings,
+    writhe,
+    segment_intersection,
+)
+
+# mesh_meta public API
+from mesh_meta import (  # noqa: E402
+    build_meshmeta,
+    dumps_meshmeta,
+    sign_meshmeta,
+    verify_meshmeta,
+    read_stl,
+    write_stl,
+    parse_data,
+    format_data,
+)
+
+# verify public API
 from cure_oracle.verify import (  # noqa: E402
     VerifyResult,
     KNOWN_VERSIONS,
@@ -30,8 +49,17 @@ from cure_oracle.verify import (  # noqa: E402
     verify_disclosed,
 )
 
+_LAZY_MODULES = {
+    "knot_crossings": "knot_crossings",
+    "mesh_meta":      "mesh_meta",
+    "cure_initial":   "cure_initial",
+    "bmi":            "cure_oracle.bmi",
+    "space_sensor":   "cure_oracle.space_sensor",
+    "verify":         "cure_oracle.verify",
+}
 
-def __getattr__(name: str):  # lazy: cure_initial needs FastAPI, the others need nothing
-    if name in ("knot_crossings", "mesh_meta", "cure_initial", "bmi", "space_sensor", "verify"):
-        return importlib.import_module(f"cure_oracle.{name}" if name in ("bmi", "space_sensor", "verify") else name)
+
+def __getattr__(name: str):
+    if name in _LAZY_MODULES:
+        return importlib.import_module(_LAZY_MODULES[name])
     raise AttributeError(name)
