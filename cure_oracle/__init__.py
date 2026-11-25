@@ -17,10 +17,16 @@ __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
     "birth", "bmi", "space_sensor", "verify", "resonance",
+    "round_circuit", "cli",
     # resonance
     "run", "circuit", "best_cut", "cut_value", "bits_of",
     "export_qasm", "ideal", "tune", "load",
     "CONFIRM",
+    # round_circuit
+    "round_circuit", "guide_angles", "spiral_preview",
+    "EVENT_NAMES", "GUIDES", "N_EVENT", "N_GUIDE", "N_TOTAL",
+    # cli
+    "main",
     # birth
     "make_certificate", "save_certificate", "load_certificate",
     "make_sig_receipt", "certificate_html", "receipt_html_section",
@@ -99,10 +105,19 @@ _LAZY_MODULES = {
     "cure_initial":   "cure_initial",
     "birth":          "cure_oracle.birth",
     "bmi":            "cure_oracle.bmi",
+    "cli":            "cure_oracle.cli",
     "resonance":      "cure_oracle.resonance",
+    "round_circuit":  "cure_oracle.round_circuit",
     "space_sensor":   "cure_oracle.space_sensor",
     "verify":         "cure_oracle.verify",
 }
+
+_ROUND_CIRCUIT_EXPORTS = frozenset({
+    "round_circuit", "guide_angles", "spiral_preview",
+    "EVENT_NAMES", "GUIDES", "N_EVENT", "N_GUIDE", "N_TOTAL",
+})
+
+_CLI_EXPORTS = frozenset({"main"})
 
 # cure_initial names exported lazily (FastAPI optional dependency)
 _CURE_INITIAL_EXPORTS = frozenset({
@@ -130,5 +145,11 @@ def __getattr__(name: str):
         return getattr(mod, name)
     if name in _RESONANCE_EXPORTS:
         mod = importlib.import_module("cure_oracle.resonance")
+        return getattr(mod, name)
+    if name in _ROUND_CIRCUIT_EXPORTS:
+        mod = importlib.import_module("cure_oracle.round_circuit")
+        return getattr(mod, name)
+    if name in _CLI_EXPORTS:
+        mod = importlib.import_module("cure_oracle.cli")
         return getattr(mod, name)
     raise AttributeError(name)
