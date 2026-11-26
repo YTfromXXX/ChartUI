@@ -25,10 +25,12 @@ except ImportError:
     sys.exit(1)
 
 from cure_oracle.app_state import (
-    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT,
+    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
 )
 
 # ── design tokens ─────────────────────────────────────────────────────────────
+
+_MENTE_CONST = 1.618 * (2 ** 0.5)   # φ×√2 ≈ 2.2882
 
 _BG      = "#0a0a1a"
 _SURFACE = "#111128"
@@ -73,8 +75,8 @@ def _status_dot(passed: bool | None) -> ft.Container:
 # ── nav rail ──────────────────────────────────────────────────────────────────
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
-    idx = {HOME: 0, BENCHMARK: 1, ROUND: 2, BIRTH_CERT: 3}
-    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT]
+    idx = {HOME: 0, BENCHMARK: 1, ROUND: 2, BIRTH_CERT: 3, MENTE: 4}
+    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE]
 
     def on_change(e: ft.ControlEvent) -> None:
         state.navigate(views[int(e.data)])
@@ -104,6 +106,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.WORKSPACE_PREMIUM_OUTLINED,
                 selected_icon=ft.Icons.WORKSPACE_PREMIUM,
                 label="証明書",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.AUTO_AWESOME_OUTLINED,
+                selected_icon=ft.Icons.AUTO_AWESOME,
+                label="MENTE",
             ),
         ],
         on_change=on_change,
@@ -154,6 +161,26 @@ def _home_view(state: AppState) -> ft.Column:
     else:
         cert_summary = _value("誕生証明書なし", color=_DIM)
 
+    # MENTE summary
+    mn = state.mente
+    mente_summary: ft.Control
+    if mn.check_result:
+        achieved = mn.mente_achieved
+        icon = "⭐" if achieved else "◎"
+        mente_summary = ft.Column([
+            ft.Row([
+                _value(f"{icon} {mn.mente_total:.4f}", color=_GOLD if achieved else _DIM),
+                ft.Container(expand=True),
+                _label("/ MENTE"),
+            ], spacing=4),
+            _label("四天王全顕現" if achieved else
+                   f"不足: {', '.join(mn.missing_kings)}"),
+        ], spacing=4)
+    elif mn.error:
+        mente_summary = _value(mn.error, color=_RED)
+    else:
+        mente_summary = _value("未チェック", color=_DIM)
+
     return ft.Column([
         ft.Row([
             ft.Icon(ft.Icons.FAVORITE, color=_PURPLE, size=28),
@@ -176,6 +203,11 @@ def _home_view(state: AppState) -> ft.Column:
                 _title("QPU 誕生証明書", size=14, color=_GOLD),
                 ft.Container(height=6),
                 cert_summary,
+            ], spacing=4))),
+            ft.Expanded(_card(ft.Column([
+                _title("MENTE 四天王", size=14, color=_GOLD),
+                ft.Container(height=6),
+                mente_summary,
             ], spacing=4))),
         ], spacing=12),
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
@@ -462,6 +494,250 @@ def _cert_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── MENTE screen ─────────────────────────────────────────────────────────────
+
+_SLOT_LABELS = [
+    ("q ≥ 0.75", "S4", "広目天"),
+    ("0.50 ≤ q < 0.75", "S1", "多聞天"),
+    ("0.25 ≤ q < 0.50", "S3", "持国天"),
+    ("q < 0.25", "S2", "増長天"),
+]
+
+
+def _q_to_slot(q: float) -> tuple[str, str]:
+    if q >= 0.75:
+        return "S4", "広目天"
+    if q >= 0.50:
+        return "S1", "多聞天"
+    if q >= 0.25:
+        return "S3", "持国天"
+    return "S2", "増長天"
+
+
+def _mente_view(state: AppState, page: ft.Page) -> ft.Column:
+    ms = state.mente
+
+    # ── Triangle input rows ────────────────────────────────────────────────
+    labels = ["A", "B", "C", "D"]
+    q_values: list[float] = [0.80, 0.60, 0.35, 0.10]  # defaults → 四天王全顕現
+
+    slot_texts: list[ft.Text] = []
+    sliders: list[ft.Slider] = []
+    q_disp: list[ft.Text] = []
+
+    for i, lbl in enumerate(labels):
+        slot, king = _q_to_slot(q_values[i])
+        slot_texts.append(ft.Text(
+            f"{slot} {king}", size=12, color=_GOLD, weight=ft.FontWeight.BOLD,
+        ))
+        q_disp.append(ft.Text(f"q = {q_values[i]:.2f}", size=12, color=_WHITE))
+        sliders.append(ft.Slider(
+            value=q_values[i], min=0.0, max=1.0, divisions=100,
+            active_color=_PURPLE, inactive_color=_BORDER,
+            expand=True,
+        ))
+
+    def _make_slider_handler(idx: int):
+        def on_change(e: ft.ControlEvent) -> None:
+            q_values[idx] = round(float(e.control.value), 2)
+            q_disp[idx].value = f"q = {q_values[idx]:.2f}"
+            slot, king = _q_to_slot(q_values[idx])
+            slot_texts[idx].value = f"{slot} {king}"
+            # live MENTE preview
+            total = sum(q * 10 for q in q_values)
+            score_text.value = f"推定スコア  {total:.2f} / {_MENTE_CONST:.4f}"
+            score_bar.value = min(total / (_MENTE_CONST * 2), 1.0)
+            page.update()
+        return on_change
+
+    for i, sl in enumerate(sliders):
+        sl.on_change = _make_slider_handler(i)
+
+    triangle_rows = ft.Column(spacing=8)
+    for i, lbl in enumerate(labels):
+        triangle_rows.controls.append(
+            _card(ft.Row([
+                ft.Text(f"△ {lbl}", size=14, color=_ACCENT,
+                        weight=ft.FontWeight.BOLD, width=28),
+                sliders[i],
+                q_disp[i],
+                ft.Container(width=12),
+                slot_texts[i],
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER))
+        )
+
+    # ── MENTE score bar ────────────────────────────────────────────────────
+    init_total = sum(q * 10 for q in q_values)
+    score_text = ft.Text(
+        f"推定スコア  {init_total:.2f} / {_MENTE_CONST:.4f}",
+        size=13, color=_WHITE,
+    )
+    score_bar = ft.ProgressBar(
+        value=min(init_total / (_MENTE_CONST * 2), 1.0),
+        color=_PURPLE, bgcolor=_BORDER, expand=True,
+    )
+    mente_const_label = ft.Text(
+        f"MENTE閾値  φ×√2 = {_MENTE_CONST:.4f}", size=11, color=_DIM,
+    )
+
+    # ── action buttons ─────────────────────────────────────────────────────
+    check_btn = ft.ElevatedButton(
+        "🔮 MENTE チェック", bgcolor=_PURPLE, color=_WHITE,
+        disabled=ms.running,
+    )
+    birth_btn = ft.ElevatedButton(
+        "⭐ 誕生証明書 発行", bgcolor=_GOLD, color="#0a0a1a",
+        visible=False,
+    )
+    progress = ft.ProgressRing(visible=ms.running, color=_ACCENT, width=24, height=24)
+
+    # ── result panel ──────────────────────────────────────────────────────
+    result_col = ft.Column(spacing=8)
+
+    def _refresh() -> None:
+        check_btn.disabled = ms.running
+        progress.visible   = ms.running
+        result_col.controls.clear()
+
+        if ms.error:
+            result_col.controls.append(_value(f"エラー: {ms.error}", color=_RED))
+            birth_btn.visible = False
+            page.update()
+            return
+
+        cr = ms.check_result
+        if not cr:
+            page.update()
+            return
+
+        achieved = cr["mente_achieved"]
+        total    = cr["mente_total"]
+
+        # update bar to actual computed value
+        score_text.value = f"MENTEスコア  {total:.4f} / {_MENTE_CONST:.4f}"
+        score_bar.value  = min(total / (_MENTE_CONST * 2), 1.0)
+        score_bar.color  = _GREEN if achieved else _PURPLE
+
+        # achieved banner
+        if achieved:
+            result_col.controls.append(
+                _card(ft.Row([
+                    ft.Icon(ft.Icons.AUTO_AWESOME, color=_GOLD, size=28),
+                    _title("四天王全顕現  MENTE 達成！", color=_GOLD, size=16),
+                ], spacing=8), padding=20)
+            )
+        else:
+            missing = cr.get("missing_kings", [])
+            result_col.controls.append(
+                _card(ft.Column([
+                    _value("MENTE 未達成", color=_DIM),
+                    _label(f"不足: {', '.join(missing) if missing else '—'}"),
+                ], spacing=4))
+            )
+
+        # slots table
+        slot_rows: list[ft.Control] = [
+            ft.Row([
+                ft.Container(_label("△"), width=24),
+                ft.Container(_label("スロット"), width=56),
+                ft.Container(_label("天王"), width=72),
+                ft.Container(_label("MENTE"), width=64),
+                ft.Container(_label("ε"), width=56),
+                ft.Container(_label("SIG"), expand=True),
+            ], spacing=8),
+            ft.Divider(color=_BORDER, height=1),
+        ]
+        for s in cr["slots"]:
+            slot_rows.append(ft.Row([
+                ft.Container(_value(s["label"], color=_ACCENT), width=24),
+                ft.Container(_value(s["slot"], color=_PURPLE), width=56),
+                ft.Container(_value(s["king"], color=_GOLD), width=72),
+                ft.Container(_value(f"{s['mente']:.4f}"), width=64),
+                ft.Container(_value(f"{s['epsilon']:.4f}"), width=56),
+                ft.Container(_value(s["sig"], size=11, color=_DIM), expand=True),
+            ], spacing=8))
+        result_col.controls.append(_card(ft.Column(slot_rows, spacing=4)))
+
+        # birth result
+        br = ms.birth_result
+        if br:
+            cert_id = br["cert"].get("certificate_id", "?")
+            result_col.controls.append(
+                _card(ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.WORKSPACE_PREMIUM, color=_GOLD),
+                        _title("誕生証明書 発行済み", color=_GOLD),
+                    ], spacing=8),
+                    ft.Row([
+                        ft.Column([_label("Certificate ID"),
+                                   _value(cert_id, color=_GOLD)], spacing=2),
+                        ft.Column([_label("SIG receipts"),
+                                   _value(str(len(br["receipts"])))], spacing=2),
+                    ], spacing=24),
+                    _label(f"保存先: {br['cert_path']}"),
+                ], spacing=6), padding=20)
+            )
+
+        birth_btn.visible = achieved and (br is None) and (state.round.result is not None)
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_check(_: ft.ControlEvent) -> None:
+        tris = [{"q": q_values[i], "label": labels[i]} for i in range(4)]
+        await state.run_mente(tris)
+
+    async def on_birth(_: ft.ControlEvent) -> None:
+        if state.round.result is None:
+            return
+        tris = [{"q": q_values[i], "label": labels[i]} for i in range(4)]
+        await state.run_mente(tris, round_result=state.round.result)
+
+    check_btn.on_click = on_check
+    birth_btn.on_click = on_birth
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.AUTO_AWESOME, color=_GOLD, size=24),
+            _title("MENTE  四天王全顕現", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+
+        # slot guide
+        _card(ft.Column([
+            _title("四天王スロット早見表", size=12, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([
+                ft.Column([
+                    _label(cond),
+                    ft.Text(f"{slot} {king}", size=12, color=_GOLD,
+                            weight=ft.FontWeight.BOLD),
+                ], spacing=2)
+                for cond, slot, king in _SLOT_LABELS
+            ], spacing=20, wrap=True),
+        ], spacing=4)),
+
+        # triangle inputs
+        _card(ft.Column([
+            _title("三角形バッチ (A–D)", size=14, color=_DIM),
+            ft.Container(height=4),
+            triangle_rows,
+        ], spacing=4)),
+
+        # score bar
+        _card(ft.Column([
+            ft.Row([score_text, ft.Container(expand=True), mente_const_label]),
+            ft.Container(height=4),
+            score_bar,
+        ], spacing=4)),
+
+        # run buttons
+        ft.Row([check_btn, birth_btn, progress], spacing=12),
+
+        result_col,
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -472,6 +748,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _round_view(state, page)
     if view == BIRTH_CERT:
         return _cert_view(state, page)
+    if view == MENTE:
+        return _mente_view(state, page)
     return _home_view(state)
 
 
