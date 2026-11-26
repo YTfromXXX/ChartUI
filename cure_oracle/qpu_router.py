@@ -23,6 +23,12 @@ from cure_oracle.benchmark import (
     run_benchmark,
     _THETA_INFO,
 )
+from cure_oracle.mente import (
+    MENTE_CONST,
+    HEAVENLY_KINGS,
+    check_mente,
+    issue_birth_on_mente,
+)
 
 router = APIRouter(prefix="/api/v1/qpu", tags=["qpu"])
 
@@ -72,6 +78,61 @@ class CampaignShape(BaseModel):
     circuit_family: str
     theta_disp: str
     eps_code: str
+
+
+# ── MENTE models ──────────────────────────────────────────────────────────────
+
+class MenteTriangle(BaseModel):
+    q: float = Field(..., ge=0.0, le=1.0,
+                     description="Triangle quality q = 2r/R")
+    label: str = Field(..., description="Label A / B / C / D")
+
+
+class MenteSlotResponse(BaseModel):
+    label:   str
+    slot:    str
+    king:    str
+    sig:     str
+    mente:   float
+    epsilon: float
+    shape:   str
+
+
+class MenteCheckRequest(BaseModel):
+    triangles: list[MenteTriangle] = Field(
+        ..., min_length=1, max_length=4,
+        description="1–4 triangles; pass all 4 slots (A–D) for 四天王全顕現",
+    )
+
+
+class MenteCheckResponse(BaseModel):
+    slots:          list[MenteSlotResponse]
+    mente_total:    float
+    mente_achieved: bool
+    mente_const:    float
+    missing_kings:  list[str]
+
+
+class MenteBirthRequest(BaseModel):
+    triangles:    list[MenteTriangle] = Field(..., min_length=1, max_length=4)
+    round_result: dict = Field(
+        ...,
+        description="dict returned by round_circuit() or POST /api/v1/qpu/round",
+    )
+    cert_path: str = Field(
+        "cure_birth_certificate.json",
+        description="Where to write the certificate on the server",
+    )
+
+
+class MenteBirthResponse(BaseModel):
+    mente_achieved: bool
+    mente_total:    float
+    mente_const:    float
+    cert:           Optional[dict] = None
+    receipts:       Optional[list[dict]] = None
+    cert_path:      Optional[str] = None
+    html_path:      Optional[str] = None
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -165,4 +226,72 @@ def run_benchmark_endpoint(req: BenchmarkRequest) -> BenchmarkResponse:
         job_id=result.job_id,
         qpu_seconds=result.qpu_seconds,
         sig=sig,
+    )
+
+
+@router.post("/mente/check", response_model=MenteCheckResponse)
+def mente_check_endpoint(req: MenteCheckRequest) -> MenteCheckResponse:
+    """
+    Calculate the MENTE score for a batch of mesh triangles.
+
+    Pass 1–4 triangles (labels A–D, q = radius ratio 2r/R).
+    When **mente_achieved** is True all four 四天王 have appeared —
+    call `/mente/birth` to auto-issue the birth certificate.
+    """
+    tris = [{"q": t.q, "label": t.label} for t in req.triangles]
+    try:
+        result = check_mente(tris)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return MenteCheckResponse(
+        slots=[
+            MenteSlotResponse(
+                label=s.label, slot=s.slot, king=s.king,
+                sig=s.sig, mente=s.mente,
+                epsilon=s.epsilon, shape=s.shape,
+            )
+            for s in result.slots
+        ],
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        mente_const=result.mente_const,
+        missing_kings=result.missing_kings,
+    )
+
+
+@router.post("/mente/birth", response_model=MenteBirthResponse)
+def mente_birth_endpoint(req: MenteBirthRequest) -> MenteBirthResponse:
+    """
+    Issue a birth certificate when MENTE is achieved (四天王全顕現).
+
+    Requires a `round_result` from a QPU or local/fake round run.
+    When **mente_achieved** is False nothing is written and the response
+    carries only the MENTE calculation (no cert / receipts).
+    """
+    tris = [{"q": t.q, "label": t.label} for t in req.triangles]
+    try:
+        birth = issue_birth_on_mente(tris, req.round_result, req.cert_path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if birth is None:
+        # MENTE not achieved — return the check result only
+        try:
+            check = check_mente(tris)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return MenteBirthResponse(
+            mente_achieved=False,
+            mente_total=check.mente_total,
+            mente_const=check.mente_const,
+        )
+
+    return MenteBirthResponse(
+        mente_achieved=True,
+        mente_total=birth.check.mente_total,
+        mente_const=birth.check.mente_const,
+        cert=birth.cert,
+        receipts=birth.receipts,
+        cert_path=birth.cert_path,
+        html_path=birth.html_path,
     )
