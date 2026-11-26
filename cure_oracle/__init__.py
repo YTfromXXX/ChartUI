@@ -32,7 +32,7 @@ __all__ = [
     "credentials_status", "verify_instance",
     # benchmark
     "run_benchmark", "build_circuit", "compare_ibm_result", "issue_sig_if_passed",
-    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES",
+    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES", "CONFIRM",
     # mail
     "deliver",
     # birth
@@ -125,7 +125,7 @@ _LAZY_MODULES = {
 
 _BENCHMARK_EXPORTS = frozenset({
     "run_benchmark", "build_circuit", "compare_ibm_result", "issue_sig_if_passed",
-    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES",
+    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES", "CONFIRM",
 })
 
 _IBM_SETUP_EXPORTS = frozenset({"credentials_status", "verify_instance"})

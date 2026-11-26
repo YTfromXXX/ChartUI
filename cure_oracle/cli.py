@@ -41,6 +41,16 @@ def main(argv: list[str] | None = None) -> int:
     rr.add_argument("--notify", metavar="TARGET", default="stdout")
     rr.add_argument("--birth-cert", metavar="PATH", nargs="?", const="cure_birth_certificate.json",
                     help="save QPU birth certificate to this path (auto on first ibm run)")
+    bm = sub.add_parser("benchmark", help="run a SIG benchmark circuit on Aer, fake or IBM QPU")
+    bm.add_argument("--shape", choices=["CUBE","RING","TREE","LINE","STAR"], default="LINE",
+                    help="SIG shape (default LINE=GHZ)")
+    bm.add_argument("--n-qubits", type=int, default=4, dest="n_qubits")
+    bm.add_argument("--theta-disp", default="√.414", choices=["φ.618","π.785","√.414"],
+                    dest="theta_disp")
+    bm.add_argument("--shots", type=int, default=4096)
+    bm.add_argument("--mode", choices=["local","fake","ibm"], default="local")
+    bm.add_argument("--out-dir", default=".", dest="out_dir",
+                    help="directory for result JSON (default: current dir)")
     ib = sub.add_parser("ibm-setup", help="check/verify IBM Quantum credentials and instance")
     ib.add_argument("--verify", action="store_true", help="connect to IBM Quantum and list backends")
     bc = sub.add_parser("birth-cert", help="show QPU birth certificate / game login token")
@@ -60,6 +70,40 @@ def main(argv: list[str] | None = None) -> int:
         target = f"email:{a.mail}" if a.mail else a.notify
         _mail.deliver(result, to=target)
         return 0
+    if a.cmd == "benchmark":
+        import os as _os
+        from cure_oracle.benchmark import run_benchmark, CONFIRM, issue_sig_if_passed, SHAPE_CIRCUIT_MAP
+        kwargs: dict = dict(
+            shape=a.shape, n_qubits=a.n_qubits, theta_disp=a.theta_disp,
+            shots=a.shots, mode=a.mode,
+        )
+        if a.mode == "ibm":
+            kwargs["token"]    = _os.environ.get("IBM_QUANTUM_TOKEN")
+            kwargs["instance"] = _os.environ.get("IBM_QUANTUM_INSTANCE")
+            kwargs["confirm"]  = CONFIRM
+        result = run_benchmark(**kwargs)
+        sig = issue_sig_if_passed(result)
+        out = {
+            "shape": result.shape, "circuit_family": result.circuit_family,
+            "n_qubits": result.n_qubits, "theta_disp": result.theta_disp,
+            "shots": result.shots, "backend": result.backend,
+            "circuit_hash": result.circuit_hash,
+            "delta": round(result.delta, 6), "eps_threshold": result.eps_threshold,
+            "passed": result.passed, "sig_code": result.sig_code,
+            "job_id": result.job_id, "qpu_seconds": result.qpu_seconds,
+        }
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        out_dir = pathlib.Path(a.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fname = out_dir / f"benchmark-{result.shape}-{result.backend}.json"
+        fname.write_text(json.dumps(out, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"\n  結果 → {fname}")
+        if sig:
+            print(f"\n✓ SIG PASSED: {sig}")
+        else:
+            print(f"\n✗ δ={result.delta:.4f} > ε={result.eps_threshold:.4f} — not passed")
+        return 0 if result.passed else 2
+
     if a.cmd == "ibm-setup":
         from cure_oracle.ibm_setup import credentials_status, verify_instance
         status = credentials_status()

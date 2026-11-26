@@ -62,6 +62,8 @@ _THETA_INFO: dict[str, tuple[float, float, str]] = {
     "√.414": (math.pi * 0.4142,  0.010, "ε.010"),
 }
 
+CONFIRM = "RUN ON QPU"
+
 # Standard IBM Quantum Campaign shapes
 CAMPAIGN_SHAPES: list[dict] = [
     {"shape": "CUBE", "n_qubits": 4, "theta_disp": "φ.618", "shots": 8192},
@@ -90,6 +92,8 @@ class BenchmarkResult:
     sig_code:       str            # "CUBE-φ.618-ε.001" if passed, "" otherwise
     qasm:           str            # OpenQASM 2 / 3 string
     backend:        str            # "aer_simulator" or IBM backend name
+    job_id:         Optional[str]   = None   # IBM job ID (None for Aer/fake)
+    qpu_seconds:    Optional[float] = None   # QPU usage seconds (None for Aer/fake)
 
     @property
     def eps_code(self) -> str:
@@ -107,19 +111,29 @@ def run_benchmark(
     theta_disp: str = "φ.618",
     shots: int = 4096,
     seed: int = 42,
-    backend_name: str = "aer_simulator",
+    # execution mode
+    mode: str = "local",          # "local" | "fake" | "ibm"
+    token: str | None = None,
+    instance: str | None = None,
+    confirm: str | None = None,   # must equal CONFIRM for ibm mode
+    backend_name: str = "aer_simulator",  # Aer backend (local mode only)
 ) -> BenchmarkResult:
     """
-    Build and simulate a benchmark circuit for the given SIG SHAPE.
+    Build and run a benchmark circuit for the given SIG SHAPE.
 
     Parameters
     ----------
     shape       : one of CUBE / RING / TREE / LINE / STAR
     n_qubits    : circuit width (2–8 recommended)
     theta_disp  : θ_disp code — φ.618 / π.785 / √.414
-    shots       : number of Aer shots
-    seed        : RNG seed for QV circuit and shot sampling
-    backend_name: Aer backend name (default "aer_simulator")
+    shots       : number of shots
+    seed        : RNG seed for QV circuit and Aer shot sampling
+    mode        : "local" (AerSimulator, default) | "fake" (FakeTorino noise model)
+                  | "ibm" (real QPU — requires confirm=CONFIRM, token, instance)
+    token       : IBM Quantum API token (ibm mode only; dropped after service init)
+    instance    : IBM Quantum instance / CRN (ibm mode only)
+    confirm     : must equal CONFIRM = "RUN ON QPU" to authorise ibm mode
+    backend_name: Aer backend name (local mode only, default "aer_simulator")
 
     Returns
     -------
@@ -130,6 +144,8 @@ def run_benchmark(
         raise ValueError(f"unknown shape {shape!r}; expected one of {sorted(SHAPE_CIRCUIT_MAP)}")
     if theta_disp not in _THETA_INFO:
         raise ValueError(f"unknown theta_disp {theta_disp!r}; expected one of {sorted(_THETA_INFO)}")
+    if mode not in ("local", "fake", "ibm"):
+        raise ValueError("mode must be 'local', 'fake' or 'ibm'")
 
     theta_val, eps, eps_code = _THETA_INFO[theta_disp]
     family = SHAPE_CIRCUIT_MAP[shape]
@@ -138,12 +154,19 @@ def run_benchmark(
     qasm = _circuit_to_qasm(circ)
     chash = _circuit_hash(qasm)
 
-    # sample on Aer
-    counts = _run_aer(circ, shots, seed=seed, backend_name=backend_name)
+    job_id: Optional[str] = None
+    qpu_seconds: Optional[float] = None
 
-    # ideal distribution
+    if mode == "local":
+        counts = _run_aer(circ, shots, seed=seed, backend_name=backend_name)
+        actual_backend = backend_name
+    else:
+        counts, actual_backend, job_id, qpu_seconds = _run_ibm_sampler(
+            circ, shots,
+            mode=mode, token=token, instance=instance, confirm=confirm, seed=seed,
+        )
+
     ideal = _ideal_distribution(shape, n_qubits, theta_val, seed=seed)
-
     delta = _total_variation_distance(counts, ideal, shots)
     passed = delta <= eps
     sig_code = f"{shape}-{theta_disp}-{eps_code}" if passed else ""
@@ -162,7 +185,9 @@ def run_benchmark(
         passed=passed,
         sig_code=sig_code,
         qasm=qasm,
-        backend=backend_name,
+        backend=actual_backend,
+        job_id=job_id,
+        qpu_seconds=qpu_seconds,
     )
 
 
@@ -356,6 +381,68 @@ def _statevector_distribution(
     sv = Statevector(circ_sv)
     probs = sv.probabilities_dict()
     return {k: float(v) for k, v in probs.items() if v > 1e-12}
+
+
+# ── IBM / fake SamplerV2 runner ────────────────────────────────────────────────
+
+def _run_ibm_sampler(
+    circ,
+    shots: int,
+    *,
+    mode: str,
+    token: str | None,
+    instance: str | None,
+    confirm: str | None,
+    seed: int,
+) -> tuple[dict[str, int], str, Optional[str], Optional[float]]:
+    """Run *circ* on a fake or real IBM backend via SamplerV2.
+
+    Returns (counts, backend_name, job_id, qpu_seconds).
+    Token is dropped from local scope immediately after service creation.
+    """
+    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+    from qiskit_ibm_runtime import SamplerV2
+
+    if mode == "fake":
+        from qiskit_ibm_runtime import fake_provider
+        bk = fake_provider.FakeTorino()
+    else:
+        if confirm != CONFIRM:
+            raise PermissionError(
+                f'a real-QPU run requires confirm="{CONFIRM}".  '
+                "Set IBM_QUANTUM_TOKEN and IBM_QUANTUM_INSTANCE env vars, then pass confirm=CONFIRM."
+            )
+        from qiskit_ibm_runtime import QiskitRuntimeService
+        channel = "ibm_quantum_platform" if (instance or "").startswith("crn:") else "ibm_quantum"
+        service = (
+            QiskitRuntimeService(channel=channel, token=token, instance=instance)
+            if token else QiskitRuntimeService()
+        )
+        token = None  # drop our reference immediately
+        bk = service.least_busy(operational=True, simulator=False, min_num_qubits=circ.num_qubits)
+
+    backend_name: str = bk.name
+    pm = generate_preset_pass_manager(optimization_level=3, backend=bk, seed_transpiler=seed)
+    isa = pm.run(circ)
+    ops = isa.count_ops()
+    two_q = sum(v for k, v in ops.items() if k in ("cz", "ecr", "cx", "rzz"))
+    print(f"[benchmark] {backend_name}: depth={isa.depth()}, 2q={two_q}, shots={shots}")
+
+    job = SamplerV2(mode=bk).run([isa], shots=shots)
+    job_id: str = job.job_id()
+    data_bin = job.result()[0].data
+    # classical register name may vary after transpilation; use the first one
+    creg_name = next(iter(data_bin))
+    counts: dict[str, int] = getattr(data_bin, creg_name).get_counts()
+
+    qpu_seconds: Optional[float] = None
+    if mode == "ibm":
+        try:
+            qpu_seconds = job.usage()
+        except Exception:  # noqa: BLE001 — older runtimes may not expose usage()
+            pass
+
+    return counts, backend_name, job_id, qpu_seconds
 
 
 # ── Aer runner ─────────────────────────────────────────────────────────────────

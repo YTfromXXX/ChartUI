@@ -5,6 +5,7 @@ import pytest
 from cure_oracle.benchmark import (
     BENCHMARK_VERSION,
     CAMPAIGN_SHAPES,
+    CONFIRM,
     SHAPE_CIRCUIT_MAP,
     BenchmarkResult,
     build_circuit,
@@ -293,3 +294,50 @@ class TestThetaInfo:
     def test_angle_values_in_range(self):
         for theta_val, _, _ in _THETA_INFO.values():
             assert 0 < theta_val < math.pi * 1.1
+
+
+# ── TestIBMMode ───────────────────────────────────────────────────────────────
+
+class TestIBMMode:
+    def test_confirm_constant(self):
+        assert CONFIRM == "RUN ON QPU"
+
+    def test_ibm_mode_requires_confirm(self):
+        with pytest.raises(PermissionError, match="RUN ON QPU"):
+            run_benchmark("LINE", n_qubits=4, shots=256, mode="ibm",
+                          token="dummy", instance="dummy", confirm="wrong")
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(ValueError, match="mode must be"):
+            run_benchmark("LINE", n_qubits=4, shots=256, mode="quantum")
+
+    def test_local_mode_job_id_is_none(self):
+        r = run_benchmark("LINE", n_qubits=4, shots=512, seed=0, mode="local")
+        assert r.job_id is None
+        assert r.qpu_seconds is None
+
+    def test_local_mode_backend_name(self):
+        r = run_benchmark("LINE", n_qubits=4, shots=512, seed=0, mode="local")
+        assert r.backend == "aer_simulator"
+
+    @pytest.mark.skipif(
+        not pytest.importorskip("qiskit_ibm_runtime", reason="qiskit-ibm-runtime not installed"),
+        reason="qiskit-ibm-runtime not installed",
+    )
+    def test_fake_mode_returns_benchmark_result(self):
+        pytest.importorskip("qiskit_ibm_runtime")
+        r = run_benchmark("LINE", n_qubits=4, theta_disp="√.414", shots=512, seed=0, mode="fake")
+        assert isinstance(r, BenchmarkResult)
+        assert r.backend != "aer_simulator"
+        assert r.job_id is not None
+        assert 0.0 <= r.delta <= 1.0
+
+    @pytest.mark.skipif(
+        not pytest.importorskip("qiskit_ibm_runtime", reason="qiskit-ibm-runtime not installed"),
+        reason="qiskit-ibm-runtime not installed",
+    )
+    def test_fake_mode_counts_sum_to_shots(self):
+        pytest.importorskip("qiskit_ibm_runtime")
+        shots = 256
+        r = run_benchmark("LINE", n_qubits=4, shots=shots, seed=0, mode="fake")
+        assert sum(r.counts.values()) == shots
