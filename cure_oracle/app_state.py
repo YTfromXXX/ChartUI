@@ -40,6 +40,15 @@ except Exception:
     save_certificate = None   # type: ignore[assignment]
     certificate_html = None   # type: ignore[assignment]
 
+try:
+    from cure_oracle.mente import (
+        MENTE_CONST, check_mente, issue_birth_on_mente,
+    )
+except Exception:
+    MENTE_CONST = 2.2882       # type: ignore[assignment]
+    check_mente = None         # type: ignore[assignment]
+    issue_birth_on_mente = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────
 
@@ -47,6 +56,7 @@ HOME       = "home"
 BENCHMARK  = "benchmark"
 ROUND      = "round"
 BIRTH_CERT = "birth_cert"
+MENTE      = "mente"
 
 
 # ── data containers ───────────────────────────────────────────────────────────
@@ -81,11 +91,24 @@ class CertState:
 
 
 @dataclass
+class MenteState:
+    running:        bool              = False
+    triangles:      list[dict]        = field(default_factory=list)
+    check_result:   Optional[dict]    = None   # serialised MenteCheckResult
+    birth_result:   Optional[dict]    = None   # serialised MenteBirthResult (if achieved)
+    mente_total:    float             = 0.0
+    mente_achieved: bool              = False
+    missing_kings:  list[str]         = field(default_factory=list)
+    error:          Optional[str]     = None
+
+
+@dataclass
 class AppState:
     current_view: str            = HOME
     benchmark:    BenchmarkState = field(default_factory=BenchmarkState)
     round:        RoundState     = field(default_factory=RoundState)
     cert:         CertState      = field(default_factory=CertState)
+    mente:        MenteState     = field(default_factory=MenteState)
 
     # registered UI-refresh callbacks (called after each state mutation)
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
@@ -188,6 +211,55 @@ class AppState:
             self.round.running = False
             self._notify()
 
+    # ── MENTE ─────────────────────────────────────────────────────────────────
+
+    async def run_mente(
+        self,
+        triangles: list[dict],
+        round_result: Optional[dict] = None,
+        cert_path: str = "cure_birth_certificate.json",
+    ) -> None:
+        """Calculate MENTE and auto-issue birth cert when 四天王全顕現."""
+        self.mente.running        = True
+        self.mente.error          = None
+        self.mente.check_result   = None
+        self.mente.birth_result   = None
+        self.mente.triangles      = list(triangles)
+        self._notify()
+        try:
+            check = await asyncio.to_thread(check_mente, triangles)
+            self.mente.mente_total    = check.mente_total
+            self.mente.mente_achieved = check.mente_achieved
+            self.mente.missing_kings  = check.missing_kings
+            self.mente.check_result = {
+                "slots": [
+                    {"label": s.label, "slot": s.slot, "king": s.king,
+                     "sig": s.sig, "mente": s.mente, "epsilon": s.epsilon,
+                     "shape": s.shape}
+                    for s in check.slots
+                ],
+                "mente_total":    check.mente_total,
+                "mente_achieved": check.mente_achieved,
+                "mente_const":    check.mente_const,
+                "missing_kings":  check.missing_kings,
+            }
+            if check.mente_achieved and round_result is not None:
+                birth = await asyncio.to_thread(
+                    issue_birth_on_mente, triangles, round_result, cert_path,
+                )
+                if birth is not None:
+                    self.mente.birth_result = {
+                        "cert":      birth.cert,
+                        "receipts":  birth.receipts,
+                        "cert_path": birth.cert_path,
+                        "html_path": birth.html_path,
+                    }
+        except Exception as exc:
+            self.mente.error = str(exc)
+        finally:
+            self.mente.running = False
+            self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -233,5 +305,12 @@ class AppState:
             "cert": {
                 "has_cert":  self.cert.cert is not None,
                 "error":     self.cert.error,
+            },
+            "mente": {
+                "mente_total":    self.mente.mente_total,
+                "mente_achieved": self.mente.mente_achieved,
+                "missing_kings":  self.mente.missing_kings,
+                "has_birth":      self.mente.birth_result is not None,
+                "error":          self.mente.error,
             },
         }

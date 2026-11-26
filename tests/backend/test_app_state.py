@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from cure_oracle.app_state import (
-    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT,
-    BenchmarkState, RoundState, CertState,
+    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
+    BenchmarkState, RoundState, CertState, MenteState,
 )
 from cure_oracle.benchmark import BenchmarkResult
 
@@ -256,6 +256,147 @@ class TestCertLoad:
         assert s.cert.html_path is not None
 
 
+# ── TestMenteRun ──────────────────────────────────────────────────────────────
+
+FOUR_KINGS = [
+    {"q": 0.80, "label": "A"},
+    {"q": 0.60, "label": "B"},
+    {"q": 0.35, "label": "C"},
+    {"q": 0.10, "label": "D"},
+]
+LOW_TRIS = [{"q": 0.05, "label": "A"}]
+
+
+def _mock_check(achieved: bool):
+    """Return a MenteCheckResult-like mock."""
+    from unittest.mock import MagicMock
+    from cure_oracle.mente import MenteCheckResult, MenteSlot, MENTE_CONST
+    slots = []
+    if achieved:
+        for label, slot, king, q in [
+            ("A", "S4", "広目天", 0.80), ("B", "S1", "多聞天", 0.60),
+            ("C", "S3", "持国天", 0.35), ("D", "S2", "増長天", 0.10),
+        ]:
+            slots.append(MenteSlot(
+                label=label, slot=slot, king=king,
+                sig=f"LINE-√.414-ε.{int(q*100):03d}",
+                mente=q * 10, epsilon=0.02, shape="LINE",
+            ))
+    else:
+        slots.append(MenteSlot(
+            label="A", slot="S2", king="増長天",
+            sig="LINE-√.414-ε.005", mente=0.5, epsilon=0.02, shape="LINE",
+        ))
+    total = sum(s.mente for s in slots)
+    return MenteCheckResult(
+        slots=slots,
+        mente_total=total,
+        mente_achieved=achieved and total >= MENTE_CONST,
+        missing_kings=[] if achieved else ["S1", "S3", "S4"],
+    )
+
+
+class TestMenteRun:
+    def test_mente_state_defaults(self):
+        s = AppState()
+        assert s.mente.running is False
+        assert s.mente.mente_achieved is False
+        assert s.mente.mente_total == 0.0
+        assert s.mente.check_result is None
+        assert s.mente.birth_result is None
+        assert s.mente.error is None
+
+    def test_mente_view_constant(self):
+        assert MENTE == "mente"
+
+    def test_run_mente_check_success(self):
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(True)):
+            with patch("cure_oracle.app_state.issue_birth_on_mente",
+                       return_value=None):
+                _run(s.run_mente(FOUR_KINGS))
+        assert s.mente.error is None
+        assert s.mente.running is False
+        assert s.mente.check_result is not None
+
+    def test_run_mente_check_result_fields(self):
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(True)):
+            with patch("cure_oracle.app_state.issue_birth_on_mente",
+                       return_value=None):
+                _run(s.run_mente(FOUR_KINGS))
+        cr = s.mente.check_result
+        for key in ("slots", "mente_total", "mente_achieved",
+                    "mente_const", "missing_kings"):
+            assert key in cr, f"missing key: {key}"
+
+    def test_run_mente_stores_triangles(self):
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(False)):
+            _run(s.run_mente(LOW_TRIS))
+        assert s.mente.triangles == LOW_TRIS
+
+    def test_run_mente_not_achieved(self):
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(False)):
+            _run(s.run_mente(LOW_TRIS))
+        assert s.mente.mente_achieved is False
+        assert s.mente.birth_result is None
+        assert len(s.mente.missing_kings) > 0
+
+    def test_run_mente_achieved_no_round_result(self):
+        """Achieved but no round_result → no birth issued."""
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(True)):
+            _run(s.run_mente(FOUR_KINGS, round_result=None))
+        assert s.mente.mente_achieved is True
+        assert s.mente.birth_result is None
+
+    def test_run_mente_achieved_with_round_result(self, tmp_path):
+        from cure_oracle.mente import MenteBirthResult, MenteCheckResult
+        s = AppState()
+        fake_check = _mock_check(True)
+        fake_birth = MenteBirthResult(
+            check=fake_check,
+            cert={"certificate_id": "CERT-M1"},
+            receipts=[{"merkle": "0xabc", "proof": []}],
+            cert_path=str(tmp_path / "cert.json"),
+            html_path=str(tmp_path / "cert.html"),
+        )
+        rr = {"round": 1}
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=fake_check):
+            with patch("cure_oracle.app_state.issue_birth_on_mente",
+                       return_value=fake_birth):
+                _run(s.run_mente(FOUR_KINGS, round_result=rr,
+                                 cert_path=str(tmp_path / "cert.json")))
+        assert s.mente.birth_result is not None
+        assert s.mente.birth_result["cert"]["certificate_id"] == "CERT-M1"
+        assert len(s.mente.birth_result["receipts"]) == 1
+
+    def test_run_mente_exception_stores_error(self):
+        s = AppState()
+        with patch("cure_oracle.app_state.check_mente",
+                   side_effect=RuntimeError("mente error")):
+            _run(s.run_mente(FOUR_KINGS))
+        assert s.mente.error == "mente error"
+        assert s.mente.running is False
+
+    def test_run_mente_notifies_listeners(self):
+        s = AppState()
+        calls = []
+        s.add_listener(lambda: calls.append(1))
+        with patch("cure_oracle.app_state.check_mente",
+                   return_value=_mock_check(False)):
+            _run(s.run_mente(LOW_TRIS))
+        assert len(calls) >= 2
+
+
 # ── TestToDict ────────────────────────────────────────────────────────────────
 
 class TestToDict:
@@ -266,6 +407,14 @@ class TestToDict:
         assert "benchmark" in d
         assert "round" in d
         assert "cert" in d
+        assert "mente" in d
+
+    def test_to_dict_mente_fields(self):
+        s = AppState()
+        d = s.to_dict()
+        for key in ("mente_total", "mente_achieved", "missing_kings",
+                    "has_birth", "error"):
+            assert key in d["mente"], f"missing mente key: {key}"
 
     def test_to_dict_reflects_navigation(self):
         s = AppState()
