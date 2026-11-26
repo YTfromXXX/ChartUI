@@ -16,6 +16,7 @@ __version__ = "0.3.2"
 __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
+    "benchmark",
     "birth", "bmi", "space_sensor", "verify", "resonance",
     "round_circuit", "cli", "ibm_setup", "mail",
     # resonance
@@ -29,6 +30,9 @@ __all__ = [
     "main",
     # ibm_setup
     "credentials_status", "verify_instance",
+    # benchmark
+    "run_benchmark", "build_circuit", "compare_ibm_result", "issue_sig_if_passed",
+    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES",
     # mail
     "deliver",
     # birth
@@ -107,6 +111,7 @@ _LAZY_MODULES = {
     "knot_crossings": "knot_crossings",
     "mesh_meta":      "mesh_meta",
     "cure_initial":   "cure_initial",
+    "benchmark":      "cure_oracle.benchmark",
     "birth":          "cure_oracle.birth",
     "bmi":            "cure_oracle.bmi",
     "cli":            "cure_oracle.cli",
@@ -117,6 +122,11 @@ _LAZY_MODULES = {
     "space_sensor":   "cure_oracle.space_sensor",
     "verify":         "cure_oracle.verify",
 }
+
+_BENCHMARK_EXPORTS = frozenset({
+    "run_benchmark", "build_circuit", "compare_ibm_result", "issue_sig_if_passed",
+    "BenchmarkResult", "BENCHMARK_VERSION", "SHAPE_CIRCUIT_MAP", "CAMPAIGN_SHAPES",
+})
 
 _IBM_SETUP_EXPORTS = frozenset({"credentials_status", "verify_instance"})
 _MAIL_EXPORTS      = frozenset({"deliver"})
@@ -166,5 +176,8 @@ def __getattr__(name: str):
         return getattr(mod, name)
     if name in _MAIL_EXPORTS:
         mod = importlib.import_module("cure_oracle.mail")
+        return getattr(mod, name)
+    if name in _BENCHMARK_EXPORTS:
+        mod = importlib.import_module("cure_oracle.benchmark")
         return getattr(mod, name)
     raise AttributeError(name)
