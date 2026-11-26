@@ -31,6 +31,7 @@ from orderbook_analyzer import OrderBookSpoofFilter, calculate_true_gravity_tens
 from spiral_cube_analyzer import analyze_spiral_cube
 from spiral_candy_grid import router as spiral_grid_router
 from cure_initial import router as cure_initial_router
+from cure_oracle.qpu_router import router as qpu_router
 
 from tarot_engine import (
     MAJOR_ARCANA_SYMBOLS,
@@ -63,6 +64,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="ChartUI API")
 app.include_router(spiral_grid_router)
 app.include_router(cure_initial_router)
+app.include_router(qpu_router)
 matrix_manager = TarotMatrixManager()
 magic_ledger = MagicLedgerDB(os.getenv("MAGIC_LEDGER_DB", "magic_ledger.db"))
 mt5_executor = MT5Executor()
