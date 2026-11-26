@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import importlib
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 __all__ = [
     # sub-modules (lazy)
     "knot_crossings", "mesh_meta", "cure_initial",
