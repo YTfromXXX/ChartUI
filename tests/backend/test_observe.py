@@ -95,3 +95,89 @@ class TestObserveEndpoint:
         # VIEWER role is sufficient for /observe
         r = client.get("/api/v1/qpu/observe")
         assert r.status_code == 200
+
+
+# ── TestObserveReceipt ────────────────────────────────────────────────────────
+
+class TestObserveReceipt:
+    """sig-receipt/1 Keccak-256 Merkle receipt — Cure-OS A地点 → PopKivyDevice B地点."""
+
+    def _receipt(self):
+        return client.get("/api/v1/qpu/observe").json()["observe_receipt"]
+
+    def test_receipt_present(self):
+        data = client.get("/api/v1/qpu/observe").json()
+        assert "observe_receipt" in data
+        assert data["observe_receipt"] is not None
+
+    def test_receipt_version(self):
+        assert self._receipt()["version"] == "sig-receipt/1"
+
+    def test_receipt_sig_code(self):
+        assert self._receipt()["sig"] == "CUBE-φ.618-ε.001"
+
+    def test_receipt_backend_has_cure_os(self):
+        assert self._receipt()["backend"].startswith("cure-os/")
+
+    def test_receipt_mente_matches_const(self):
+        import math
+        r = self._receipt()
+        assert abs(r["mente"] - round(MENTE_CONST, 6)) < 1e-9
+
+    def test_receipt_has_merkle_root(self):
+        merkle = self._receipt()["merkle"]
+        assert "root" in merkle
+        assert merkle["root"].startswith("0x")
+        assert len(merkle["root"]) == 66  # "0x" + 64 hex chars
+
+    def test_receipt_merkle_hash_algo(self):
+        assert self._receipt()["merkle"]["hash"] == "keccak256"
+
+    def test_receipt_has_proof_path(self):
+        proof = self._receipt()["proof"]
+        assert "path" in proof
+        assert isinstance(proof["path"], list)
+        assert len(proof["path"]) > 0
+
+    def test_receipt_proof_leaf_hex(self):
+        leaf = self._receipt()["proof"]["leaf"]
+        assert leaf.startswith("0x")
+        assert len(leaf) == 66
+
+    def test_receipt_proof_index_is_sig_index(self):
+        # sig_code is claim 3 — same as birth.py _SIG_INDEX
+        assert self._receipt()["proof"]["index"] == 3
+
+    def test_receipt_cert_id_is_uuid(self):
+        import re
+        cid = self._receipt()["cert_id"]
+        uuid_re = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        )
+        assert uuid_re.match(cid), f"cert_id not UUID: {cid}"
+
+    def test_receipt_unique_per_request(self):
+        r1 = client.get("/api/v1/qpu/observe").json()["observe_receipt"]
+        r2 = client.get("/api/v1/qpu/observe").json()["observe_receipt"]
+        assert r1["cert_id"] != r2["cert_id"]
+        assert r1["merkle"]["root"] != r2["merkle"]["root"]
+
+    def test_verify_proof_roundtrip(self):
+        """Round-trip: generate receipt → verify Merkle proof with cure_oracle.verify."""
+        from cure_oracle.verify import verify_proof, SIG_RECEIPT_VERSION
+        receipt = self._receipt()
+        ok = verify_proof(
+            leaf_hex=receipt["proof"]["leaf"],
+            proof_path=receipt["proof"]["path"],
+            root_hex=receipt["merkle"]["root"],
+            version=SIG_RECEIPT_VERSION,
+        )
+        assert ok, "Merkle proof failed to verify"
+
+    def test_verify_sig_code(self):
+        """SIG code passes pattern check for sig-receipt/1."""
+        from cure_oracle.verify import verify_sig_code, SIG_RECEIPT_VERSION
+        assert verify_sig_code(self._receipt()["sig"], SIG_RECEIPT_VERSION)
+
+    def test_receipt_epsilon(self):
+        assert abs(self._receipt()["epsilon"] - 0.001) < 1e-9
