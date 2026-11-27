@@ -221,3 +221,49 @@ class SonnetScoreClient:
             callback(event)
             if event.get("type") == "stream_end":
                 break
+
+    # ── Phase J ───────────────────────────────────────────────────────────────
+
+    def mesh_score(
+        self,
+        strokes: list[list[dict]],
+        era: str = "baroque",
+        grid: Optional[dict] = None,
+    ) -> dict:
+        """POST /api/v1/qpu/candy/sonnet/mesh-score — convert mesh strokes to notes.
+
+        Parameters
+        ----------
+        strokes:
+            List of strokes; each stroke is a list of {x, y, t?} dicts with
+            normalized coordinates x,y ∈ [0,1].
+        era:
+            Musical era (baroque|classical|beethoven|romantic|inner_world).
+        grid:
+            Optional GridConfig override dict (cols, rows, bpm, bars, beats_per_bar).
+
+        Returns
+        -------
+        MeshScoreResponse dict: era, version, bpm, bars, events, stroke_count.
+        """
+        payload: dict[str, Any] = {"strokes": strokes, "era": era}
+        if grid is not None:
+            payload["grid"] = grid
+        return self._post("/api/v1/qpu/candy/sonnet/mesh-score", payload)
+
+    def version(self, mente_total: float = 0.0) -> dict:
+        """GET /api/v1/qpu/candy/sonnet/version — era-aware version negotiation.
+
+        Returns the active API version string ``cure-{era}-r{rev}`` for the
+        given MENTE score, plus era thresholds and the full endpoint map.
+        """
+        import httpx
+        url = f"{self._base_url}/api/v1/qpu/candy/sonnet/version"
+        resp = httpx.get(
+            url,
+            params={"mente_total": mente_total},
+            headers=self._headers(),
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
