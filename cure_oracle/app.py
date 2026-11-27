@@ -806,4 +806,9 @@ def main(page: ft.Page) -> None:
 
 if __name__ == "__main__":
     web = "--web" in sys.argv
-    ft.app(target=main, port=8550 if web else None, view=ft.AppView.WEB_BROWSER if web else None)
+    if hasattr(ft, "run"):
+        ft.run(main, port=8550 if web else 0,
+               view=ft.AppView.WEB_BROWSER if web else ft.AppView.FLET_APP)
+    else:
+        ft.app(target=main, port=8550 if web else None,
+               view=ft.AppView.WEB_BROWSER if web else None)
