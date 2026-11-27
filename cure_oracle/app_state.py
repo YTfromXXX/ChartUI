@@ -60,6 +60,7 @@ BENCHMARK  = "benchmark"
 ROUND      = "round"
 BIRTH_CERT = "birth_cert"
 MENTE      = "mente"
+VERIFY     = "verify"   # sig-receipt/1 Merkle verification (PopKivyDevice-OS B地点)
 
 
 # ── data containers ───────────────────────────────────────────────────────────
@@ -106,12 +107,24 @@ class MenteState:
 
 
 @dataclass
+class VerifyState:
+    """PopKivyDevice-OS B地点 — sig-receipt/1 Merkle receipt verification."""
+    running:       bool           = False
+    receipt:       Optional[dict] = None   # last /observe receipt from Cure-OS
+    proof_ok:      Optional[bool] = None   # True if Merkle proof verified
+    sig_ok:        Optional[bool] = None   # True if SIG code is valid
+    root_hash:     Optional[str]  = None   # merkle root (last verified)
+    error:         Optional[str]  = None
+
+
+@dataclass
 class AppState:
     current_view: str            = HOME
     benchmark:    BenchmarkState = field(default_factory=BenchmarkState)
     round:        RoundState     = field(default_factory=RoundState)
     cert:         CertState      = field(default_factory=CertState)
     mente:        MenteState     = field(default_factory=MenteState)
+    verify:       VerifyState    = field(default_factory=VerifyState)
 
     # registered UI-refresh callbacks (called after each state mutation)
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
@@ -266,6 +279,50 @@ class AppState:
             finally:
                 self.mente.running = False
                 self._notify()
+
+    # ── sig-receipt/1 verification (PopKivyDevice-OS B地点) ──────────────────────
+
+    async def run_verify(self, receipt: dict) -> None:
+        """Verify a sig-receipt/1 from Cure-OS A地点.
+
+        Checks both the Merkle proof path and the SIG code pattern.
+        Called by the VERIFY screen after fetching /observe from the backend.
+        """
+        async with self._lock:
+            self.verify.running = True
+            self.verify.receipt = receipt
+            self.verify.proof_ok = None
+            self.verify.sig_ok = None
+            self.verify.root_hash = None
+            self.verify.error = None
+            self._notify()
+
+        try:
+            from cure_oracle.verify import verify_proof, verify_sig_code, SIG_RECEIPT_VERSION
+            merkle = receipt.get("merkle", {})
+            proof  = receipt.get("proof", {})
+
+            proof_ok = verify_proof(
+                leaf_hex=proof.get("leaf", "0x" + "0" * 64),
+                proof_path=proof.get("path", []),
+                root_hex=merkle.get("root", "0x" + "0" * 64),
+                version=SIG_RECEIPT_VERSION,
+            )
+            sig_ok = verify_sig_code(
+                receipt.get("sig", ""),
+                SIG_RECEIPT_VERSION,
+            )
+            async with self._lock:
+                self.verify.proof_ok  = proof_ok
+                self.verify.sig_ok    = sig_ok
+                self.verify.root_hash = merkle.get("root")
+        except Exception as exc:
+            async with self._lock:
+                self.verify.error = str(exc)
+        finally:
+            async with self._lock:
+                self.verify.running = False
+            self._notify()
 
     # ── birth certificate ─────────────────────────────────────────────────────
 

@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from cure_oracle.app_state import (
-    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
-    BenchmarkState, RoundState, CertState, MenteState,
+    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
+    BenchmarkState, RoundState, CertState, MenteState, VerifyState,
 )
 from cure_oracle.benchmark import BenchmarkResult
 
@@ -425,3 +425,68 @@ class TestToDict:
         s = AppState()
         s.benchmark.error = "oops"
         assert s.to_dict()["benchmark"]["error"] == "oops"
+
+
+# ── TestVerifyState ───────────────────────────────────────────────────────────
+
+class TestVerifyState:
+    """VerifyState dataclass — PopKivyDevice-OS B地点 sig-receipt/1 state."""
+
+    def test_initial_defaults(self):
+        vs = VerifyState()
+        assert not vs.running
+        assert vs.receipt is None
+        assert vs.proof_ok is None
+        assert vs.sig_ok is None
+        assert vs.root_hash is None
+        assert vs.error is None
+
+    def test_appstate_has_verify(self):
+        s = AppState()
+        assert hasattr(s, "verify")
+        assert isinstance(s.verify, VerifyState)
+
+    def test_navigate_to_verify(self):
+        s = AppState()
+        s.navigate(VERIFY)
+        assert s.current_view == VERIFY
+
+    def test_run_verify_proof_ok(self):
+        import asyncio
+        s = AppState()
+        # Build a valid receipt via _build_observe_receipt
+        import platform, sys as _sys
+        from cure_oracle.qpu_router import _build_observe_receipt, _OSInfo
+        from cure_oracle.mente import MENTE_CONST
+        point_a = _OSInfo(
+            system=platform.system(), release=platform.release(),
+            machine=platform.machine(),
+            python=f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
+            role="quantum_state",
+        )
+        receipt = _build_observe_receipt(point_a, MENTE_CONST)
+        asyncio.get_event_loop().run_until_complete(s.run_verify(receipt))
+        assert s.verify.proof_ok is True
+        assert s.verify.sig_ok   is True
+        assert s.verify.error    is None
+        assert s.verify.root_hash == receipt["merkle"]["root"]
+
+    def test_run_verify_bad_receipt(self):
+        import asyncio
+        s = AppState()
+        bad = {
+            "version": "sig-receipt/1",
+            "sig": "CUBE-φ.618-ε.001",
+            "merkle": {"root": "0x" + "a" * 64},
+            "proof":  {"path": ["0x" + "b" * 64], "index": 3, "leaf": "0x" + "c" * 64},
+        }
+        asyncio.get_event_loop().run_until_complete(s.run_verify(bad))
+        # Proof should fail (wrong leaf/root combination)
+        assert s.verify.proof_ok is False
+
+    def test_run_verify_running_flag_clears(self):
+        import asyncio
+        s = AppState()
+        receipt = {"version": "sig-receipt/1", "sig": "", "merkle": {}, "proof": {}}
+        asyncio.get_event_loop().run_until_complete(s.run_verify(receipt))
+        assert not s.verify.running

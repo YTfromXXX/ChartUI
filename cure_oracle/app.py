@@ -26,7 +26,7 @@ except ImportError:
     sys.exit(1)
 
 from cure_oracle.app_state import (
-    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
+    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
 )
 
 # ── B地点: 観察者OS識別 (Pop Kivy / Flet virtual quantum device) ───────────────
@@ -91,8 +91,8 @@ def _status_dot(passed: bool | None) -> ft.Container:
 # ── nav rail ──────────────────────────────────────────────────────────────────
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
-    idx = {HOME: 0, BENCHMARK: 1, ROUND: 2, BIRTH_CERT: 3, MENTE: 4}
-    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE]
+    idx = {HOME: 0, BENCHMARK: 1, ROUND: 2, BIRTH_CERT: 3, MENTE: 4, VERIFY: 5}
+    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY]
 
     def on_change(e: ft.ControlEvent) -> None:
         state.navigate(views[int(e.data)])
@@ -127,6 +127,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.AUTO_AWESOME_OUTLINED,
                 selected_icon=ft.Icons.AUTO_AWESOME,
                 label="MENTE",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.VERIFIED_OUTLINED,
+                selected_icon=ft.Icons.VERIFIED,
+                label="B地点検証",
             ),
         ],
         on_change=on_change,
@@ -765,6 +770,97 @@ def _mente_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── VERIFY screen: PopKivyDevice-OS B地点 — sig-receipt/1 Merkle検証 ──────────
+
+_GOLD   = "#ffd166"
+_PURPLE_V = "#b66fff"
+_GREEN_V  = "#39ff9b"
+_RED_V    = "#ff4c6a"
+
+
+def _verify_view(state: AppState, page: ft.Page) -> ft.Column:
+    vs = state.verify
+
+    def _on_fetch(_e: ft.ControlEvent) -> None:
+        import asyncio
+        from cure_oracle.qpu_router import _build_observe_receipt
+        from cure_oracle.qpu_router import _OSInfo
+        import platform as _plat, sys as _sys
+        # Simulate A地点 point_a locally (PopKivyDevice fetches from Cure-OS in production)
+        point_a = _OSInfo(
+            system=_plat.system(), release=_plat.release(),
+            machine=_plat.machine(),
+            python=f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
+            role="quantum_state",
+        )
+        from cure_oracle.mente import MENTE_CONST as _MC
+        receipt = _build_observe_receipt(point_a, _MC)
+        asyncio.ensure_future(state.run_verify(receipt))
+
+    # ── status row ────────────────────────────────────────────────────────────
+    if vs.running:
+        status_row: ft.Control = ft.Row([
+            ft.ProgressRing(width=18, height=18, stroke_width=2),
+            _label("検証中…"),
+        ], spacing=8)
+    elif vs.error:
+        status_row = ft.Row([
+            _status_dot(False),
+            _label(f"エラー: {vs.error}", color=_RED_V),
+        ], spacing=8)
+    elif vs.proof_ok is not None:
+        both_ok = vs.proof_ok and vs.sig_ok
+        status_row = ft.Row([
+            _status_dot(both_ok),
+            _label("検証成功" if both_ok else "検証失敗",
+                   color=_GREEN_V if both_ok else _RED_V),
+        ], spacing=8)
+    else:
+        status_row = _label("「レシートを取得」をタップして Cure-OS A地点を検証", color=_DIM)
+
+    # ── result card ───────────────────────────────────────────────────────────
+    result_rows: list[ft.Control] = []
+    if vs.receipt:
+        merkle = vs.receipt.get("merkle", {})
+        proof  = vs.receipt.get("proof", {})
+        rows_data = [
+            ("バージョン",   vs.receipt.get("version", "—")),
+            ("SIG コード",   vs.receipt.get("sig", "—")),
+            ("Merkle root",  (merkle.get("root", "—"))[:20] + "…"),
+            ("証明パス長",   str(len(proof.get("path", [])))),
+            ("証明インデックス", str(proof.get("index", "—"))),
+            ("Proof 検証",   "✓ OK" if vs.proof_ok else ("✗ NG" if vs.proof_ok is not None else "—")),
+            ("SIG 検証",     "✓ OK" if vs.sig_ok  else ("✗ NG" if vs.sig_ok  is not None else "—")),
+        ]
+        for lbl, val in rows_data:
+            result_rows.append(ft.Row([
+                _label(lbl, color=_DIM),
+                ft.Expanded(_value(val)),
+            ], spacing=8))
+
+    result_col = _card(ft.Column(result_rows or [_label("—")], spacing=8)) if result_rows else ft.Container()
+
+    fetch_btn = ft.FilledButton(
+        text="レシートを取得・検証",
+        on_click=_on_fetch,
+        disabled=vs.running,
+    )
+
+    obs_banner = _card(ft.Column([
+        _title("PopKivyDevice-OS  B地点", size=13),
+        _label("sig-receipt/1 Keccak-256 Merkle 検証", color=_PURPLE_V),
+        _label("CUBE-φ.618-ε.001  |  四天王座標系 φ×√2", color=_GOLD),
+    ], spacing=4), padding=10)
+
+    return ft.Column([
+        obs_banner,
+        _title("Cure-OS A地点 → B地点 レシート検証"),
+        status_row,
+        ft.Row([fetch_btn], spacing=12),
+        result_col,
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -777,6 +873,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _cert_view(state, page)
     if view == MENTE:
         return _mente_view(state, page)
+    if view == VERIFY:
+        return _verify_view(state, page)
     return _home_view(state)
 
 

@@ -67,11 +67,11 @@ for _mod in list(sys.modules):
 
 from cure_oracle.app import (       # noqa: E402
     _q_to_slot, _MENTE_CONST, _SLOT_LABELS,
-    _mente_view, _nav_rail, _build_body, _home_view,
+    _mente_view, _verify_view, _nav_rail, _build_body, _home_view,
     _card, _title, _label, _value,
 )
 from cure_oracle.app_state import (  # noqa: E402
-    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
+    AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
 )
 
 
@@ -227,7 +227,7 @@ class TestMenteViewBuilds:
 # ── TestNavRailMente ──────────────────────────────────────────────────────────
 
 class TestNavRailMente:
-    def test_nav_rail_has_five_destinations(self):
+    def test_nav_rail_has_six_destinations(self):
         import flet as ft
         s = AppState()
         p = MagicMock()
@@ -235,7 +235,7 @@ class TestNavRailMente:
         # NavigationRail was called; check destinations kwarg length
         call_kwargs = ft.NavigationRail.call_args
         destinations = call_kwargs.kwargs.get("destinations", [])
-        assert len(destinations) == 5
+        assert len(destinations) == 6
 
     def test_mente_view_in_navigation_index_map(self):
         # _nav_rail internally maps MENTE → index 4
@@ -304,4 +304,73 @@ class TestHomeDashboardMente:
         s = AppState()
         s.mente.error = "QPU error"
         result = _home_view(s)
+        assert result is not None
+
+
+# ── TestVerifyScreen ──────────────────────────────────────────────────────────
+
+class TestVerifyScreen:
+    """VERIFY screen: PopKivyDevice-OS B地点 — sig-receipt/1 Merkle検証."""
+
+    def _make_state(self) -> AppState:
+        s = AppState()
+        s.navigate(VERIFY)
+        return s
+
+    def test_builds_without_exception(self):
+        s = self._make_state()
+        p = MagicMock()
+        result = _verify_view(s, p)
+        assert result is not None
+
+    def test_verify_view_in_navigation_index_map(self):
+        import flet as ft
+        s = AppState()
+        s.navigate(VERIFY)
+        p = MagicMock()
+        _nav_rail(s, p)
+        call_kwargs = ft.NavigationRail.call_args
+        assert call_kwargs.kwargs.get("selected_index") == 5
+
+    def test_build_body_routes_verify(self):
+        s = AppState()
+        s.navigate(VERIFY)
+        p = MagicMock()
+        result = _build_body(s, p)
+        assert result is not None
+
+    def test_initial_state_no_receipt(self):
+        s = self._make_state()
+        assert s.verify.receipt is None
+        assert s.verify.proof_ok is None
+        assert s.verify.sig_ok is None
+        assert not s.verify.running
+
+    def test_verify_state_with_receipt(self):
+        s = self._make_state()
+        # Inject a mock receipt
+        s.verify.receipt = {
+            "version": "sig-receipt/1",
+            "sig": "CUBE-φ.618-ε.001",
+            "merkle": {"root": "0x" + "a" * 64, "hash": "keccak256"},
+            "proof":  {"path": ["0x" + "b" * 64], "index": 3, "leaf": "0x" + "c" * 64},
+        }
+        s.verify.proof_ok = True
+        s.verify.sig_ok   = True
+        p = MagicMock()
+        result = _verify_view(s, p)
+        assert result is not None
+
+    def test_verify_state_with_error(self):
+        s = self._make_state()
+        s.verify.error = "接続エラー"
+        p = MagicMock()
+        result = _verify_view(s, p)
+        assert result is not None
+
+    def test_verify_state_running(self):
+        s = self._make_state()
+        s.verify.running = True
+        p = MagicMock()
+        result = _verify_view(s, p)
         assert result is not None
