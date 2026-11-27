@@ -48,6 +48,7 @@ from cure_oracle.quantum_sim import run_quantum_sim, CURRENT_REV as QS_REV
 from cure_oracle.midi_viz import build_midi_viz_frame
 from cure_oracle.resonance_score import build_resonance_frame as build_resonance_frame_
 from cure_oracle.midi_export import frame_to_midi as _frame_to_midi
+from cure_oracle.score_replay import build_score_replay_frame as _build_score_replay_frame
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1265,6 +1266,7 @@ def candy_sonnet_version(
             "quantum_sim_stream": "/api/v1/qpu/candy/quantum-sim/stream",
             "resonance_stream":   "/api/v1/qpu/candy/resonance/stream",
             "export_midi":        "/api/v1/qpu/candy/export/midi",
+            "score_replay":       "/api/v1/qpu/candy/score-replay/frames",
         },
     }
 
@@ -1716,3 +1718,93 @@ async def candy_export_midi(
             "X-Duration-Seconds":  str(export.duration_seconds),
         },
     )
+
+
+# ── Phase O: Score Replay endpoint ────────────────────────────────────────────
+
+@router.get(
+    "/candy/score-replay/frames",
+    summary="Phase O — Score Replay & Piano-Roll frame (cure-{era}-r7)",
+    tags=["quantum-sim"],
+)
+async def candy_score_replay_frames(
+    shapes:    str = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:     int = Query(1,          ge=1, le=9999, description="蔓旋ラウンド番号"),
+    bars:      int = Query(4,          ge=1, le=32,   description="バー数"),
+    source:    str = Query("midi_viz", description="midi_viz | resonance"),
+    token:     str = Query(...,                        description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run export pipeline and return a ScoreReplayFrame as JSON (B地点第十画面).
+
+    GET /candy/score-replay/frames?shapes=LINE&round=1&token=…
+
+    Returns ScoreReplayFrame with piano_roll grid and note list.
+    No binary bytes in response — use /candy/export/midi for the .mid file.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        if source == "resonance":
+            frame  = build_resonance_frame_(result)
+            export = _frame_to_midi(frame, source="resonance")
+        else:
+            frame  = build_midi_viz_frame(result)
+            export = _frame_to_midi(frame, source="midi_viz")
+
+        replay = _build_score_replay_frame(export, history_index=0)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return {
+        "frame_id":         replay.frame_id,
+        "born_at":          replay.born_at,
+        "era":              replay.era,
+        "version":          replay.version,
+        "bpm":              replay.bpm,
+        "ppqn":             replay.ppqn,
+        "bars":             replay.bars,
+        "source":           replay.source,
+        "event_count":      replay.event_count,
+        "duration_ticks":   replay.duration_ticks,
+        "duration_seconds": replay.duration_seconds,
+        "history_index":    replay.history_index,
+        "notes": [
+            {
+                "tick":           n.tick,
+                "channel":        n.channel,
+                "note":           n.note,
+                "velocity":       n.velocity,
+                "duration_ticks": n.duration_ticks,
+                "label":          n.label,
+            }
+            for n in replay.notes
+        ],
+        "piano_roll": [
+            {
+                "bar":         c.bar,
+                "pitch_class": c.pitch_class,
+                "octave":      c.octave,
+                "channel":     c.channel,
+                "velocity":    c.velocity,
+            }
+            for c in replay.piano_roll
+        ],
+    }

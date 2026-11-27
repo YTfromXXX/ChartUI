@@ -72,6 +72,11 @@ try:
 except Exception:
     frame_to_midi = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.score_replay import build_score_replay_frame
+except Exception:
+    build_score_replay_frame = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -84,6 +89,7 @@ VERIFY     = "verify"
 MIDI_VIZ       = "midi_viz"       # Phase L — B地点第七画面
 RESONANCE_VIZ  = "resonance_viz"  # Phase M — B地点第八画面
 EXPORT_VIZ     = "export_viz"     # Phase N — B地点第九画面
+SCORE_REPLAY   = "score_replay"   # Phase O — B地点第十画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -183,16 +189,29 @@ class ExportState:
 
 
 @dataclass
+class ScoreReplayState:
+    """B地点第十画面 — Score Replay & Piano-Roll History 状態 (Phase O, cure-{era}-r7)."""
+    running:        bool           = False
+    current_frame:  Optional[dict] = None   # serialised ScoreReplayFrame (no bytes)
+    history:        list[dict]     = field(default_factory=list)  # last 10 frames
+    era:            str            = "baroque"
+    source:         str            = "midi_viz"
+    piano_roll:     list[dict]     = field(default_factory=list)  # serialised PianoRollCell list
+    error:          Optional[str]  = None
+
+
+@dataclass
 class AppState:
-    current_view:   str              = HOME
-    benchmark:      BenchmarkState   = field(default_factory=BenchmarkState)
-    round:          RoundState       = field(default_factory=RoundState)
-    cert:           CertState        = field(default_factory=CertState)
-    mente:          MenteState       = field(default_factory=MenteState)
-    verify:         VerifyState      = field(default_factory=VerifyState)
-    midi_viz:       MidiVizState     = field(default_factory=MidiVizState)
-    resonance_viz:  ResonanceState   = field(default_factory=ResonanceState)
-    export_viz:     ExportState      = field(default_factory=ExportState)
+    current_view:   str               = HOME
+    benchmark:      BenchmarkState    = field(default_factory=BenchmarkState)
+    round:          RoundState        = field(default_factory=RoundState)
+    cert:           CertState         = field(default_factory=CertState)
+    mente:          MenteState        = field(default_factory=MenteState)
+    verify:         VerifyState       = field(default_factory=VerifyState)
+    midi_viz:       MidiVizState      = field(default_factory=MidiVizState)
+    resonance_viz:  ResonanceState    = field(default_factory=ResonanceState)
+    export_viz:     ExportState       = field(default_factory=ExportState)
+    score_replay:   ScoreReplayState  = field(default_factory=ScoreReplayState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -578,6 +597,91 @@ class AppState:
                 self.export_viz.running = False
                 self._notify()
 
+    # ── Score Replay (Phase O) ───────────────────────────────────────────────────────────────────────
+
+    async def run_score_replay(
+        self,
+        shapes: Optional[list[str]] = None,
+        source: str = "midi_viz",
+        round_num: int = 1,
+        bars: int = 4,
+    ) -> None:
+        """Run export pipeline and append a ScoreReplayFrame to the history buffer.
+
+        source="midi_viz"  → build_midi_viz_frame()  → frame_to_midi() → build_score_replay_frame()
+        source="resonance" → build_resonance_frame() → frame_to_midi() → build_score_replay_frame()
+        """
+        self.score_replay.source = source
+        async with self._lock:
+            self.score_replay.running = True
+            self.score_replay.error   = None
+            self._notify()
+            try:
+                _shapes = shapes or ["LINE"]
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=_shapes,
+                    round_num=round_num,
+                    bars=bars,
+                    offline=True,
+                )
+                if source == "resonance":
+                    frame  = build_resonance_frame(result)
+                    export = frame_to_midi(frame, source="resonance")
+                else:
+                    frame  = build_midi_viz_frame(result)
+                    export = frame_to_midi(frame, source="midi_viz")
+
+                history_index = len(self.score_replay.history)
+                replay = build_score_replay_frame(export, history_index=history_index)
+
+                # serialise (omit raw bytes; keep piano_roll and notes)
+                replay_dict = {
+                    "frame_id":         replay.frame_id,
+                    "born_at":          replay.born_at,
+                    "era":              replay.era,
+                    "version":          replay.version,
+                    "bpm":              replay.bpm,
+                    "ppqn":             replay.ppqn,
+                    "bars":             replay.bars,
+                    "source":           replay.source,
+                    "event_count":      replay.event_count,
+                    "duration_ticks":   replay.duration_ticks,
+                    "duration_seconds": replay.duration_seconds,
+                    "history_index":    replay.history_index,
+                    "notes": [
+                        {
+                            "tick":           n.tick,
+                            "channel":        n.channel,
+                            "note":           n.note,
+                            "velocity":       n.velocity,
+                            "duration_ticks": n.duration_ticks,
+                            "label":          n.label,
+                        }
+                        for n in replay.notes
+                    ],
+                    "piano_roll": [
+                        {
+                            "bar":         c.bar,
+                            "pitch_class": c.pitch_class,
+                            "octave":      c.octave,
+                            "channel":     c.channel,
+                            "velocity":    c.velocity,
+                        }
+                        for c in replay.piano_roll
+                    ],
+                }
+                self.score_replay.current_frame = replay_dict
+                self.score_replay.history       = (self.score_replay.history + [replay_dict])[-10:]
+                self.score_replay.era           = replay.era
+                self.score_replay.source        = replay.source
+                self.score_replay.piano_roll    = replay_dict["piano_roll"]
+            except Exception as exc:
+                self.score_replay.error = str(exc)
+            finally:
+                self.score_replay.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -658,5 +762,12 @@ class AppState:
                 "has_midi":         self.export_viz.midi_bytes is not None,
                 "file_size_bytes":  len(self.export_viz.midi_bytes) if self.export_viz.midi_bytes else 0,
                 "error":            self.export_viz.error,
+            },
+            "score_replay": {
+                "era":           self.score_replay.era,
+                "source":        self.score_replay.source,
+                "history_count": len(self.score_replay.history),
+                "piano_cells":   len(self.score_replay.piano_roll),
+                "error":         self.score_replay.error,
             },
         }

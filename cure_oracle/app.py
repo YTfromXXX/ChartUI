@@ -17,6 +17,7 @@ Screens
   MIDI_VIZ      — MIDI visualizer cure-{era}-r4 (B地点第七画面, Phase L)
   RESONANCE_VIZ — Resonance Max-Cut × MIDI fusion cure-{era}-r5 (B地点第八画面, Phase M)
   EXPORT_VIZ    — MIDI Format 0 export cure-{era}-r6 (B地点第九画面, Phase N)
+  SCORE_REPLAY  — Score Replay & Piano-Roll History cure-{era}-r7 (B地点第十画面, Phase O)
 """
 
 from __future__ import annotations
@@ -32,7 +33,8 @@ except ImportError:
 
 from cure_oracle.app_state import (
     AppState,
-    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ,
+    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
+    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -95,7 +97,8 @@ def _status_dot(passed: bool | None) -> ft.Container:
 # ── nav rail ──────────────────────────────────────────────────────────────────
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
-    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ]
+    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
+             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -151,6 +154,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.MUSIC_NOTE_OUTLINED,
                 selected_icon=ft.Icons.MUSIC_NOTE,
                 label="MIDI出力",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.QUEUE_MUSIC_OUTLINED,
+                selected_icon=ft.Icons.QUEUE_MUSIC,
+                label="スコア再生",
             ),
         ],
         on_change=on_change,
@@ -1211,6 +1219,225 @@ def _export_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── SCORE_REPLAY screen: B地点第十画面 ───────────────────────────────────────
+
+_NOTE_NAMES_SHORT = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+_CH_REPLAY_COLORS = [_ACCENT, _PURPLE, _GOLD, _GREEN]
+
+
+def _score_replay_view(state: AppState, page: ft.Page) -> ft.Column:
+    """Phase O — cure-{era}-r7 Score Replay & Piano-Roll History (B地点第十画面).
+
+    Runs export pipeline and renders a piano-roll grid (bar × pitch_class)
+    with per-channel coloring, plus a scrollable note-event list.
+    Keeps a history of the last 10 frames selectable by index.
+    """
+    sr = state.score_replay
+
+    shapes_tf = ft.TextField(
+        value="LINE", label="形状 (カンマ区切り)",
+        width=200, bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    bars_dd = ft.Dropdown(
+        value="4",
+        options=[ft.dropdown.Option(str(b)) for b in (2, 4, 8, 16)],
+        label="バー数", width=100,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    source_dd = ft.Dropdown(
+        value=sr.source,
+        options=[
+            ft.dropdown.Option("midi_viz",  "MIDI可視化 (r4)"),
+            ft.dropdown.Option("resonance", "共鳴スコア (r5)"),
+        ],
+        label="ソース", width=180,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    replay_btn = ft.FilledButton("▶ スコア生成", bgcolor=_PURPLE, color=_WHITE,
+                                 disabled=sr.running)
+    progress   = ft.ProgressRing(visible=sr.running, color=_ACCENT, width=24, height=24)
+
+    piano_grid  = ft.Column(spacing=2)
+    notes_col   = ft.Column(spacing=4)
+    history_row = ft.Row(spacing=8, wrap=True)
+    result_col  = ft.Column(spacing=8)
+
+    def _build_piano_grid(cells: list[dict], bars: int) -> None:
+        piano_grid.controls.clear()
+        if not cells:
+            piano_grid.controls.append(_label("ノートなし", color=_DIM))
+            return
+
+        # Header: bar indices
+        hdr_cells: list[ft.Control] = [ft.Container(width=32)]
+        for b in range(bars):
+            hdr_cells.append(ft.Container(
+                content=ft.Text(str(b + 1), size=10, color=_DIM,
+                                text_align=ft.TextAlign.CENTER),
+                width=28,
+            ))
+        piano_grid.controls.append(ft.Row(hdr_cells, spacing=2))
+
+        # Row per pitch_class (descending: B=11 → C=0)
+        cell_map = {(c["bar"], c["pitch_class"]): c for c in cells}
+        for pc in range(11, -1, -1):
+            row_cells: list[ft.Control] = [
+                ft.Container(
+                    content=ft.Text(_NOTE_NAMES_SHORT[pc], size=10, color=_DIM),
+                    width=32, alignment=ft.alignment.center_right,
+                )
+            ]
+            for b in range(bars):
+                c = cell_map.get((b, pc))
+                if c:
+                    ch_color = _CH_REPLAY_COLORS[c["channel"] % 4]
+                    alpha = max(0.3, c["velocity"] / 127.0)
+                    cell_ctrl = ft.Container(
+                        bgcolor=ch_color,
+                        width=26, height=14,
+                        border_radius=2,
+                        opacity=alpha,
+                        tooltip=f"{_NOTE_NAMES_SHORT[pc]}{c['octave']}  "
+                                f"vel={c['velocity']}  ch={c['channel']}",
+                    )
+                else:
+                    cell_ctrl = ft.Container(
+                        bgcolor=_BORDER,
+                        width=26, height=14,
+                        border_radius=2,
+                    )
+                row_cells.append(cell_ctrl)
+            piano_grid.controls.append(ft.Row(row_cells, spacing=2))
+
+    def _refresh() -> None:
+        replay_btn.disabled = sr.running
+        progress.visible    = sr.running
+        piano_grid.controls.clear()
+        notes_col.controls.clear()
+        history_row.controls.clear()
+        result_col.controls.clear()
+
+        if sr.error:
+            result_col.controls.append(_value(f"エラー: {sr.error}", color=_RED))
+            page.update()
+            return
+
+        frame = sr.current_frame
+        if not frame:
+            page.update()
+            return
+
+        result_col.controls += [
+            ft.Divider(color=_BORDER),
+            ft.Row([
+                ft.Column([_label("era"),        _value(frame["era"], color=_GOLD)],     spacing=2),
+                ft.Column([_label("BPM"),         _value(str(frame["bpm"]), color=_ACCENT)], spacing=2),
+                ft.Column([_label("ノート数"),    _value(str(frame["event_count"]), color=_WHITE)], spacing=2),
+                ft.Column([_label("長さ (秒)"),   _value(f"{frame['duration_seconds']:.2f}s", color=_WHITE)], spacing=2),
+                ft.Column([_label("履歴"),        _value(f"{len(sr.history)} / 10", color=_WHITE)], spacing=2),
+            ], spacing=20),
+        ]
+
+        _build_piano_grid(frame.get("piano_roll", []), bars=frame.get("bars", 4))
+
+        for n in frame.get("notes", [])[:20]:
+            ch_color = _CH_REPLAY_COLORS[n["channel"] % 4]
+            notes_col.controls.append(ft.Row([
+                ft.Container(_value(n["label"], color=ch_color), width=40),
+                ft.Container(_label(f"ch{n['channel']}"), width=32),
+                ft.Container(_label(f"t={n['tick']}"), width=64),
+                ft.Container(_label(f"vel={n['velocity']}"), width=56),
+                ft.Container(_label(f"dur={n['duration_ticks']}"), width=64),
+            ], spacing=4))
+
+        for i, h in enumerate(reversed(sr.history)):
+            is_current = h["frame_id"] == frame["frame_id"]
+            history_row.controls.append(_card(
+                ft.Column([
+                    ft.Text(f"#{len(sr.history) - i}", size=11,
+                            color=_ACCENT if is_current else _DIM,
+                            weight=ft.FontWeight.BOLD),
+                    _label(h["era"][:6], color=_GOLD if is_current else _DIM),
+                    _label(f"{h['event_count']}n", color=_DIM),
+                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=6,
+            ))
+
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_replay(_: ft.ControlEvent) -> None:
+        shapes = [s.strip().upper() for s in shapes_tf.value.split(",") if s.strip()]
+        if not shapes:
+            shapes = ["LINE"]
+        src = source_dd.value or "midi_viz"
+        await state.run_score_replay(shapes=shapes, source=src,
+                                     bars=int(bars_dd.value or "4"))
+
+    replay_btn.on_click = on_replay
+
+    obs = _observer_info()
+    obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.QUEUE_MUSIC, color=_ACCENT, size=16),
+        ft.Text(
+            f"B地点 スコア再生  cure-{{era}}-r7  MIDI piano-roll  history×10  "
+            f"{obs['system']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.QUEUE_MUSIC, color=_ACCENT, size=24),
+            _title("スコア再生  cure-{era}-r7", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+        obs_banner,
+
+        _card(ft.Column([
+            _title("シミュレーション設定", size=14, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([shapes_tf, bars_dd, source_dd], spacing=12, wrap=True),
+            ft.Container(height=8),
+            ft.Row([replay_btn, progress], spacing=12),
+        ], spacing=4)),
+
+        result_col,
+
+        _card(ft.Column([
+            _title("ピアノロール  (bar × pitch)", size=12, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([
+                ft.Container(_card(ft.Row([
+                    ft.Container(bgcolor=_CH_REPLAY_COLORS[i], width=12, height=12,
+                                 border_radius=2),
+                    _label(["大甲音", "甲音", "呂音", "呂音-bass"][i]),
+                ], spacing=4), padding=4))
+                for i in range(4)
+            ], spacing=8, wrap=True),
+            ft.Container(height=4),
+            ft.SingleChildScrollView(
+                content=piano_grid,
+                scroll_direction=ft.ScrollMode.HORIZONTAL,
+            ),
+        ], spacing=4)),
+
+        _card(ft.Column([
+            _title("ノートイベント (先頭20件)", size=12, color=_DIM),
+            ft.Container(height=4),
+            notes_col,
+        ], spacing=4)),
+
+        _card(ft.Column([
+            _title("履歴バッファ (最新10フレーム)", size=12, color=_DIM),
+            ft.Container(height=4),
+            history_row,
+        ], spacing=4)),
+
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -1231,6 +1458,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _resonance_view(state, page)
     if view == EXPORT_VIZ:
         return _export_view(state, page)
+    if view == SCORE_REPLAY:
+        return _score_replay_view(state, page)
     return _home_view(state)
 
 
