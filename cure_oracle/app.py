@@ -16,6 +16,7 @@ Screens
   VERIFY      — sig-receipt/1 Merkle verification (B地点)
   MIDI_VIZ      — MIDI visualizer cure-{era}-r4 (B地点第七画面, Phase L)
   RESONANCE_VIZ — Resonance Max-Cut × MIDI fusion cure-{era}-r5 (B地点第八画面, Phase M)
+  EXPORT_VIZ    — MIDI Format 0 export cure-{era}-r6 (B地点第九画面, Phase N)
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ except ImportError:
 
 from cure_oracle.app_state import (
     AppState,
-    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ,
+    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ def _status_dot(passed: bool | None) -> ft.Container:
 # ── nav rail ──────────────────────────────────────────────────────────────────
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
-    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ]
+    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -145,6 +146,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.HUB_OUTLINED,
                 selected_icon=ft.Icons.HUB,
                 label="共鳴スコア",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.MUSIC_NOTE_OUTLINED,
+                selected_icon=ft.Icons.MUSIC_NOTE,
+                label="MIDI出力",
             ),
         ],
         on_change=on_change,
@@ -1082,6 +1088,129 @@ def _resonance_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── EXPORT_VIZ screen: B地点第九画面 ─────────────────────────────────────────
+
+_SOURCE_LABELS = {"midi_viz": "MIDI可視化 (r4)", "resonance": "共鳴スコア (r5)"}
+
+
+def _export_view(state: AppState, page: ft.Page) -> ft.Column:
+    """Phase N — cure-{era}-r6 MIDI Export (B地点第九画面).
+
+    Runs quantum-sim + frame builder + MIDI Format 0 writer and displays
+    metadata for the resulting .mid file.  POST /candy/export/midi provides
+    the same bytes over HTTP.
+    """
+    ev = state.export_viz
+
+    shapes_tf = ft.TextField(
+        value=",".join(ev.shapes), label="形状 (カンマ区切り)",
+        width=200, bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    bars_dd = ft.Dropdown(
+        value="4",
+        options=[ft.dropdown.Option(str(b)) for b in (2, 4, 8, 16)],
+        label="バー数", width=100,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    source_dd = ft.Dropdown(
+        value=ev.source,
+        options=[
+            ft.dropdown.Option("midi_viz",   "MIDI可視化 (r4)"),
+            ft.dropdown.Option("resonance",  "共鳴スコア (r5)"),
+        ],
+        label="ソース", width=180,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    export_btn = ft.FilledButton("▶ MIDI エクスポート", bgcolor=_PURPLE, color=_WHITE,
+                                 disabled=ev.running)
+    progress   = ft.ProgressRing(visible=ev.running, color=_ACCENT, width=24, height=24)
+    result_col = ft.Column(spacing=8)
+
+    def _refresh() -> None:
+        export_btn.disabled = ev.running
+        progress.visible    = ev.running
+        result_col.controls.clear()
+
+        if ev.error:
+            result_col.controls.append(_value(f"エラー: {ev.error}", color=_RED))
+            page.update()
+            return
+
+        if not ev.last_export:
+            page.update()
+            return
+
+        ex = ev.last_export
+        result_col.controls += [
+            ft.Divider(color=_BORDER),
+            ft.Row([
+                ft.Column([_label("era"),        _value(ex["era"], color=_GOLD)],     spacing=2),
+                ft.Column([_label("BPM"),         _value(str(ex["bpm"]), color=_ACCENT)], spacing=2),
+                ft.Column([_label("PPQN"),         _value(str(ex["ppqn"]), color=_WHITE)], spacing=2),
+                ft.Column([_label("バー"),         _value(str(ex["bars"]), color=_WHITE)], spacing=2),
+                ft.Column([_label("イベント数"),   _value(str(ex["event_count"]), color=_WHITE)], spacing=2),
+                ft.Column([_label("長さ (秒)"),    _value(f"{ex['duration_seconds']:.2f}s", color=_WHITE)], spacing=2),
+                ft.Column([_label("ファイルサイズ"), _value(f"{ex['file_size_bytes']} B", color=_WHITE)], spacing=2),
+            ], spacing=20, wrap=True),
+            _card(ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.CHECK_CIRCLE, color=_GREEN, size=18),
+                    _title("MIDI Format 0  生成完了", color=_GREEN, size=14),
+                ], spacing=8),
+                _label(f"export_id: {ex['export_id']}"),
+                _label(f"version:   {ex['version']}"),
+                _label(f"source:    {_SOURCE_LABELS.get(ex['source'], ex['source'])}"),
+                _label(f"born_at:   {ex['born_at'][:19]}"),
+            ], spacing=4), padding=16),
+        ]
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_export(_: ft.ControlEvent) -> None:
+        shapes = [s.strip().upper() for s in shapes_tf.value.split(",") if s.strip()]
+        if not shapes:
+            shapes = ["LINE"]
+        src = source_dd.value or "midi_viz"
+        await state.run_export(shapes=shapes, source=src, bars=int(bars_dd.value or "4"))
+
+    export_btn.on_click = on_export
+
+    obs = _observer_info()
+    obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.MUSIC_NOTE, color=_ACCENT, size=16),
+        ft.Text(
+            f"B地点 MIDI Export  cure-{{era}}-r6  Format 0  struct  480 PPQN  "
+            f"{obs['system']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.MUSIC_NOTE, color=_ACCENT, size=24),
+            _title("MIDI Export  cure-{era}-r6", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+        obs_banner,
+
+        _card(ft.Column([
+            _title("エクスポート設定", size=14, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([shapes_tf, bars_dd, source_dd], spacing=12, wrap=True),
+            ft.Container(height=8),
+            ft.Row([export_btn, progress], spacing=12),
+        ], spacing=4)),
+
+        _card(ft.Column([
+            _title("エンドポイント", size=12, color=_DIM),
+            _label("POST /api/v1/qpu/candy/export/midi  → audio/midi bytes"),
+        ], spacing=4)),
+
+        result_col,
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -1100,6 +1229,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _midi_viz_view(state, page)
     if view == RESONANCE_VIZ:
         return _resonance_view(state, page)
+    if view == EXPORT_VIZ:
+        return _export_view(state, page)
     return _home_view(state)
 
 

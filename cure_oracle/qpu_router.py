@@ -47,6 +47,7 @@ from cure_oracle.mesh_score import (
 from cure_oracle.quantum_sim import run_quantum_sim, CURRENT_REV as QS_REV
 from cure_oracle.midi_viz import build_midi_viz_frame
 from cure_oracle.resonance_score import build_resonance_frame as build_resonance_frame_
+from cure_oracle.midi_export import frame_to_midi as _frame_to_midi
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1263,6 +1264,7 @@ def candy_sonnet_version(
             "quantum_sim":        "/api/v1/qpu/candy/quantum-sim",
             "quantum_sim_stream": "/api/v1/qpu/candy/quantum-sim/stream",
             "resonance_stream":   "/api/v1/qpu/candy/resonance/stream",
+            "export_midi":        "/api/v1/qpu/candy/export/midi",
         },
     }
 
@@ -1634,5 +1636,83 @@ async def candy_resonance_stream(
         headers={
             "Cache-Control":    "no-cache",
             "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Phase N: MIDI Export endpoint ─────────────────────────────────────────────
+
+class MidiExportRequest(BaseModel):
+    shapes:    list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="入力キャンディ群 (1–5 shapes: CUBE/RING/TREE/LINE/STAR)",
+    )
+    round_num: int  = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
+    bars:      int  = Field(4, ge=1, le=32,   description="Sonnet-Score バー数")
+    source:    str  = Field(
+        "midi_viz",
+        description="フレームソース: midi_viz (r4) または resonance (r5)",
+    )
+
+
+@router.post(
+    "/candy/export/midi",
+    summary="Phase N — MIDI Format 0 export (cure-{era}-r6)",
+    tags=["quantum-sim"],
+)
+async def candy_export_midi(
+    request: MidiExportRequest,
+    token: str = Query(..., description="Bearer token (OPERATOR role required)"),
+):
+    """Export quantum-sim fusion result as a MIDI Format 0 (.mid) binary.
+
+    Runs run_quantum_sim() + frame builder + MIDI writer and returns
+    the raw .mid bytes with Content-Type audio/midi (B地点第九画面).
+
+    source="midi_viz"  → build_midi_viz_frame()  → frame_to_midi()
+    source="resonance" → build_resonance_frame() → frame_to_midi(source="resonance")
+    """
+    from fastapi.responses import Response as _Response
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    for s in request.shapes:
+        s_up = s.strip().upper()
+        if s_up not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    shape_list = [s.strip().upper() for s in request.shapes]
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=request.round_num,
+            bars=request.bars,
+            offline=True,
+        )
+        if request.source == "resonance":
+            frame  = build_resonance_frame_(result)
+            export = _frame_to_midi(frame, source="resonance")
+        else:
+            frame  = build_midi_viz_frame(result)
+            export = _frame_to_midi(frame, source="midi_viz")
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    filename = f"cure-{export.era}-r6-{export.export_id[:8]}.mid"
+    return _Response(
+        content=export.midi_bytes,
+        media_type="audio/midi",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Export-Id":         export.export_id,
+            "X-Era":               export.era,
+            "X-Version":           export.version,
+            "X-Event-Count":       str(export.event_count),
+            "X-Duration-Seconds":  str(export.duration_seconds),
         },
     )

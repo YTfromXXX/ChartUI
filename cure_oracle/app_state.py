@@ -67,6 +67,11 @@ try:
 except Exception:
     build_resonance_frame = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.midi_export import frame_to_midi
+except Exception:
+    frame_to_midi = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -78,6 +83,7 @@ MENTE      = "mente"
 VERIFY     = "verify"
 MIDI_VIZ       = "midi_viz"       # Phase L — B地点第七画面
 RESONANCE_VIZ  = "resonance_viz"  # Phase M — B地点第八画面
+EXPORT_VIZ     = "export_viz"     # Phase N — B地点第九画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -162,6 +168,21 @@ class ResonanceState:
 
 
 @dataclass
+class ExportState:
+    """B地点第九画面 — MIDI Export 状態 (Phase N, cure-{era}-r6)."""
+    running:          bool           = False
+    last_export:      Optional[dict] = None   # serialised MidiExportResult (no bytes)
+    midi_bytes:       Optional[bytes] = None  # raw .mid file bytes
+    source:           str            = "midi_viz"   # "midi_viz" | "resonance"
+    shapes:           list[str]      = field(default_factory=lambda: ["LINE"])
+    era:              str            = "baroque"
+    bpm:              int            = 120
+    duration_seconds: float          = 0.0
+    event_count:      int            = 0
+    error:            Optional[str]  = None
+
+
+@dataclass
 class AppState:
     current_view:   str              = HOME
     benchmark:      BenchmarkState   = field(default_factory=BenchmarkState)
@@ -171,6 +192,7 @@ class AppState:
     verify:         VerifyState      = field(default_factory=VerifyState)
     midi_viz:       MidiVizState     = field(default_factory=MidiVizState)
     resonance_viz:  ResonanceState   = field(default_factory=ResonanceState)
+    export_viz:     ExportState      = field(default_factory=ExportState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -494,6 +516,68 @@ class AppState:
                 self.resonance_viz.running = False
                 self._notify()
 
+    # ── MIDI Export (Phase N) ────────────────────────────────────────────────────────────────────────
+
+    async def run_export(
+        self,
+        shapes: Optional[list[str]] = None,
+        source: str = "midi_viz",
+        round_num: int = 1,
+        bars: int = 4,
+    ) -> None:
+        """Run quantum-sim + frame builder + MIDI export and store .mid bytes.
+
+        source="midi_viz"  → build_midi_viz_frame() → frame_to_midi()
+        source="resonance" → build_resonance_frame() → frame_to_midi(source="resonance")
+        """
+        if shapes:
+            self.export_viz.shapes = list(shapes)
+        self.export_viz.source = source
+        async with self._lock:
+            self.export_viz.running = True
+            self.export_viz.error   = None
+            self._notify()
+            try:
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=self.export_viz.shapes,
+                    round_num=round_num,
+                    bars=bars,
+                    offline=True,
+                )
+                if source == "resonance":
+                    frame = build_resonance_frame(result)
+                    export = frame_to_midi(frame, source="resonance")
+                else:
+                    frame = build_midi_viz_frame(result)
+                    export = frame_to_midi(frame, source="midi_viz")
+
+                self.export_viz.midi_bytes       = export.midi_bytes
+                self.export_viz.era              = export.era
+                self.export_viz.bpm              = export.bpm
+                self.export_viz.duration_seconds = export.duration_seconds
+                self.export_viz.event_count      = export.event_count
+                self.export_viz.last_export      = {
+                    "export_id":        export.export_id,
+                    "born_at":          export.born_at,
+                    "era":              export.era,
+                    "version":          export.version,
+                    "bpm":              export.bpm,
+                    "ppqn":             export.ppqn,
+                    "bars":             export.bars,
+                    "event_count":      export.event_count,
+                    "track_count":      export.track_count,
+                    "duration_ticks":   export.duration_ticks,
+                    "duration_seconds": export.duration_seconds,
+                    "source":           export.source,
+                    "file_size_bytes":  len(export.midi_bytes),
+                }
+            except Exception as exc:
+                self.export_viz.error = str(exc)
+            finally:
+                self.export_viz.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -563,5 +647,16 @@ class AppState:
                 "frame_count":    len(self.resonance_viz.frames),
                 "shapes":         self.resonance_viz.shapes,
                 "error":          self.resonance_viz.error,
+            },
+            "export_viz": {
+                "era":              self.export_viz.era,
+                "bpm":              self.export_viz.bpm,
+                "source":           self.export_viz.source,
+                "shapes":           self.export_viz.shapes,
+                "event_count":      self.export_viz.event_count,
+                "duration_seconds": self.export_viz.duration_seconds,
+                "has_midi":         self.export_viz.midi_bytes is not None,
+                "file_size_bytes":  len(self.export_viz.midi_bytes) if self.export_viz.midi_bytes else 0,
+                "error":            self.export_viz.error,
             },
         }
