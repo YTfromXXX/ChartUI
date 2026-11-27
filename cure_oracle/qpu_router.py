@@ -34,6 +34,7 @@ from cure_oracle.accelerator import (
     VirtualAccelerator,
 )
 from cure_oracle.gemini_candy import GeminiCandyFlash
+from cure_oracle.sonnet_score import SonnetScore
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -789,5 +790,142 @@ def candy_flash_endpoint(
             commentary=result.recommendation.commentary,
             model_used=result.recommendation.model_used,
         ),
+        observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Sonnet-Score endpoint ─────────────────────────────────────────────────────
+
+class ScoreEventResponse(BaseModel):
+    beat:          float
+    duration:      float
+    register:      str
+    motif:         str
+    intensity:     float
+    embellishment: Optional[str] = None
+
+
+class DriveCellResponse(BaseModel):
+    col:    int
+    row:    int
+    shape:  str
+    slot:   str
+    motif:  str
+    q:      float
+    effect: str
+
+
+class DriveBoardResponse(BaseModel):
+    name:  str
+    cols:  int
+    rows:  int
+    cells: list[DriveCellResponse]
+    grid:  list[list[Optional[str]]]
+
+
+class SonnetScoreRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状",
+    )
+    shots:     Optional[int] = Field(None, ge=1, le=100_000)
+    mode:      str = Field("local", description="local | fake")
+    round_num: int = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    bars:      int = Field(4, ge=1, le=32,   description="スコアのバー数")
+
+
+class SonnetScoreResponse(BaseModel):
+    score_id:       str
+    born_at:        str
+    bpm:            int
+    bars:           int
+    tilt_rate:      float
+    ascent_rate:    float
+    mente_total:    float
+    mente_achieved: bool
+    key:            str
+    mode_name:      str
+    era:            str
+    events:         list[ScoreEventResponse]
+    board_1:        DriveBoardResponse
+    board_2:        DriveBoardResponse
+    embellishments: list[str]
+    commentary:     str
+    observe_receipt: dict
+
+
+@router.post("/candy/sonnet", response_model=SonnetScoreResponse)
+def candy_sonnet_endpoint(
+    req: SonnetScoreRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> SonnetScoreResponse:
+    """
+    Sonnet-Score-API — ハーマイオニーの杖 × ドライブ板 × 螺旋 → 音楽スコア生成。
+
+    キャンディ群の量子回路を実行し螺旋状態と組み合わせて
+    ドライブ板グリッド(1: 4×4 / 2: 8×4)へのワンド攻撃を配置、
+    MENTE 上昇率・BPM・音楽時代（バロック→ロマン派）を含む
+    Sonnet-Score 構造体と sig-receipt/1 を返す。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/sonnet/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "sonnet supports only local or fake mode")
+
+    try:
+        ss = SonnetScore(bars=req.bars)
+        result = ss.compute_offline(
+            shapes=req.shapes,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.sonnet", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    audit.log(role.value, "candy.sonnet", resource, "success", {
+        "ascent_rate": result.ascent_rate,
+        "bpm":         result.bpm,
+        "era":         result.era,
+    })
+
+    def _board(b) -> DriveBoardResponse:
+        return DriveBoardResponse(
+            name=b.name, cols=b.cols, rows=b.rows,
+            cells=[DriveCellResponse(
+                col=c.col, row=c.row, shape=c.shape, slot=c.slot,
+                motif=c.motif, q=c.q, effect=c.effect,
+            ) for c in b.cells],
+            grid=b.to_grid(),
+        )
+
+    return SonnetScoreResponse(
+        score_id=result.score_id,
+        born_at=result.born_at,
+        bpm=result.bpm,
+        bars=result.bars,
+        tilt_rate=result.tilt_rate,
+        ascent_rate=result.ascent_rate,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        key=result.key,
+        mode_name=result.mode_name,
+        era=result.era,
+        events=[ScoreEventResponse(
+            beat=e.beat, duration=e.duration, register=e.register,
+            motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+        ) for e in result.events],
+        board_1=_board(result.board_1),
+        board_2=_board(result.board_2),
+        embellishments=result.embellishments,
+        commentary=result.commentary,
         observe_receipt=result.observe_receipt,
     )
