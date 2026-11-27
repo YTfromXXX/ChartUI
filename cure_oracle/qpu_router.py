@@ -40,6 +40,10 @@ from cure_oracle.accelerator import (
 from cure_oracle.gemini_candy import GeminiCandyFlash
 from cure_oracle.sonnet_score import SonnetScore
 from cure_oracle.sonnet_remix import compute_remix, VALID_REMIX_STYLES
+from cure_oracle.mesh_score import (
+    strokes_to_score, era_from_mente, GridConfig as MeshGridConfig,
+    CURRENT_REV, ERA_MENTE_LOWER,
+)
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1154,3 +1158,104 @@ async def candy_sonnet_stream_endpoint(
             "X-Accel-Buffering": "no",
         },
     )
+
+# ── Phase J: mesh-score models ────────────────────────────────────────────────
+
+class RawPointModel(BaseModel):
+    x: float = Field(..., ge=0.0, le=1.0, description="Normalized x ∈ [0,1] (time)")
+    y: float = Field(..., ge=0.0, le=1.0, description="Normalized y ∈ [0,1] (pitch, top=high)")
+    t: float = Field(0.0, description="Timestamp in ms (optional)")
+
+
+class GridConfigModel(BaseModel):
+    cols: int = Field(16, ge=4, le=64)
+    rows: int = Field(12, ge=4, le=24)
+    bpm: int = Field(120, ge=40, le=240)
+    bars: int = Field(4, ge=1, le=16)
+    beats_per_bar: int = Field(4, ge=2, le=7)
+
+
+class MeshScoreRequest(BaseModel):
+    strokes: list[list[RawPointModel]] = Field(
+        ..., description="List of strokes; each stroke is a list of RawPoints"
+    )
+    era: str = Field("baroque", description="Musical era for instrument context")
+    grid: GridConfigModel = Field(default_factory=GridConfigModel)
+
+
+class MeshScoreResponse(BaseModel):
+    era: str
+    version: str
+    bpm: int
+    bars: int
+    events: list[dict]
+    stroke_count: int
+    export_hint: str
+
+
+# ── Phase J endpoints ─────────────────────────────────────────────────────────
+
+@router.post(
+    "/candy/sonnet/mesh-score",
+    response_model=MeshScoreResponse,
+    summary="Phase J — free-curve mesh → musical notes",
+    tags=["sonnet"],
+)
+def candy_sonnet_mesh_score(
+    req: MeshScoreRequest,
+    _: Role = Depends(require_role(Role.OPERATOR)),
+):
+    """Convert freehand strokes drawn on a grid mesh into Sonnet-Score NoteEvents.
+
+    Each stroke's geometry (curvature, oscillation, length, Y-position) is
+    analysed and mapped to: register (大甲音/甲音/呂音/呂音-bass), motif type,
+    beat offset, duration, and intensity.  The resulting events are
+    MIDI-compatible at 480 PPQN via to_midi_events().
+    """
+    cfg = MeshGridConfig(
+        cols=req.grid.cols,
+        rows=req.grid.rows,
+        bpm=req.grid.bpm,
+        bars=req.grid.bars,
+        beats_per_bar=req.grid.beats_per_bar,
+    )
+    raw_strokes = [
+        [{"x": p.x, "y": p.y, "t": p.t} for p in stroke]
+        for stroke in req.strokes
+    ]
+    try:
+        result = strokes_to_score(raw_strokes, era=req.era, grid_cfg=cfg)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return result
+
+
+@router.get(
+    "/candy/sonnet/version",
+    summary="Phase J — era-aware version negotiation",
+    tags=["sonnet"],
+)
+def candy_sonnet_version(
+    mente_total: float = Query(0.0, ge=0.0, description="Current MENTE score"),
+):
+    """Return the active Sonnet-Score API version for a given MENTE score.
+
+    The ``{era}`` segment is computed from *mente_total* using the same
+    thresholds as SonnetScore.compute_offline().  The ``{rev}`` is the
+    Phase J revision constant (r2).
+    """
+    era = era_from_mente(mente_total)
+    return {
+        "version":        f"cure-{era}-r{CURRENT_REV}",
+        "era":            era,
+        "rev":            CURRENT_REV,
+        "mente_total":    mente_total,
+        "era_thresholds": ERA_MENTE_LOWER,
+        "endpoint_map": {
+            "compute":    "/api/v1/qpu/candy/sonnet",
+            "remix":      "/api/v1/qpu/candy/sonnet/remix",
+            "stream":     "/api/v1/qpu/candy/sonnet/stream",
+            "mesh_score": "/api/v1/qpu/candy/sonnet/mesh-score",
+            "version":    "/api/v1/qpu/candy/sonnet/version",
+        },
+    }
