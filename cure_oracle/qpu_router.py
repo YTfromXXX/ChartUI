@@ -33,6 +33,7 @@ from cure_oracle.accelerator import (
     AcceleratorResult,
     VirtualAccelerator,
 )
+from cure_oracle.gemini_candy import GeminiCandyFlash
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -657,6 +658,136 @@ def accelerate_endpoint(
             mente_achieved=result.synthesized.mente_achieved,
             four_kings=result.synthesized.four_kings,
             missing_slots=result.synthesized.missing_slots,
+        ),
+        observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Gemini-Candy-Flash endpoint ───────────────────────────────────────────────
+
+class GeminiRecommendationResponse(BaseModel):
+    suggested_shapes: list[str]
+    suggested_shots:  int
+    suggested_theta:  str
+    retest_reason:    str
+    commentary:       str
+    model_used:       str
+
+
+class CandyFlashRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状 (CUBE / RING / TREE / LINE / STAR)",
+    )
+    shots: Optional[int] = Field(
+        None, ge=1, le=100_000,
+        description="Shots per shape; None = canonical default per shape",
+    )
+    mode: str = Field("local", description="local | fake")
+    round_num: int = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    offline: bool = Field(
+        False,
+        description="True = skip Gemini call, return heuristic recommendation",
+    )
+
+
+class CandyFlashResponse(BaseModel):
+    session_id:      str
+    born_at:         str
+    runs:            list[AcceleratorRunResponse]
+    synthesized:     SynthesizedResponse
+    spiral:          dict
+    spiral_preview:  str
+    gemini:          GeminiRecommendationResponse
+    observe_receipt: dict
+
+
+@router.post("/candy/flash", response_model=CandyFlashResponse)
+def candy_flash_endpoint(
+    req: CandyFlashRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> CandyFlashResponse:
+    """
+    Gemini-Candy-Flash-API — キャンディ群 × 螺旋 → Gemini Flash パラメーター制御。
+
+    キャンディ群（CUBE / RING / TREE / LINE / STAR）の量子回路を実行し、
+    螺旋ラウンド回路状態と合わせて Gemini Flash に送信する。
+    Gemini は MENTE スコア改善のための内部パラメーター推薦を返す。
+
+    **offline=true** で Gemini 呼び出しをスキップし、ヒューリスティック推薦を返す。
+    Gemini を呼び出す場合は GEMINI_API_KEY 環境変数が必要。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/flash/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}",
+            )
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "candy/flash supports only local or fake mode")
+
+    try:
+        flash = GeminiCandyFlash()
+        if req.offline or not os.environ.get("GEMINI_API_KEY"):
+            result = flash.run_offline(
+                shapes=req.shapes,
+                shots=req.shots,
+                mode=req.mode,
+                round_num=req.round_num,
+            )
+        else:
+            result = flash.run(
+                shapes=req.shapes,
+                shots=req.shots,
+                mode=req.mode,
+                round_num=req.round_num,
+            )
+    except EnvironmentError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.flash", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    acc = result.accelerator
+    audit.log(role.value, "candy.flash", resource, "success", {
+        "mente_total":  acc.synthesized.mente_total,
+        "four_kings":   acc.synthesized.four_kings,
+        "model_used":   result.recommendation.model_used,
+    })
+
+    def _rr(r) -> AcceleratorRunResponse:
+        return AcceleratorRunResponse(
+            shape=r.shape, q=r.q, slot=r.slot, delta=r.delta,
+            passed=r.passed, sig_code=r.sig_code, backend=r.backend,
+            shots=r.shots, theta_disp=r.theta_disp,
+        )
+
+    return CandyFlashResponse(
+        session_id=result.session_id,
+        born_at=result.born_at,
+        runs=[_rr(r) for r in acc.runs],
+        synthesized=SynthesizedResponse(
+            slots={s: _rr(run) for s, run in acc.synthesized.slots.items()},
+            mente_total=acc.synthesized.mente_total,
+            mente_achieved=acc.synthesized.mente_achieved,
+            four_kings=acc.synthesized.four_kings,
+            missing_slots=acc.synthesized.missing_slots,
+        ),
+        spiral=result.spiral,
+        spiral_preview=result.spiral_preview,
+        gemini=GeminiRecommendationResponse(
+            suggested_shapes=result.recommendation.suggested_shapes,
+            suggested_shots=result.recommendation.suggested_shots,
+            suggested_theta=result.recommendation.suggested_theta,
+            retest_reason=result.recommendation.retest_reason,
+            commentary=result.recommendation.commentary,
+            model_used=result.recommendation.model_used,
         ),
         observe_receipt=result.observe_receipt,
     )
