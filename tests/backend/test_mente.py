@@ -1,5 +1,6 @@
 """Tests for cure_oracle/mente.py and /api/v1/qpu/mente/* endpoints."""
 
+import os
 import pathlib
 from unittest.mock import patch, MagicMock
 
@@ -16,6 +17,13 @@ from cure_oracle.mente import (
     MenteCheckResult,
     MenteBirthResult,
 )
+
+_TEST_OPERATOR_TOKEN = "test-operator-token-for-ci"
+os.environ.setdefault(
+    "CURE_API_TOKENS",
+    f'{{"{_TEST_OPERATOR_TOKEN}":"operator"}}',
+)
+_OPERATOR_HEADERS = {"Authorization": f"Bearer {_TEST_OPERATOR_TOKEN}"}
 
 app = FastAPI()
 app.include_router(router)
@@ -179,13 +187,13 @@ class TestIssueBirthOnMente:
 
 class TestMenteCheckEndpoint:
     def test_four_kings_returns_200(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         assert r.status_code == 200
 
     def test_four_kings_achieved_true(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         data = r.json()
@@ -193,26 +201,26 @@ class TestMenteCheckEndpoint:
         assert data["mente_total"] > MENTE_CONST
 
     def test_four_kings_missing_empty(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         assert r.json()["missing_kings"] == []
 
     def test_four_slots_in_response(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         slots = {s["slot"] for s in r.json()["slots"]}
         assert slots == {"S1", "S2", "S3", "S4"}
 
     def test_low_q_not_achieved(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": LOW_TRIS,
         })
         assert r.json()["mente_achieved"] is False
 
     def test_response_has_required_fields(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         data = r.json()
@@ -221,7 +229,7 @@ class TestMenteCheckEndpoint:
             assert key in data, f"missing key: {key}"
 
     def test_slot_fields_present(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": FOUR_KINGS_TRIS,
         })
         for s in r.json()["slots"]:
@@ -230,18 +238,18 @@ class TestMenteCheckEndpoint:
                 assert key in s, f"missing slot key: {key}"
 
     def test_too_many_triangles_422(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": [{"q": 0.5, "label": x}
                           for x in ["A", "B", "C", "D", "E"]],
         })
         assert r.status_code == 422
 
     def test_empty_triangles_422(self):
-        r = client.post("/api/v1/qpu/mente/check", json={"triangles": []})
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={"triangles": []})
         assert r.status_code == 422
 
     def test_q_out_of_range_422(self):
-        r = client.post("/api/v1/qpu/mente/check", json={
+        r = client.post("/api/v1/qpu/mente/check", headers=_OPERATOR_HEADERS, json={
             "triangles": [{"q": 1.5, "label": "A"}],
         })
         assert r.status_code == 422
@@ -255,23 +263,22 @@ class TestMenteBirthEndpoint:
         payload = {
             "triangles": tris or FOUR_KINGS_TRIS,
             "round_result": rr,
+            "cert_path": "cert.json",
         }
-        if tmp_path:
-            payload["cert_path"] = str(tmp_path / "cert.json")
         return payload
 
     def test_four_kings_returns_200(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path))
         assert r.status_code == 200
 
     def test_four_kings_achieved_true(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path))
         assert r.json()["mente_achieved"] is True
 
     def test_four_kings_cert_in_response(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path))
         data = r.json()
         assert data["cert"] is not None
@@ -279,14 +286,14 @@ class TestMenteBirthEndpoint:
         assert len(data["receipts"]) == 4
 
     def test_four_kings_cert_has_四天王(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path))
         cert = r.json()["cert"]
         assert "四天王" in cert
         assert cert["mente_achieved"] is True
 
     def test_not_achieved_returns_no_cert(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path, tris=LOW_TRIS))
         data = r.json()
         assert data["mente_achieved"] is False
@@ -294,7 +301,7 @@ class TestMenteBirthEndpoint:
         assert data["receipts"] is None
 
     def test_response_has_required_fields(self, tmp_path):
-        r = client.post("/api/v1/qpu/mente/birth",
+        r = client.post("/api/v1/qpu/mente/birth", headers=_OPERATOR_HEADERS,
                         json=self._birth_payload(tmp_path))
         for key in ("mente_achieved", "mente_total", "mente_const"):
             assert key in r.json(), f"missing key: {key}"

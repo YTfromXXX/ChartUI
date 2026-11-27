@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
+
+_log = logging.getLogger(__name__)
 
 # module-level imports — present at import time so patch() can target them
 try:
@@ -112,6 +115,7 @@ class AppState:
 
     # registered UI-refresh callbacks (called after each state mutation)
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     # ── listener plumbing ─────────────────────────────────────────────────────
 
@@ -122,8 +126,8 @@ class AppState:
         for cb in self._listeners:
             try:
                 cb()
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.warning("listener error: %s", exc, exc_info=True)
 
     def navigate(self, view: str) -> None:
         self.current_view = view
@@ -141,45 +145,46 @@ class AppState:
         token: Optional[str] = None,
         instance: Optional[str] = None,
     ) -> None:
-        self.benchmark.running = True
-        self.benchmark.error   = None
-        self.benchmark.result  = None
-        self.benchmark.shape      = shape
-        self.benchmark.n_qubits   = n_qubits
-        self.benchmark.theta_disp = theta_disp
-        self.benchmark.shots      = shots
-        self.benchmark.mode       = mode
-        self._notify()
-        try:
-            kwargs: dict[str, Any] = dict(
-                shape=shape, n_qubits=n_qubits,
-                theta_disp=theta_disp, shots=shots, mode=mode,
-            )
-            if mode == "ibm":
-                kwargs.update(token=token, instance=instance, confirm=CONFIRM)
-            result = await asyncio.to_thread(run_benchmark, **kwargs)
-            sig = issue_sig_if_passed(result)
-            self.benchmark.result = {
-                "shape":        result.shape,
-                "circuit_family": result.circuit_family,
-                "n_qubits":     result.n_qubits,
-                "theta_disp":   result.theta_disp,
-                "shots":        result.shots,
-                "backend":      result.backend,
-                "circuit_hash": result.circuit_hash,
-                "delta":        round(result.delta, 6),
-                "eps_threshold": result.eps_threshold,
-                "passed":       result.passed,
-                "sig_code":     result.sig_code,
-                "job_id":       result.job_id,
-                "qpu_seconds":  result.qpu_seconds,
-                "sig":          sig,
-            }
-        except Exception as exc:
-            self.benchmark.error = str(exc)
-        finally:
-            self.benchmark.running = False
+        async with self._lock:
+            self.benchmark.running = True
+            self.benchmark.error   = None
+            self.benchmark.result  = None
+            self.benchmark.shape      = shape
+            self.benchmark.n_qubits   = n_qubits
+            self.benchmark.theta_disp = theta_disp
+            self.benchmark.shots      = shots
+            self.benchmark.mode       = mode
             self._notify()
+            try:
+                kwargs: dict[str, Any] = dict(
+                    shape=shape, n_qubits=n_qubits,
+                    theta_disp=theta_disp, shots=shots, mode=mode,
+                )
+                if mode == "ibm":
+                    kwargs.update(token=token, instance=instance, confirm=CONFIRM)
+                result = await asyncio.to_thread(run_benchmark, **kwargs)
+                sig = issue_sig_if_passed(result)
+                self.benchmark.result = {
+                    "shape":        result.shape,
+                    "circuit_family": result.circuit_family,
+                    "n_qubits":     result.n_qubits,
+                    "theta_disp":   result.theta_disp,
+                    "shots":        result.shots,
+                    "backend":      result.backend,
+                    "circuit_hash": result.circuit_hash,
+                    "delta":        round(result.delta, 6),
+                    "eps_threshold": result.eps_threshold,
+                    "passed":       result.passed,
+                    "sig_code":     result.sig_code,
+                    "job_id":       result.job_id,
+                    "qpu_seconds":  result.qpu_seconds,
+                    "sig":          sig,
+                }
+            except Exception as exc:
+                self.benchmark.error = str(exc)
+            finally:
+                self.benchmark.running = False
+                self._notify()
 
     # ── round ─────────────────────────────────────────────────────────────────
 
@@ -191,25 +196,26 @@ class AppState:
         token: Optional[str] = None,
         instance: Optional[str] = None,
     ) -> None:
-        self.round.running   = True
-        self.round.error     = None
-        self.round.result    = None
-        self.round.preview   = None
-        self.round.round_num = round_num
-        self.round.mode      = mode
-        self._notify()
-        try:
-            kwargs: dict[str, Any] = dict(round_num=round_num, mode=mode, shots=shots)
-            if mode == "ibm":
-                kwargs.update(token=token, instance=instance, confirm="RUN ON QPU")
-            result = await asyncio.to_thread(round_circuit, **kwargs)
-            self.round.result  = result
-            self.round.preview = spiral_preview(result)
-        except Exception as exc:
-            self.round.error = str(exc)
-        finally:
-            self.round.running = False
+        async with self._lock:
+            self.round.running   = True
+            self.round.error     = None
+            self.round.result    = None
+            self.round.preview   = None
+            self.round.round_num = round_num
+            self.round.mode      = mode
             self._notify()
+            try:
+                kwargs: dict[str, Any] = dict(round_num=round_num, mode=mode, shots=shots)
+                if mode == "ibm":
+                    kwargs.update(token=token, instance=instance, confirm="RUN ON QPU")
+                result = await asyncio.to_thread(round_circuit, **kwargs)
+                self.round.result  = result
+                self.round.preview = spiral_preview(result)
+            except Exception as exc:
+                self.round.error = str(exc)
+            finally:
+                self.round.running = False
+                self._notify()
 
     # ── MENTE ─────────────────────────────────────────────────────────────────
 
@@ -220,45 +226,46 @@ class AppState:
         cert_path: str = "cure_birth_certificate.json",
     ) -> None:
         """Calculate MENTE and auto-issue birth cert when 四天王全顕現."""
-        self.mente.running        = True
-        self.mente.error          = None
-        self.mente.check_result   = None
-        self.mente.birth_result   = None
-        self.mente.triangles      = list(triangles)
-        self._notify()
-        try:
-            check = await asyncio.to_thread(check_mente, triangles)
-            self.mente.mente_total    = check.mente_total
-            self.mente.mente_achieved = check.mente_achieved
-            self.mente.missing_kings  = check.missing_kings
-            self.mente.check_result = {
-                "slots": [
-                    {"label": s.label, "slot": s.slot, "king": s.king,
-                     "sig": s.sig, "mente": s.mente, "epsilon": s.epsilon,
-                     "shape": s.shape}
-                    for s in check.slots
-                ],
-                "mente_total":    check.mente_total,
-                "mente_achieved": check.mente_achieved,
-                "mente_const":    check.mente_const,
-                "missing_kings":  check.missing_kings,
-            }
-            if check.mente_achieved and round_result is not None:
-                birth = await asyncio.to_thread(
-                    issue_birth_on_mente, triangles, round_result, cert_path,
-                )
-                if birth is not None:
-                    self.mente.birth_result = {
-                        "cert":      birth.cert,
-                        "receipts":  birth.receipts,
-                        "cert_path": birth.cert_path,
-                        "html_path": birth.html_path,
-                    }
-        except Exception as exc:
-            self.mente.error = str(exc)
-        finally:
-            self.mente.running = False
+        async with self._lock:
+            self.mente.running        = True
+            self.mente.error          = None
+            self.mente.check_result   = None
+            self.mente.birth_result   = None
+            self.mente.triangles      = list(triangles)
             self._notify()
+            try:
+                check = await asyncio.to_thread(check_mente, triangles)
+                self.mente.mente_total    = check.mente_total
+                self.mente.mente_achieved = check.mente_achieved
+                self.mente.missing_kings  = check.missing_kings
+                self.mente.check_result = {
+                    "slots": [
+                        {"label": s.label, "slot": s.slot, "king": s.king,
+                         "sig": s.sig, "mente": s.mente, "epsilon": s.epsilon,
+                         "shape": s.shape}
+                        for s in check.slots
+                    ],
+                    "mente_total":    check.mente_total,
+                    "mente_achieved": check.mente_achieved,
+                    "mente_const":    check.mente_const,
+                    "missing_kings":  check.missing_kings,
+                }
+                if check.mente_achieved and round_result is not None:
+                    birth = await asyncio.to_thread(
+                        issue_birth_on_mente, triangles, round_result, cert_path,
+                    )
+                    if birth is not None:
+                        self.mente.birth_result = {
+                            "cert":      birth.cert,
+                            "receipts":  birth.receipts,
+                            "cert_path": birth.cert_path,
+                            "html_path": birth.html_path,
+                        }
+            except Exception as exc:
+                self.mente.error = str(exc)
+            finally:
+                self.mente.running = False
+                self._notify()
 
     # ── birth certificate ─────────────────────────────────────────────────────
 

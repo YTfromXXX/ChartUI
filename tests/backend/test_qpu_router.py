@@ -1,5 +1,6 @@
 """Tests for cure_oracle/qpu_router.py — /api/v1/qpu/* endpoints."""
 
+import os
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +13,18 @@ from cure_oracle.benchmark import (
     SHAPE_CIRCUIT_MAP,
     BenchmarkResult,
 )
+
+# ── auth helpers ──────────────────────────────────────────────────────────────
+# Set test tokens before building the TestClient so RBAC dependency sees them.
+_TEST_OPERATOR_TOKEN = "test-operator-token-for-ci"
+_TEST_ADMIN_TOKEN    = "test-qpu-admin-token-for-ci"
+# Unconditionally set so admin token is present even when another test file ran first.
+os.environ["CURE_API_TOKENS"] = (
+    f'{{"{_TEST_OPERATOR_TOKEN}":"operator","{_TEST_ADMIN_TOKEN}":"qpu_admin"}}'
+)
+
+_OPERATOR_HEADERS = {"Authorization": f"Bearer {_TEST_OPERATOR_TOKEN}"}
+_ADMIN_HEADERS    = {"Authorization": f"Bearer {_TEST_ADMIN_TOKEN}"}
 
 app = FastAPI()
 app.include_router(router)
@@ -40,20 +53,20 @@ def _make_result(**overrides) -> BenchmarkResult:
 
 class TestShapesEndpoint:
     def test_returns_200(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         assert r.status_code == 200
 
     def test_returns_five_shapes(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         assert len(r.json()) == 5
 
     def test_all_shapes_present(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         shapes = {item["shape"] for item in r.json()}
         assert shapes == set(SHAPE_CIRCUIT_MAP.keys())
 
     def test_response_has_required_fields(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         for item in r.json():
             assert "shape" in item
             assert "circuit_family" in item
@@ -61,12 +74,12 @@ class TestShapesEndpoint:
             assert "eps_code" in item
 
     def test_circuit_family_matches_map(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         for item in r.json():
             assert item["circuit_family"] == SHAPE_CIRCUIT_MAP[item["shape"]]
 
     def test_eps_code_format(self):
-        r = client.get("/api/v1/qpu/benchmark/shapes")
+        r = client.get("/api/v1/qpu/benchmark/shapes", headers=_OPERATOR_HEADERS)
         for item in r.json():
             assert item["eps_code"].startswith("ε.")
 
@@ -79,7 +92,7 @@ class TestBenchmarkEndpoint:
     def test_local_mode_returns_200(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result()) as mock_rb:
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "n_qubits": 4, "theta_disp": "√.414",
                 "shots": 512, "mode": "local",
             })
@@ -88,7 +101,7 @@ class TestBenchmarkEndpoint:
     def test_response_has_required_fields(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result()):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "local",
             })
         data = r.json()
@@ -101,7 +114,7 @@ class TestBenchmarkEndpoint:
     def test_local_mode_backend_stored(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(backend="aer_simulator")):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "local",
             })
         assert r.json()["backend"] == "aer_simulator"
@@ -109,7 +122,7 @@ class TestBenchmarkEndpoint:
     def test_local_mode_job_id_null(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(job_id=None, qpu_seconds=None)):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "local",
             })
         data = r.json()
@@ -120,7 +133,7 @@ class TestBenchmarkEndpoint:
         h = "0x" + "b" * 64
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(circuit_hash=h)):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "CUBE", "shots": 256, "mode": "local",
             })
         assert r.json()["circuit_hash"] == h
@@ -129,7 +142,7 @@ class TestBenchmarkEndpoint:
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(passed=True,
                                              sig_code="LINE-√.414-ε.010")):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "theta_disp": "√.414", "shots": 512, "mode": "local",
             })
         data = r.json()
@@ -141,7 +154,7 @@ class TestBenchmarkEndpoint:
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(passed=False, sig_code="",
                                              delta=0.5)):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "STAR", "shots": 1, "mode": "local",
             })
         assert r.json()["sig"] is None
@@ -149,7 +162,7 @@ class TestBenchmarkEndpoint:
     def test_delta_forwarded(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(delta=0.123456)):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "local",
             })
         assert abs(r.json()["delta"] - 0.123456) < 1e-5
@@ -159,7 +172,7 @@ class TestBenchmarkEndpoint:
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=_make_result(shape=shape,
                                              circuit_family=SHAPE_CIRCUIT_MAP[shape])):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": shape, "shots": 256, "mode": "local",
             })
         assert r.status_code == 200
@@ -169,7 +182,7 @@ class TestBenchmarkEndpoint:
         mock_result = _make_result()
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=mock_result) as mock_rb:
-            client.post("/api/v1/qpu/benchmark", json={
+            client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "TREE", "n_qubits": 4, "theta_disp": "π.785",
                 "shots": 1024, "mode": "local",
             })
@@ -190,7 +203,7 @@ class TestBenchmarkEndpoint:
                                    qpu_seconds=1.5)
         with patch("cure_oracle.qpu_router.run_benchmark",
                    return_value=mock_result) as mock_rb:
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_ADMIN_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "ibm",
                 "confirm": CONFIRM,
             })
@@ -209,19 +222,19 @@ class TestBenchmarkEndpoint:
 
 class TestBenchmarkValidation:
     def test_unknown_shape_returns_422(self):
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
             "shape": "BLOB", "shots": 256, "mode": "local",
         })
         assert r.status_code == 422
 
     def test_unknown_theta_disp_returns_422(self):
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
             "shape": "LINE", "theta_disp": "ψ.999", "shots": 256, "mode": "local",
         })
         assert r.status_code == 422
 
     def test_unknown_mode_returns_422(self):
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
             "shape": "LINE", "shots": 256, "mode": "quantum",
         })
         assert r.status_code == 422
@@ -229,7 +242,7 @@ class TestBenchmarkValidation:
     def test_ibm_mode_without_token_returns_503(self, monkeypatch):
         monkeypatch.delenv("IBM_QUANTUM_TOKEN", raising=False)
         monkeypatch.delenv("IBM_QUANTUM_INSTANCE", raising=False)
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_ADMIN_HEADERS, json={
             "shape": "LINE", "shots": 256, "mode": "ibm", "confirm": CONFIRM,
         })
         assert r.status_code == 503
@@ -238,7 +251,7 @@ class TestBenchmarkValidation:
     def test_ibm_mode_without_instance_returns_503(self, monkeypatch):
         monkeypatch.setenv("IBM_QUANTUM_TOKEN", "dummy-token")
         monkeypatch.delenv("IBM_QUANTUM_INSTANCE", raising=False)
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_ADMIN_HEADERS, json={
             "shape": "LINE", "shots": 256, "mode": "ibm", "confirm": CONFIRM,
         })
         assert r.status_code == 503
@@ -250,20 +263,20 @@ class TestBenchmarkValidation:
         with patch("cure_oracle.qpu_router.run_benchmark",
                    side_effect=PermissionError(
                        f'a real-QPU run requires confirm="{CONFIRM}"')):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_ADMIN_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "ibm", "confirm": "wrong",
             })
         assert r.status_code == 403
         assert "RUN ON QPU" in r.json()["detail"]
 
     def test_n_qubits_too_low_returns_422(self):
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
             "shape": "LINE", "n_qubits": 1, "shots": 256, "mode": "local",
         })
         assert r.status_code == 422
 
     def test_n_qubits_too_high_returns_422(self):
-        r = client.post("/api/v1/qpu/benchmark", json={
+        r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
             "shape": "LINE", "n_qubits": 9, "shots": 256, "mode": "local",
         })
         assert r.status_code == 422
@@ -271,7 +284,7 @@ class TestBenchmarkValidation:
     def test_value_error_from_benchmark_returns_422(self):
         with patch("cure_oracle.qpu_router.run_benchmark",
                    side_effect=ValueError("unknown shape")):
-            r = client.post("/api/v1/qpu/benchmark", json={
+            r = client.post("/api/v1/qpu/benchmark", headers=_OPERATOR_HEADERS, json={
                 "shape": "LINE", "shots": 256, "mode": "local",
             })
         assert r.status_code == 422

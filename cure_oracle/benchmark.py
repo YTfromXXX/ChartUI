@@ -64,6 +64,14 @@ _THETA_INFO: dict[str, tuple[float, float, str]] = {
 
 CONFIRM = "RUN ON QPU"
 
+
+def get_eps_code(theta_disp: str) -> str:
+    """Return the ε code string for a theta_disp value (public API)."""
+    if theta_disp not in _THETA_INFO:
+        raise ValueError(f"unknown theta_disp {theta_disp!r}; expected one of {sorted(_THETA_INFO)}")
+    return _THETA_INFO[theta_disp][2]
+
+
 # Standard IBM Quantum Campaign shapes
 CAMPAIGN_SHAPES: list[dict] = [
     {"shape": "CUBE", "n_qubits": 4, "theta_disp": "φ.618", "shots": 8192},
