@@ -34,7 +34,7 @@ except ImportError:
 from cure_oracle.app_state import (
     AppState,
     HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY,
+    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def _status_dot(passed: bool | None) -> ft.Container:
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
     views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY]
+             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -159,6 +159,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.QUEUE_MUSIC_OUTLINED,
                 selected_icon=ft.Icons.QUEUE_MUSIC,
                 label="スコア再生",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.CASINO_OUTLINED,
+                selected_icon=ft.Icons.CASINO,
+                label="パンチカード",
             ),
         ],
         on_change=on_change,
@@ -1438,6 +1443,229 @@ def _score_replay_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── PUNCHCARD screen: B地点第十一画面 ────────────────────────────────────────
+
+_PUNCH_ON  = "#38c8f0"   # punched cell: cyan
+_PUNCH_OFF = "#1a1a3a"   # blank cell: dark navy
+
+_GRID_COLORS = {
+    "A_dyn": "#38c8f0",   # dynamic A: cyan
+    "B_dyn": "#8b5cf6",   # dynamic B: purple
+    "A_sta": "#f59e0b",   # static A: gold
+    "B_sta": "#22c55e",   # static B: green
+}
+
+
+def _punch_grid(bits: list[list[int]], key: str, label: str) -> ft.Control:
+    """Render an 8×16 punchcard grid as a card."""
+    on_color = _GRID_COLORS.get(key, _PUNCH_ON)
+    rows: list[ft.Control] = []
+    for tr in range(8):
+        cells: list[ft.Control] = []
+        for step in range(16):
+            bit = bits[tr][step] if tr < len(bits) and step < len(bits[tr]) else 0
+            cells.append(ft.Container(
+                bgcolor=on_color if bit else _PUNCH_OFF,
+                width=14, height=10, border_radius=1,
+                opacity=0.9 if bit else 0.3,
+            ))
+        rows.append(ft.Row(cells, spacing=2))
+    return _card(ft.Column([
+        _title(label, size=11, color=_DIM),
+        ft.Container(height=4),
+        ft.Column(rows, spacing=2),
+    ], spacing=4), padding=10)
+
+
+def _punchcard_view(state: AppState, page: ft.Page) -> ft.Column:
+    """Phase P — cure-{era}-r8 串刺し螺旋サイコロ × Punchcard Engine (B地点第十一画面).
+
+    Displays 2 octahedra (D₁, D₂) rotating on horizontal axis u=(1,0,0)
+    with quaternion-derived helix trajectories, plus:
+      - Dynamic Punchcard A (8×16): |v'_1,i.y| > φ⁻¹ gate
+      - Dynamic Punchcard B (8×16): |Θ₂−Θ₁| mod π < threshold
+      - Static Punchcard A (8×16): 50-byte claim record bitmap
+      - Static Punchcard B (8×16): selective disclosure mask
+    """
+    pc = state.punchcard
+
+    shapes_tf = ft.TextField(
+        value="LINE", label="形状 (カンマ区切り)",
+        width=200, bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    bars_dd = ft.Dropdown(
+        value="4",
+        options=[ft.dropdown.Option(str(b)) for b in (2, 4, 8, 16)],
+        label="バー数", width=100,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    epsilon_tf = ft.TextField(
+        value="0.019", label="ε_disp",
+        width=90, keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    run_btn  = ft.FilledButton("▶ パンチカード生成", bgcolor=_PURPLE, color=_WHITE,
+                               disabled=pc.running)
+    progress = ft.ProgressRing(visible=pc.running, color=_ACCENT, width=24, height=24)
+
+    grids_row  = ft.Row(spacing=12, wrap=True)
+    params_col = ft.Column(spacing=8)
+    result_col = ft.Column(spacing=8)
+
+    def _refresh() -> None:
+        run_btn.disabled = pc.running
+        progress.visible = pc.running
+        grids_row.controls.clear()
+        params_col.controls.clear()
+        result_col.controls.clear()
+
+        if pc.error:
+            result_col.controls.append(_value(f"エラー: {pc.error}", color=_RED))
+            page.update()
+            return
+
+        frame = pc.current_frame
+        if not frame:
+            page.update()
+            return
+
+        result_col.controls += [
+            ft.Divider(color=_BORDER),
+            ft.Row([
+                ft.Column([_label("era"),           _value(frame["era"], color=_GOLD)],     spacing=2),
+                ft.Column([_label("θ_q"),            _value(f"{frame['theta_q']:.4f}", color=_ACCENT)], spacing=2),
+                ft.Column([_label("θ_disp_mode"),   _value(frame["theta_disp_mode"], color=_PURPLE)], spacing=2),
+                ft.Column([_label("ε_disp"),         _value(f"{frame['epsilon_perturbation']:.3f}", color=_WHITE)], spacing=2),
+                ft.Column([_label("R_helix"),         _value(f"{frame['helix_radius']:.3f}", color=_WHITE)], spacing=2),
+                ft.Column([_label("MENTE"),           _value(f"{frame['mente_total']:.4f}", color=_WHITE)], spacing=2),
+                ft.Column([_label("shape"),           _value(frame["shape"], color=_GOLD)], spacing=2),
+            ], spacing=20, wrap=True),
+        ]
+
+        da = frame.get("dynamic_a")
+        db = frame.get("dynamic_b")
+        sa = frame.get("static_a")
+        sb = frame.get("static_b")
+
+        if da:
+            grids_row.controls.append(
+                _punch_grid(da["bits"], "A_dyn", "Dynamic A — |v'₁ᵢ.y| > φ⁻¹")
+            )
+        if db:
+            grids_row.controls.append(
+                _punch_grid(db["bits"], "B_dyn", "Dynamic B — |Θ₂−Θ₁| mod π < ε_track")
+            )
+        if sa:
+            claim = sa.get("claim_record", "")
+            grids_row.controls.append(
+                _punch_grid(sa["bits"], "A_sta", f"Static A — {claim[:20]}")
+            )
+        if sb:
+            merkle = sb.get("merkle_root", "")
+            grids_row.controls.append(
+                _punch_grid(sb["bits"], "B_sta", f"Static B — Merkle {merkle[2:10]}…")
+            )
+
+        if sa:
+            params_col.controls += [
+                ft.Divider(color=_BORDER),
+                _card(ft.Column([
+                    _title("Claim Record (50 bytes)", size=12, color=_DIM),
+                    _value(sa.get("claim_record", ""), color=_GOLD),
+                    _label(sa.get("claim_record_hex", "")[:48] + "…", color=_DIM),
+                    ft.Container(height=4),
+                    _title("Merkle Root (SHA-256)", size=12, color=_DIM),
+                    _value(sa.get("merkle_root", "")[2:34] + "…", color=_ACCENT, size=11),
+                ], spacing=4), padding=12),
+            ]
+        if sb:
+            mask = sb.get("disclosure_mask", {})
+            mask_row = ft.Row([
+                _card(ft.Column([
+                    _label(k, color=_GREEN if v else _DIM),
+                    ft.Text("OPEN" if v else "SHLD", size=10,
+                            color=_GREEN if v else _DIM,
+                            weight=ft.FontWeight.BOLD),
+                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER), padding=4)
+                for k, v in mask.items()
+            ], spacing=6, wrap=True)
+            params_col.controls.append(_card(ft.Column([
+                _title("開示マスク", size=12, color=_DIM),
+                ft.Container(height=4),
+                mask_row,
+            ], spacing=4), padding=12))
+
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_run(_: ft.ControlEvent) -> None:
+        shapes = [s.strip().upper() for s in shapes_tf.value.split(",") if s.strip()]
+        if not shapes:
+            shapes = ["LINE"]
+        try:
+            eps = float(epsilon_tf.value or "0.019")
+        except ValueError:
+            eps = 0.019
+        await state.run_punchcard(shapes=shapes, bars=int(bars_dd.value or "4"), epsilon=eps)
+
+    run_btn.on_click = on_run
+
+    obs = _observer_info()
+    obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.CASINO, color=_PURPLE, size=16),
+        ft.Text(
+            f"B地点 串刺し螺旋サイコロ  cure-{{era}}-r8  正八面体×2  quaternion×x軸  "
+            f"{obs['system']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.CASINO, color=_PURPLE, size=24),
+            _title("パンチカード  cure-{era}-r8", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+        obs_banner,
+
+        _card(ft.Column([
+            _title("シミュレーション設定", size=14, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([shapes_tf, bars_dd, epsilon_tf], spacing=12, wrap=True),
+            ft.Container(height=8),
+            ft.Row([run_btn, progress], spacing=12),
+        ], spacing=4)),
+
+        result_col,
+
+        _card(ft.Column([
+            _title("パンチカードグリッド (8 tracks × 16 steps)", size=12, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([
+                _card(ft.Row([
+                    ft.Container(bgcolor=_GRID_COLORS[k], width=12, height=10, border_radius=1),
+                    _label(lbl),
+                ], spacing=4), padding=4)
+                for k, lbl in [
+                    ("A_dyn", "Dyn-A: y閾値"),
+                    ("B_dyn", "Dyn-B: 位相差"),
+                    ("A_sta", "Sta-A: クレーム"),
+                    ("B_sta", "Sta-B: 開示"),
+                ]
+            ], spacing=8, wrap=True),
+            ft.Container(height=4),
+            ft.SingleChildScrollView(
+                content=grids_row,
+                scroll_direction=ft.ScrollMode.HORIZONTAL,
+            ),
+        ], spacing=4)),
+
+        params_col,
+
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -1460,6 +1688,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _export_view(state, page)
     if view == SCORE_REPLAY:
         return _score_replay_view(state, page)
+    if view == PUNCHCARD:
+        return _punchcard_view(state, page)
     return _home_view(state)
 
 

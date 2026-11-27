@@ -49,6 +49,7 @@ from cure_oracle.midi_viz import build_midi_viz_frame
 from cure_oracle.resonance_score import build_resonance_frame as build_resonance_frame_
 from cure_oracle.midi_export import frame_to_midi as _frame_to_midi
 from cure_oracle.score_replay import build_score_replay_frame as _build_score_replay_frame
+from cure_oracle.punchcard import build_punchcard_frame as _build_punchcard_frame
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1267,6 +1268,7 @@ def candy_sonnet_version(
             "resonance_stream":   "/api/v1/qpu/candy/resonance/stream",
             "export_midi":        "/api/v1/qpu/candy/export/midi",
             "score_replay":       "/api/v1/qpu/candy/score-replay/frames",
+            "punchcard":          "/api/v1/qpu/candy/punchcard/frame",
         },
     }
 
@@ -1807,4 +1809,86 @@ async def candy_score_replay_frames(
             }
             for c in replay.piano_roll
         ],
+    }
+
+
+# ── Phase P: Punchcard Engine endpoint ───────────────────────────────────────
+
+@router.get(
+    "/candy/punchcard/frame",
+    summary="Phase P — 串刺し螺旋サイコロ × Punchcard Engine frame (cure-{era}-r8)",
+    tags=["quantum-sim"],
+)
+async def candy_punchcard_frame(
+    shapes:  str   = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:   int   = Query(1,     ge=1,  le=9999, description="蔓旋ラウンド番号"),
+    bars:    int   = Query(4,     ge=1,  le=32,   description="バー数"),
+    epsilon: float = Query(0.019, ge=0.0, le=1.0, description="ε_disp noise perturbation"),
+    token:   str   = Query(...,                   description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run quantum-sim and return a PunchcardFrame as JSON (B地点第十一画面).
+
+    GET /candy/punchcard/frame?shapes=LINE&round=1&token=…
+
+    Returns 4 punchcard grids: Dynamic A/B (8×16, quaternion-driven) and
+    Static A/B (50-byte claim record + selective disclosure mask).
+    No binary bytes in response — all grids are integer bit-arrays.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        pf = _build_punchcard_frame(result, epsilon=epsilon, t_steps=16)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    def _grid(g) -> dict:
+        return {"tracks": g.tracks, "steps": g.steps, "bits": g.bits,
+                "track_labels": g.track_labels, "pattern": g.pattern}
+
+    def _static(s) -> dict:
+        return {
+            "pattern":          s.pattern,
+            "claim_record":     s.claim_record,
+            "claim_record_hex": s.claim_record_hex,
+            "bits":             s.bits,
+            "track_labels":     s.track_labels,
+            "disclosure_mask":  s.disclosure_mask,
+            "merkle_root":      s.merkle_root,
+        }
+
+    return {
+        "frame_id":             pf.frame_id,
+        "born_at":              pf.born_at,
+        "era":                  pf.era,
+        "version":              pf.version,
+        "shape":                pf.shape,
+        "theta_q":              pf.theta_q,
+        "theta_disp":           pf.theta_disp,
+        "theta_disp_mode":      pf.theta_disp_mode,
+        "epsilon_perturbation": pf.epsilon_perturbation,
+        "mente_total":          pf.mente_total,
+        "helix_radius":         pf.helix_radius,
+        "t_steps":              pf.t_steps,
+        "dynamic_a":            _grid(pf.dynamic_a),
+        "dynamic_b":            _grid(pf.dynamic_b),
+        "static_a":             _static(pf.static_a),
+        "static_b":             _static(pf.static_b),
     }

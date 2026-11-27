@@ -77,6 +77,11 @@ try:
 except Exception:
     build_score_replay_frame = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.punchcard import build_punchcard_frame
+except Exception:
+    build_punchcard_frame = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -90,6 +95,7 @@ MIDI_VIZ       = "midi_viz"       # Phase L — B地点第七画面
 RESONANCE_VIZ  = "resonance_viz"  # Phase M — B地点第八画面
 EXPORT_VIZ     = "export_viz"     # Phase N — B地点第九画面
 SCORE_REPLAY   = "score_replay"   # Phase O — B地点第十画面
+PUNCHCARD      = "punchcard"      # Phase P — B地点第十一画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -201,6 +207,17 @@ class ScoreReplayState:
 
 
 @dataclass
+class PunchcardState:
+    """B地点第十一画面 — 串刺し螺旋サイコロ × Punchcard Engine 状態 (Phase P, cure-{era}-r8)."""
+    running:         bool           = False
+    current_frame:   Optional[dict] = None   # serialised PunchcardFrame
+    era:             str            = "baroque"
+    theta_disp_mode: str            = "π.785"
+    shape:           str            = "LINE"
+    error:           Optional[str]  = None
+
+
+@dataclass
 class AppState:
     current_view:   str               = HOME
     benchmark:      BenchmarkState    = field(default_factory=BenchmarkState)
@@ -212,6 +229,7 @@ class AppState:
     resonance_viz:  ResonanceState    = field(default_factory=ResonanceState)
     export_viz:     ExportState       = field(default_factory=ExportState)
     score_replay:   ScoreReplayState  = field(default_factory=ScoreReplayState)
+    punchcard:      PunchcardState    = field(default_factory=PunchcardState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -682,6 +700,81 @@ class AppState:
                 self.score_replay.running = False
                 self._notify()
 
+    # ── Punchcard Engine (Phase P) ────────────────────────────────────────────────────────────────────
+
+    async def run_punchcard(
+        self,
+        shapes: Optional[list[str]] = None,
+        round_num: int = 1,
+        bars: int = 4,
+        epsilon: float = 0.019,
+    ) -> None:
+        """Run quantum-sim + build_punchcard_frame and store result in punchcard state."""
+        async with self._lock:
+            self.punchcard.running = True
+            self.punchcard.error   = None
+            self._notify()
+            try:
+                _shapes = shapes or ["LINE"]
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=_shapes,
+                    round_num=round_num,
+                    bars=bars,
+                    offline=True,
+                )
+                frame = build_punchcard_frame(result, epsilon=epsilon)
+
+                def _grid(g) -> dict:
+                    return {
+                        "tracks":       g.tracks,
+                        "steps":        g.steps,
+                        "bits":         g.bits,
+                        "track_labels": g.track_labels,
+                        "pattern":      g.pattern,
+                    }
+
+                def _static(s) -> dict:
+                    return {
+                        "pattern":          s.pattern,
+                        "claim_record":     s.claim_record,
+                        "claim_record_hex": s.claim_record_hex,
+                        "bits":             s.bits,
+                        "track_labels":     s.track_labels,
+                        "disclosure_mask":  s.disclosure_mask,
+                        "merkle_root":      s.merkle_root,
+                    }
+
+                frame_dict: dict = {
+                    "frame_id":             frame.frame_id,
+                    "born_at":              frame.born_at,
+                    "era":                  frame.era,
+                    "version":              frame.version,
+                    "shape":                frame.shape,
+                    "theta_q":              frame.theta_q,
+                    "theta_disp":           frame.theta_disp,
+                    "theta_disp_mode":      frame.theta_disp_mode,
+                    "epsilon_perturbation": frame.epsilon_perturbation,
+                    "mente_total":          frame.mente_total,
+                    "helix_radius":         frame.helix_radius,
+                    "t_steps":              frame.t_steps,
+                    "dynamic_a":            _grid(frame.dynamic_a),
+                    "dynamic_b":            _grid(frame.dynamic_b),
+                    "static_a":             _static(frame.static_a),
+                    "static_b":             _static(frame.static_b),
+                    "dice_1_count":         len(frame.dice_1_states),
+                    "dice_2_count":         len(frame.dice_2_states),
+                }
+                self.punchcard.current_frame   = frame_dict
+                self.punchcard.era             = frame.era
+                self.punchcard.theta_disp_mode = frame.theta_disp_mode
+                self.punchcard.shape           = frame.shape
+            except Exception as exc:
+                self.punchcard.error = str(exc)
+            finally:
+                self.punchcard.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -769,5 +862,12 @@ class AppState:
                 "history_count": len(self.score_replay.history),
                 "piano_cells":   len(self.score_replay.piano_roll),
                 "error":         self.score_replay.error,
+            },
+            "punchcard": {
+                "era":             self.punchcard.era,
+                "shape":           self.punchcard.shape,
+                "theta_disp_mode": self.punchcard.theta_disp_mode,
+                "has_frame":       self.punchcard.current_frame is not None,
+                "error":           self.punchcard.error,
             },
         }
