@@ -73,7 +73,7 @@ from cure_oracle.security import (
 router = APIRouter(prefix="/api/v1/qpu", tags=["qpu"])
 
 
-# ── request / response models ─────────────────────────────────────────────────
+# ── request / response models ───────────────────────────────────────────────
 
 class BenchmarkRequest(BaseModel):
     shape: str = Field(
@@ -177,7 +177,7 @@ class MenteBirthResponse(BaseModel):
     html_path:      Optional[str] = None
 
 
-# ── audit chain endpoint ──────────────────────────────────────────────────────
+# ── audit chain endpoint ────────────────────────────────────────────────────
 
 class AuditEventResponse(BaseModel):
     event_id:  str
@@ -422,7 +422,7 @@ def mente_birth_endpoint(
     )
 
 
-# ── Observe endpoint: A地点/B地点 OS識別 + MENTE座標空間 ────────────────────────
+# ── Observe endpoint: A地点/B地点 OS識別 + MENTE座標空間 ──────────────────────
 
 class _OSInfo(BaseModel):
     system:     str
@@ -696,7 +696,7 @@ class CandyFlashRequest(BaseModel):
         description="Shots per shape; None = canonical default per shape",
     )
     mode: str = Field("local", description="local | fake")
-    round_num: int = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    round_num: int = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
     offline: bool = Field(
         False,
         description="True = skip Gemini call, return heuristic recommendation",
@@ -720,13 +720,13 @@ def candy_flash_endpoint(
     role: Role = Depends(require_role(Role.OPERATOR)),
 ) -> CandyFlashResponse:
     """
-    Gemini-Candy-Flash-API — キャンディ群 × 螺旋 → Gemini Flash パラメーター制御。
+    Gemini-Candy-Flash-API — キャンディ群 × 蔓旋 → Gemini Flash パラメーター制御。
 
     キャンディ群（CUBE / RING / TREE / LINE / STAR）の量子回路を実行し、
-    螺旋ラウンド回路状態と合わせて Gemini Flash に送信する。
-    Gemini は MENTE スコア改善のための内部パラメーター推薦を返す。
+    蔓旋ラウンド回路状態と合わせて Gemini Flash に送信する。
+    Gemini は MENTE スコア改善のための内部パラメーター推袖を返す。
 
-    **offline=true** で Gemini 呼び出しをスキップし、ヒューリスティック推薦を返す。
+    **offline=true** で Gemini 呼び出しをスキップし、ヒューリスティック推袖を返す。
     Gemini を呼び出す場合は GEMINI_API_KEY 環境変数が必要。
     """
     audit = AuditLogger.get()
@@ -805,7 +805,7 @@ def candy_flash_endpoint(
     )
 
 
-# ── Sonnet-Score endpoint ─────────────────────────────────────────────────────
+# ── Sonnet-Score endpoint ────────────────────────────────────────────────────────
 
 class ScoreEventResponse(BaseModel):
     beat:          float
@@ -841,7 +841,7 @@ class SonnetScoreRequest(BaseModel):
     )
     shots:     Optional[int] = Field(None, ge=1, le=100_000)
     mode:      str = Field("local", description="local | fake")
-    round_num: int = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    round_num: int = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
     bars:      int = Field(4, ge=1, le=32,   description="スコアのバー数")
 
 
@@ -871,9 +871,9 @@ def candy_sonnet_endpoint(
     role: Role = Depends(require_role(Role.OPERATOR)),
 ) -> SonnetScoreResponse:
     """
-    Sonnet-Score-API — ハーマイオニーの杖 × ドライブ板 × 螺旋 → 音楽スコア生成。
+    Sonnet-Score-API — ハーマイオニーの杖 × ドライブ板 × 蔓旋 → 音楽スコア生成。
 
-    キャンディ群の量子回路を実行し螺旋状態と組み合わせて
+    キャンディ群の量子回路を実行し蔓旋状態と組み合わせて
     ドライブ板グリッド(1: 4×4 / 2: 8×4)へのワンド攻撃を配置、
     MENTE 上昇率・BPM・音楽時代（バロック→ロマン派）を含む
     Sonnet-Score 構造体と sig-receipt/1 を返す。
@@ -964,10 +964,10 @@ class SonnetRemixRequest(BaseModel):
         ..., min_length=1, max_length=5,
         description="キャンディ群: 1–5 形状",
     )
-    shots:        Optional[int] = Field(None, ge=1, le=100_000)
-    mode:         str           = Field("local", description="local | fake")
-    round_num:    int           = Field(1, ge=1, le=9999)
-    bars:         int           = Field(4, ge=1, le=32)
+    shots:        Optional[int]           = Field(None, ge=1, le=100_000)
+    mode:         str                     = Field("local", description="local | fake")
+    round_num:    int                     = Field(1, ge=1, le=9999)
+    bars:         int                     = Field(4, ge=1, le=32)
     bmi_state:    Optional[BmiStateModel] = Field(
         None,
         description="Cure-BMI state; null → defaults (focus=0.5, calm=0.5, energy=0.5)",
@@ -988,7 +988,7 @@ def candy_sonnet_remix_endpoint(
     role: Role = Depends(require_role(Role.OPERATOR)),
 ) -> SonnetRemixResponse:
     """
-    Sonnet-Score Remix — キャンディ群 × Cure-BMI → バックグラウンド音楽リミックス層。
+    Sonnet-Score Remix — キャンディ群 × Cure-BMI → バックグラウンド音楽リミック層。
 
     SonnetScoreResponse の全フィールドに加え、BMI 脳波状態（focus / calm / energy）を
     音楽パラメーター（テンポ倍率・楽器セット・ループ拍子）へマッピングした
@@ -1161,7 +1161,7 @@ async def candy_sonnet_stream_endpoint(
         },
     )
 
-# ── Phase J: mesh-score models ────────────────────────────────────────────────
+# ── Phase J: mesh-score models ──────────────────────────────────────────────
 
 class RawPointModel(BaseModel):
     x: float = Field(..., ge=0.0, le=1.0, description="Normalized x ∈ [0,1] (time)")
@@ -1195,7 +1195,7 @@ class MeshScoreResponse(BaseModel):
     export_hint: str
 
 
-# ── Phase J endpoints ─────────────────────────────────────────────────────────
+# ── Phase J endpoints ─────────────────────────────────────────────────────────────
 
 @router.post(
     "/candy/sonnet/mesh-score",
@@ -1210,7 +1210,7 @@ def candy_sonnet_mesh_score(
     """Convert freehand strokes drawn on a grid mesh into Sonnet-Score NoteEvents.
 
     Each stroke's geometry (curvature, oscillation, length, Y-position) is
-    analysed and mapped to: register (大甲音/甲音/呂音/呂音-bass), motif type,
+    analysed and mapped to: register (大甲音/甲音/吕音/吕音-bass), motif type,
     beat offset, duration, and intensity.  The resulting events are
     MIDI-compatible at 480 PPQN via to_midi_events().
     """
@@ -1265,7 +1265,7 @@ def candy_sonnet_version(
     }
 
 
-# ── Phase K: quantum-sim models ───────────────────────────────────────────────
+# ── Phase K: quantum-sim models ──────────────────────────────────────────────
 
 class QuantumSimRequest(BaseModel):
     shapes: list[str] = Field(
@@ -1274,7 +1274,7 @@ class QuantumSimRequest(BaseModel):
     )
     shots:     Optional[int]       = Field(None, ge=1, le=100_000)
     mode:      str                 = Field("local", description="local | fake")
-    round_num: int                 = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    round_num: int                 = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
     bars:      int                 = Field(4, ge=1, le=32, description="Sonnet-Score バー数")
     offline:   bool                = Field(
         True,

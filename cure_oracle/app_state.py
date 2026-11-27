@@ -63,7 +63,7 @@ except Exception:
     build_midi_viz_frame = None  # type: ignore[assignment]
 
 
-# ── view names ────────────────────────────────────────────────────────────────
+# ── view names ────────────────────────────────────────────────────────────────────────────────
 
 HOME       = "home"
 BENCHMARK  = "benchmark"
@@ -74,7 +74,7 @@ VERIFY     = "verify"
 MIDI_VIZ   = "midi_viz"   # Phase L — B地点第七画面
 
 
-# ── data containers ───────────────────────────────────────────────────────────
+# ── data containers ────────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class BenchmarkState:
@@ -154,7 +154,7 @@ class AppState:
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
-    # ── listener plumbing ─────────────────────────────────────────────────────
+    # ── listener plumbing ────────────────────────────────────────────────────────────────────────────────
 
     def add_listener(self, cb: Callable[[], None]) -> None:
         self._listeners.append(cb)
@@ -170,7 +170,7 @@ class AppState:
         self.current_view = view
         self._notify()
 
-    # ── benchmark ─────────────────────────────────────────────────────────────
+    # ── benchmark ────────────────────────────────────────────────────────────────────────────────
 
     async def run_benchmark(
         self,
@@ -223,7 +223,7 @@ class AppState:
                 self.benchmark.running = False
                 self._notify()
 
-    # ── round ─────────────────────────────────────────────────────────────────
+    # ── round ────────────────────────────────────────────────────────────────────────────────
 
     async def run_round(
         self,
@@ -254,7 +254,7 @@ class AppState:
                 self.round.running = False
                 self._notify()
 
-    # ── MENTE ─────────────────────────────────────────────────────────────────
+    # ── MENTE ────────────────────────────────────────────────────────────────────────────────
 
     async def run_mente(
         self,
@@ -303,7 +303,7 @@ class AppState:
                 self.mente.running = False
                 self._notify()
 
-    # ── sig-receipt/1 verification (PopKivyDevice-OS B地点) ───────────────────
+    # ── sig-receipt/1 verification (PopKivyDevice-OS B地点) ───────────────────────────────────────
 
     async def run_verify(self, receipt: dict) -> None:
         async with self._lock:
@@ -342,7 +342,7 @@ class AppState:
                 self.verify.running = False
             self._notify()
 
-    # ── MIDI visualizer (Phase L) ─────────────────────────────────────────────
+    # ── MIDI visualizer (Phase L) ─────────────────────────────────────────────────────────────────────────────
 
     async def run_midi_viz(
         self,
@@ -404,7 +404,7 @@ class AppState:
                 self.midi_viz.running = False
                 self._notify()
 
-    # ── birth certificate ─────────────────────────────────────────────────────
+    # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
         self.cert.error = None
@@ -426,7 +426,7 @@ class AppState:
         self.cert.html_path = html_path
         self._notify()
 
-    # ── serialise ─────────────────────────────────────────────────────────────
+    # ── serialise ─────────────────────────────────────────────────────────────────────────────
 
     def to_dict(self) -> dict:
         return {

@@ -26,7 +26,7 @@ from cure_oracle.midi_viz import (
 from cure_oracle.quantum_sim import run_quantum_sim
 from cure_oracle.accelerator import AcceleratorRun, AcceleratorResult, SynthesizedResult
 
-# ── auth ──────────────────────────────────────────────────────────────────────
+# ── auth ────────────────────────────────────────────────────────────────────────────────
 
 _TEST_TOKEN = "phk-test-token"
 
@@ -40,7 +40,7 @@ def _headers():
     return {"Authorization": f"Bearer {_TEST_TOKEN}"}
 
 
-# ── mock helpers ──────────────────────────────────────────────────────────────
+# ── mock helpers ────────────────────────────────────────────────────────────────────────────────
 
 def _fake_run(shape="LINE") -> AcceleratorRun:
     return AcceleratorRun(
@@ -119,7 +119,7 @@ def _patch_sleep(monkeypatch):
     monkeypatch.setattr("cure_oracle.qpu_router.asyncio.sleep", _noop)
 
 
-# ── TestMidiVizModule ─────────────────────────────────────────────────────────
+# ── TestMidiVizModule ───────────────────────────────────────────────────────────────────────────────
 
 class TestMidiVizModule:
     def test_current_rev_is_4(self):
@@ -129,7 +129,7 @@ class TestMidiVizModule:
         assert len(MIDI_CHANNELS) == 4
 
     def test_midi_channels_names(self):
-        assert MIDI_CHANNELS == ["大甲音", "甲音", "呂音", "呂音-bass"]
+        assert MIDI_CHANNELS == ["大甲音", "甲音", "吕音", "吕音-bass"]
 
     def test_build_returns_midi_viz_frame(self):
         result = run_quantum_sim(["LINE"], offline=True)
@@ -201,7 +201,7 @@ class TestMidiVizModule:
         assert isinstance(frame.notes, list)
 
 
-# ── TestQuantumSimStreamEndpoint ──────────────────────────────────────────────
+# ── TestQuantumSimStreamEndpoint ──────────────────────────────────────────────────────────────────
 
 class TestQuantumSimStreamEndpoint:
     def _url(self, shapes="LINE", token=_TEST_TOKEN, frames=1):

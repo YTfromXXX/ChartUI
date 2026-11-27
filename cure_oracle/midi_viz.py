@@ -15,12 +15,12 @@ Data flow
   → AppState.midi_viz (MidiVizState)
   → Flet MIDI_VIZ screen (B地点第七画面)
 
-MIDI channel mapping (箏三音域)
+MIDI channel mapping (箍三音域)
 ---------------------------------
   ch0  大甲音   (highest octave)   — Dragon ascent
   ch1  甲音     (middle octave)    — Wand sweep
-  ch2  呂音     (lower octave)     — Grid pulse
-  ch3  呂音-bass                   — Candy grab anchor
+  ch2  吕音     (lower octave)     — Grid pulse
+  ch3  吕音-bass                   — Candy grab anchor
 
 Version
 -------
@@ -33,15 +33,15 @@ from dataclasses import dataclass, field
 
 CURRENT_REV: int = 4
 
-MIDI_CHANNELS: list[str] = ["大甲音", "甲音", "呂音", "呂音-bass"]
+MIDI_CHANNELS: list[str] = ["大甲音", "甲音", "吕音", "吕音-bass"]
 
 _PPQN = 480
 
 _REGISTER_TO_CHANNEL: dict[str, int] = {
     "大甲音":    0,
     "甲音":      1,
-    "呂音":      2,
-    "呂音-bass": 3,
+    "吕音":      2,
+    "吕音-bass": 3,
 }
 _MOTIF_NOTE_BASE: dict[str, int] = {
     "block_chord":    60,
@@ -53,12 +53,12 @@ _MOTIF_NOTE_BASE: dict[str, int] = {
 _REGISTER_OCTAVE_OFFSET: dict[str, int] = {
     "大甲音":    24,
     "甲音":      12,
-    "呂音":       0,
-    "呂音-bass": -12,
+    "吕音":       0,
+    "吕音-bass": -12,
 }
 
 
-# ── data classes ──────────────────────────────────────────────────────────────
+# ── data classes ────────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class MidiVizNote:
@@ -101,7 +101,7 @@ class MidiVizFrame:
     ppqn:           int = _PPQN
 
 
-# ── public API ────────────────────────────────────────────────────────────────
+# ── public API ────────────────────────────────────────────────────────────────────────────────
 
 def build_midi_viz_frame(sim_result) -> MidiVizFrame:
     """Convert a QuantumSimResult into a MidiVizFrame for Flet rendering.
