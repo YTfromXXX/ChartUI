@@ -89,6 +89,14 @@ def get_current_role(authorization: Optional[str] = Header(None)) -> Role:
     return role
 
 
+def _validate_token(token: str) -> Optional[Role]:
+    """Resolve a raw bearer token string to a Role, or None if unrecognised."""
+    token_map = _load_token_map()
+    if not token_map:
+        return Role.OPERATOR
+    return token_map.get(token)
+
+
 def require_role(min_role: Role) -> Callable:
     """Dependency factory: raise 403 when caller's role is below min_role.
     Usage: role: Role = Depends(require_role(Role.OPERATOR))

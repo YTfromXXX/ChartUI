@@ -25,7 +25,11 @@ import sys
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import asyncio
+import json as _json
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from cure_oracle.birth import make_sig_receipt
@@ -35,6 +39,7 @@ from cure_oracle.accelerator import (
 )
 from cure_oracle.gemini_candy import GeminiCandyFlash
 from cure_oracle.sonnet_score import SonnetScore
+from cure_oracle.sonnet_remix import compute_remix, VALID_REMIX_STYLES
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -928,4 +933,224 @@ def candy_sonnet_endpoint(
         embellishments=result.embellishments,
         commentary=result.commentary,
         observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Sonnet-Score Remix endpoint ───────────────────────────────────────────────
+
+class BmiStateModel(BaseModel):
+    focus:  float = Field(0.5, ge=0.0, le=1.0, description="Melody clarity driver")
+    calm:   float = Field(0.5, ge=0.0, le=1.0, description="Tempo modifier driver")
+    energy: float = Field(0.5, ge=0.0, le=1.0, description="Layer intensity driver")
+
+
+class RemixLayerResponse(BaseModel):
+    tempo_modifier:  float
+    layer_intensity: float
+    instrument_set:  list[str]
+    loop_signature:  str
+    bmi_influence:   str
+    export_hint:     str
+
+
+class SonnetRemixRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状",
+    )
+    shots:        Optional[int] = Field(None, ge=1, le=100_000)
+    mode:         str           = Field("local", description="local | fake")
+    round_num:    int           = Field(1, ge=1, le=9999)
+    bars:         int           = Field(4, ge=1, le=32)
+    bmi_state:    Optional[BmiStateModel] = Field(
+        None,
+        description="Cure-BMI state; null → defaults (focus=0.5, calm=0.5, energy=0.5)",
+    )
+    remix_style:  str = Field(
+        "orchestral",
+        description="orchestral | electronic | ambient",
+    )
+
+
+class SonnetRemixResponse(SonnetScoreResponse):
+    remix: RemixLayerResponse
+
+
+@router.post("/candy/sonnet/remix", response_model=SonnetRemixResponse)
+def candy_sonnet_remix_endpoint(
+    req: SonnetRemixRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> SonnetRemixResponse:
+    """
+    Sonnet-Score Remix — キャンディ群 × Cure-BMI → バックグラウンド音楽リミックス層。
+
+    SonnetScoreResponse の全フィールドに加え、BMI 脳波状態（focus / calm / energy）を
+    音楽パラメーター（テンポ倍率・楽器セット・ループ拍子）へマッピングした
+    `remix` オブジェクトを返す。
+
+    **bmi_state=null** の場合は デフォルト値 (focus=0.5, calm=0.5, energy=0.5) を使用。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/sonnet/remix/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "sonnet/remix supports only local or fake mode")
+    if req.remix_style not in VALID_REMIX_STYLES:
+        raise HTTPException(422, f"remix_style must be one of {VALID_REMIX_STYLES}")
+
+    try:
+        ss = SonnetScore(bars=req.bars)
+        result = ss.compute_offline(
+            shapes=req.shapes,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.sonnet.remix", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    bmi_dict = req.bmi_state.model_dump() if req.bmi_state else None
+    remix = compute_remix(
+        era=result.era,
+        bmi_state=bmi_dict,
+        remix_style=req.remix_style,
+    )
+
+    audit.log(role.value, "candy.sonnet.remix", resource, "success", {
+        "ascent_rate":   result.ascent_rate,
+        "bpm":           result.bpm,
+        "era":           result.era,
+        "tempo_modifier": remix.tempo_modifier,
+        "remix_style":   req.remix_style,
+    })
+
+    def _board(b) -> DriveBoardResponse:
+        return DriveBoardResponse(
+            name=b.name, cols=b.cols, rows=b.rows,
+            cells=[DriveCellResponse(
+                col=c.col, row=c.row, shape=c.shape, slot=c.slot,
+                motif=c.motif, q=c.q, effect=c.effect,
+            ) for c in b.cells],
+            grid=b.to_grid(),
+        )
+
+    return SonnetRemixResponse(
+        score_id=result.score_id,
+        born_at=result.born_at,
+        bpm=result.bpm,
+        bars=result.bars,
+        tilt_rate=result.tilt_rate,
+        ascent_rate=result.ascent_rate,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        key=result.key,
+        mode_name=result.mode_name,
+        era=result.era,
+        events=[ScoreEventResponse(
+            beat=e.beat, duration=e.duration, register=e.register,
+            motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+        ) for e in result.events],
+        board_1=_board(result.board_1),
+        board_2=_board(result.board_2),
+        embellishments=result.embellishments,
+        commentary=result.commentary,
+        observe_receipt=result.observe_receipt,
+        remix=RemixLayerResponse(**remix.to_dict()),
+    )
+
+
+# ── Sonnet-Score SSE stream endpoint ─────────────────────────────────────────
+
+@router.get("/candy/sonnet/stream")
+async def candy_sonnet_stream_endpoint(
+    shapes: str = Query(..., description="Comma-separated shapes e.g. LINE,CUBE"),
+    round:  int = Query(1,   ge=1, le=9999, description="Starting round number"),
+    token:  str = Query(..., description="Bearer token (OPERATOR role required)"),
+) -> StreamingResponse:
+    """
+    Server-Sent Events stream — Sonnet-Score リアルタイム更新 (ayglass device 向け)。
+
+    2 秒ごとに新しい `compute_offline()` を実行し、スコア更新イベントを push する。
+    score_update イベントと ascent_tick イベントを交互に送信する。
+
+    - `?shapes=LINE,CUBE` — キャンディ群（カンマ区切り）
+    - `?round=N`          — 開始ラウンド番号（インクリメントされる）
+    - `?token=...`        — OPERATOR 権限のベアラートークン（SSE はヘッダー設定が困難なため）
+
+    10 回のスコア更新後にストリームを終了する (20 秒)。
+    """
+    # Validate token inline (SSE cannot use header-based Depends easily)
+    from cure_oracle.security import _validate_token
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    async def event_generator():
+        ss = SonnetScore(bars=4)
+        for i in range(10):
+            current_round = round + i
+            try:
+                result = ss.compute_offline(
+                    shapes=shape_list,
+                    shots=512,
+                    mode="local",
+                    round_num=current_round,
+                )
+            except Exception:
+                break
+
+            # Full score_update event
+            score_data = {
+                "score_id":      result.score_id,
+                "born_at":       result.born_at,
+                "bpm":           result.bpm,
+                "bars":          result.bars,
+                "tilt_rate":     result.tilt_rate,
+                "ascent_rate":   result.ascent_rate,
+                "mente_total":   result.mente_total,
+                "mente_achieved": result.mente_achieved,
+                "key":           result.key,
+                "mode_name":     result.mode_name,
+                "era":           result.era,
+                "embellishments": result.embellishments,
+                "commentary":    result.commentary,
+            }
+            yield f"event: score_update\ndata: {_json.dumps({'type': 'score_update', 'data': score_data})}\n\n"
+
+            await asyncio.sleep(1.0)
+
+            # Lightweight ascent_tick between full updates
+            tick_data = {
+                "type":        "ascent_tick",
+                "ascent_rate": result.ascent_rate,
+                "bpm":         result.bpm,
+                "era":         result.era,
+            }
+            yield f"event: ascent_tick\ndata: {_json.dumps(tick_data)}\n\n"
+
+            await asyncio.sleep(1.0)
+
+        yield "event: stream_end\ndata: {\"type\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
