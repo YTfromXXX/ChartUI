@@ -18,9 +18,11 @@ Security controls
 from __future__ import annotations
 
 import os
+import platform
+import sys
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from cure_oracle.benchmark import (
@@ -396,4 +398,86 @@ def mente_birth_endpoint(
         receipts=birth.receipts,
         cert_path=str(cert_path),
         html_path=birth.html_path,
+    )
+
+
+# ── Observe endpoint: A地点/B地点 OS識別 + MENTE座標空間 ────────────────────────
+
+class _OSInfo(BaseModel):
+    system:     str
+    release:    str
+    machine:    str
+    python:     str
+    role:       str   # "quantum_state" (A) or "observer" (B)
+
+
+class MenteCoordAxis(BaseModel):
+    slot:       str
+    king:       str
+    q_min:      float
+    q_max:      float
+    description: str
+
+
+class ObserveResponse(BaseModel):
+    point_a:            _OSInfo                 # server / quantum state
+    point_b:            _OSInfo                 # client / observer
+    mente_const:        float
+    coordinate_space:   list[MenteCoordAxis]    # 4 axes S1–S4
+    basis:              str                     # "四天王座標系 φ×√2"
+
+
+_MENTE_AXES: list[MenteCoordAxis] = [
+    MenteCoordAxis(slot="S4", king="広目天", q_min=0.75, q_max=1.0,
+                   description="最高位 — 広く遠くを見通す (q ≥ 0.75)"),
+    MenteCoordAxis(slot="S1", king="多聞天", q_min=0.50, q_max=0.75,
+                   description="全てを聴く — 情報の受信軸 (0.50 ≤ q < 0.75)"),
+    MenteCoordAxis(slot="S3", king="持国天", q_min=0.25, q_max=0.50,
+                   description="国を守る — 安定化軸 (0.25 ≤ q < 0.50)"),
+    MenteCoordAxis(slot="S2", king="増長天", q_min=0.0,  q_max=0.25,
+                   description="成長を促す — 初期観測軸 (q < 0.25)"),
+]
+
+
+@router.get("/observe", response_model=ObserveResponse)
+def observe_endpoint(
+    request: Request,
+    _role: Role = Depends(require_role(Role.VIEWER)),
+) -> ObserveResponse:
+    """
+    A地点 (量子状態 / server) と B地点 (観察者OS / client) を識別し
+    MENTE座標空間を返す。
+
+    - **A地点**: FastAPI バックエンド OS — 量子回路を実行する側
+    - **B地点**: クライアント (Flet/Kivyデバイス) — 観察者OS
+    - **四天王座標系**: q値によって 4軸(S1–S4)に射影、mente_total ≥ φ×√2 で全顕現
+    """
+    ua = request.headers.get("user-agent", "unknown")
+    client_host = getattr(request.client, "host", "unknown") if request.client else "unknown"
+
+    point_a = _OSInfo(
+        system=platform.system(),
+        release=platform.release(),
+        machine=platform.machine(),
+        python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        role="quantum_state",
+    )
+    point_b = _OSInfo(
+        system=ua,
+        release=client_host,
+        machine=platform.machine(),
+        python="observer",
+        role="observer",
+    )
+
+    AuditLogger.get().log(
+        "viewer", "observe", "system",
+        "success", {"client_host": client_host},
+    )
+    return ObserveResponse(
+        point_a=point_a,
+        point_b=point_b,
+        mente_const=round(MENTE_CONST, 6),
+        coordinate_space=_MENTE_AXES,
+        basis="四天王座標系 φ×√2",
     )

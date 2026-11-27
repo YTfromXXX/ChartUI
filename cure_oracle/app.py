@@ -16,6 +16,7 @@ Screens
 
 from __future__ import annotations
 
+import platform
 import sys
 
 try:
@@ -27,6 +28,21 @@ except ImportError:
 from cure_oracle.app_state import (
     AppState, HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE,
 )
+
+# ── B地点: 観察者OS識別 (Pop Kivy / Flet virtual quantum device) ───────────────
+
+def _observer_info() -> dict:
+    """Return Point-B (observer OS) fingerprint for MENTE coordinate logging."""
+    return {
+        "role":    "observer",
+        "device":  "pop_kivy_virtual_quantum",
+        "system":  platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine(),
+        "python":  f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "ui":      "flet",
+    }
+
 
 # ── design tokens ─────────────────────────────────────────────────────────────
 
@@ -696,12 +712,23 @@ def _mente_view(state: AppState, page: ft.Page) -> ft.Column:
     check_btn.on_click = on_check
     birth_btn.on_click = on_birth
 
+    obs = _observer_info()
+    _obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.DEVICE_HUB, color=_PURPLE, size=16),
+        ft.Text(
+            f"B地点 観察者OS  {obs['device']}  "
+            f"{obs['system']} {obs['release']}  Python {obs['python']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
     return ft.Column([
         ft.Row([
             ft.Icon(ft.Icons.AUTO_AWESOME, color=_GOLD, size=24),
             _title("MENTE  四天王全顕現", size=20),
         ], spacing=8),
         ft.Divider(color=_BORDER),
+        _obs_banner,
 
         # slot guide
         _card(ft.Column([
