@@ -44,6 +44,7 @@ from cure_oracle.mesh_score import (
     strokes_to_score, era_from_mente, GridConfig as MeshGridConfig,
     CURRENT_REV, ERA_MENTE_LOWER,
 )
+from cure_oracle.quantum_sim import run_quantum_sim, CURRENT_REV as QS_REV
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1252,10 +1253,165 @@ def candy_sonnet_version(
         "mente_total":    mente_total,
         "era_thresholds": ERA_MENTE_LOWER,
         "endpoint_map": {
-            "compute":    "/api/v1/qpu/candy/sonnet",
-            "remix":      "/api/v1/qpu/candy/sonnet/remix",
-            "stream":     "/api/v1/qpu/candy/sonnet/stream",
-            "mesh_score": "/api/v1/qpu/candy/sonnet/mesh-score",
-            "version":    "/api/v1/qpu/candy/sonnet/version",
+            "compute":      "/api/v1/qpu/candy/sonnet",
+            "remix":        "/api/v1/qpu/candy/sonnet/remix",
+            "stream":       "/api/v1/qpu/candy/sonnet/stream",
+            "mesh_score":   "/api/v1/qpu/candy/sonnet/mesh-score",
+            "version":      "/api/v1/qpu/candy/sonnet/version",
+            "quantum_sim":  "/api/v1/qpu/candy/quantum-sim",
         },
     }
+
+
+# ── Phase K: quantum-sim models ───────────────────────────────────────────────
+
+class QuantumSimRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="入力キャンディ群 (1–5 shapes: CUBE/RING/TREE/LINE/STAR)",
+    )
+    shots:     Optional[int]       = Field(None, ge=1, le=100_000)
+    mode:      str                 = Field("local", description="local | fake")
+    round_num: int                 = Field(1, ge=1, le=9999, description="螺旋ラウンド番号")
+    bars:      int                 = Field(4, ge=1, le=32, description="Sonnet-Score バー数")
+    offline:   bool                = Field(
+        True,
+        description="True = offline Gemini stub; False = live Gemini Flash (needs GEMINI_API_KEY)",
+    )
+    bmi_state: Optional[BmiStateModel] = Field(
+        None,
+        description="Cure-BMI state forwarded to Sonnet-Score layer",
+    )
+
+
+class QuantumSimGeminiResponse(BaseModel):
+    suggested_shapes: list[str]
+    suggested_shots:  int
+    suggested_theta:  str
+    retest_reason:    str
+    commentary:       str
+    model_used:       str
+
+
+class QuantumSimScoreResponse(BaseModel):
+    score_id:       str
+    born_at:        str
+    bpm:            int
+    bars:           int
+    era:            str
+    mente_total:    float
+    mente_achieved: bool
+    events:         list[ScoreEventResponse]
+    embellishments: list[str]
+    commentary:     str
+
+
+class QuantumSimResponse(BaseModel):
+    sim_id:          str
+    born_at:         str
+    era:             str
+    version:         str
+    input_shapes:    list[str]
+    fused_shapes:    list[str]
+    mente_total:     float
+    mente_achieved:  bool
+    fusion_note:     str
+    gemini:          QuantumSimGeminiResponse
+    score:           QuantumSimScoreResponse
+    observe_receipt: dict
+
+
+@router.post(
+    "/candy/quantum-sim",
+    response_model=QuantumSimResponse,
+    summary="Phase K — Gemini-Candy ⟷ Sonnet-Score auto-fusion loop",
+    tags=["quantum-sim"],
+)
+def candy_quantum_sim(
+    req: QuantumSimRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> QuantumSimResponse:
+    """Unified quantum simulation: Gemini-Candy observation × Sonnet-Score music.
+
+    Stage 1 — Gemini-Candy-Flash: run VirtualAccelerator on *shapes*, obtain
+    AI-driven parameter recommendation (or heuristic stub when offline=True).
+
+    Stage 2 — Sonnet-Score: re-run on Gemini's *suggested_shapes*, producing a
+    MENTE-era-aware musical score fused with the observation result.
+
+    Returns a combined QuantumSimResponse with both layers and a sig-receipt/1.
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/quantum-sim/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "quantum-sim supports only local or fake mode")
+
+    bmi_dict = req.bmi_state.model_dump() if req.bmi_state else None
+
+    try:
+        result = run_quantum_sim(
+            shapes=req.shapes,
+            bmi_state=bmi_dict,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+            bars=req.bars,
+            offline=req.offline,
+        )
+    except EnvironmentError as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.quantum_sim", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    audit.log(role.value, "candy.quantum_sim", resource, "success", {
+        "era":            result.era,
+        "mente_total":    result.mente_total,
+        "mente_achieved": result.mente_achieved,
+        "fused_shapes":   result.fused_shapes,
+    })
+
+    g = result.gemini
+    sc = result.score
+    return QuantumSimResponse(
+        sim_id=result.sim_id,
+        born_at=result.born_at,
+        era=result.era,
+        version=result.version,
+        input_shapes=result.input_shapes,
+        fused_shapes=result.fused_shapes,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        fusion_note=result.fusion_note,
+        gemini=QuantumSimGeminiResponse(
+            suggested_shapes=g.recommendation.suggested_shapes,
+            suggested_shots=g.recommendation.suggested_shots,
+            suggested_theta=g.recommendation.suggested_theta,
+            retest_reason=g.recommendation.retest_reason,
+            commentary=g.recommendation.commentary,
+            model_used=g.recommendation.model_used,
+        ),
+        score=QuantumSimScoreResponse(
+            score_id=sc.score_id,
+            born_at=sc.born_at,
+            bpm=sc.bpm,
+            bars=sc.bars,
+            era=sc.era,
+            mente_total=sc.mente_total,
+            mente_achieved=sc.mente_achieved,
+            events=[ScoreEventResponse(
+                beat=e.beat, duration=e.duration, register=e.register,
+                motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+            ) for e in sc.events],
+            embellishments=sc.embellishments,
+            commentary=sc.commentary,
+        ),
+        observe_receipt=g.observe_receipt,
+    )
