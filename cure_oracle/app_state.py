@@ -62,6 +62,11 @@ try:
 except Exception:
     build_midi_viz_frame = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.resonance_score import build_resonance_frame
+except Exception:
+    build_resonance_frame = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -71,7 +76,8 @@ ROUND      = "round"
 BIRTH_CERT = "birth_cert"
 MENTE      = "mente"
 VERIFY     = "verify"
-MIDI_VIZ   = "midi_viz"   # Phase L — B地点第七画面
+MIDI_VIZ       = "midi_viz"       # Phase L — B地点第七画面
+RESONANCE_VIZ  = "resonance_viz"  # Phase M — B地点第八画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -142,14 +148,29 @@ class MidiVizState:
 
 
 @dataclass
+class ResonanceState:
+    """B地点第八画面 — Resonance Max-Cut × MIDI fusion 状態 (Phase M, cure-{era}-r5)."""
+    running:        bool           = False
+    current_frame:  Optional[dict] = None   # serialised ResonanceFrame
+    frames:         list[dict]     = field(default_factory=list)  # last 5 frames
+    era:            str            = "baroque"
+    mente_total:    float          = 0.0
+    mente_achieved: bool           = False
+    cut_value:      float          = 0.0
+    shapes:         list[str]      = field(default_factory=lambda: ["LINE"])
+    error:          Optional[str]  = None
+
+
+@dataclass
 class AppState:
-    current_view: str            = HOME
-    benchmark:    BenchmarkState = field(default_factory=BenchmarkState)
-    round:        RoundState     = field(default_factory=RoundState)
-    cert:         CertState      = field(default_factory=CertState)
-    mente:        MenteState     = field(default_factory=MenteState)
-    verify:       VerifyState    = field(default_factory=VerifyState)
-    midi_viz:     MidiVizState   = field(default_factory=MidiVizState)
+    current_view:   str              = HOME
+    benchmark:      BenchmarkState   = field(default_factory=BenchmarkState)
+    round:          RoundState       = field(default_factory=RoundState)
+    cert:           CertState        = field(default_factory=CertState)
+    mente:          MenteState       = field(default_factory=MenteState)
+    verify:         VerifyState      = field(default_factory=VerifyState)
+    midi_viz:       MidiVizState     = field(default_factory=MidiVizState)
+    resonance_viz:  ResonanceState   = field(default_factory=ResonanceState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -404,6 +425,75 @@ class AppState:
                 self.midi_viz.running = False
                 self._notify()
 
+    # ── Resonance visualizer (Phase M) ───────────────────────────────────────────────────────────────
+
+    async def run_resonance(
+        self,
+        shapes: Optional[list[str]] = None,
+        round_num: int = 1,
+        bars: int = 4,
+    ) -> None:
+        """Run one quantum-sim pass + Resonance Max-Cut and update resonance state.
+
+        Calls run_quantum_sim(offline=True) → build_resonance_frame() with
+        pre-computed browser-optimal Max-Cut bits (Qiskit-free).
+        """
+        if shapes:
+            self.resonance_viz.shapes = list(shapes)
+        async with self._lock:
+            self.resonance_viz.running = True
+            self.resonance_viz.error   = None
+            self._notify()
+            try:
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=self.resonance_viz.shapes,
+                    round_num=round_num,
+                    bars=bars,
+                    offline=True,
+                )
+                frame = build_resonance_frame(result)
+                frame_dict: dict = {
+                    "frame_id":       frame.frame_id,
+                    "born_at":        frame.born_at,
+                    "era":            frame.era,
+                    "version":        frame.version,
+                    "bpm":            frame.bpm,
+                    "bars":           frame.bars,
+                    "mente_total":    frame.mente_total,
+                    "mente_achieved": frame.mente_achieved,
+                    "fusion_note":    frame.fusion_note,
+                    "fused_shapes":   frame.fused_shapes,
+                    "cut_value":      frame.cut_value,
+                    "partition_0":    frame.partition_0,
+                    "partition_1":    frame.partition_1,
+                    "note_count":     len(frame.notes),
+                    "ppqn":           frame.ppqn,
+                    "channels": [
+                        {
+                            "index":        c.index,
+                            "name":         c.name,
+                            "coin_labels":  c.coin_labels,
+                            "note_count":   c.note_count,
+                            "avg_velocity": c.avg_velocity,
+                            "cut_weight":   c.cut_weight,
+                            "active":       c.active,
+                        }
+                        for c in frame.channels
+                    ],
+                }
+                self.resonance_viz.current_frame = frame_dict
+                self.resonance_viz.frames        = (self.resonance_viz.frames + [frame_dict])[-5:]
+                self.resonance_viz.era            = frame.era
+                self.resonance_viz.mente_total    = frame.mente_total
+                self.resonance_viz.mente_achieved = frame.mente_achieved
+                self.resonance_viz.cut_value      = frame.cut_value
+            except Exception as exc:
+                self.resonance_viz.error = str(exc)
+            finally:
+                self.resonance_viz.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -464,5 +554,14 @@ class AppState:
                 "frame_count":    len(self.midi_viz.frames),
                 "shapes":         self.midi_viz.shapes,
                 "error":          self.midi_viz.error,
+            },
+            "resonance_viz": {
+                "era":            self.resonance_viz.era,
+                "mente_total":    self.resonance_viz.mente_total,
+                "mente_achieved": self.resonance_viz.mente_achieved,
+                "cut_value":      self.resonance_viz.cut_value,
+                "frame_count":    len(self.resonance_viz.frames),
+                "shapes":         self.resonance_viz.shapes,
+                "error":          self.resonance_viz.error,
             },
         }

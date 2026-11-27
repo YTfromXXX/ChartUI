@@ -46,6 +46,7 @@ from cure_oracle.mesh_score import (
 )
 from cure_oracle.quantum_sim import run_quantum_sim, CURRENT_REV as QS_REV
 from cure_oracle.midi_viz import build_midi_viz_frame
+from cure_oracle.resonance_score import build_resonance_frame as build_resonance_frame_
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1261,6 +1262,7 @@ def candy_sonnet_version(
             "version":      "/api/v1/qpu/candy/sonnet/version",
             "quantum_sim":        "/api/v1/qpu/candy/quantum-sim",
             "quantum_sim_stream": "/api/v1/qpu/candy/quantum-sim/stream",
+            "resonance_stream":   "/api/v1/qpu/candy/resonance/stream",
         },
     }
 
@@ -1509,6 +1511,118 @@ async def candy_quantum_sim_stream(
                 "mente_achieved": frame.mente_achieved,
             }
             yield f"event: sim_tick\ndata: {_json.dumps(tick_data)}\n\n"
+
+            await asyncio.sleep(2.0)
+
+        yield "event: stream_end\ndata: {\"type\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Phase M: resonance SSE stream endpoint ────────────────────────────────────
+
+@router.get(
+    "/candy/resonance/stream",
+    summary="Phase M — Resonance Max-Cut × MIDI fusion SSE stream (cure-{era}-r5)",
+    tags=["quantum-sim"],
+)
+async def candy_resonance_stream(
+    shapes: str = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:  int = Query(1,   ge=1, le=9999, description="開始ラウンド番号"),
+    token:  str = Query(..., description="Bearer token (OPERATOR role required)"),
+    frames: int = Query(10,  ge=1, le=10,   description="フレーム数 (1–10, default 10)"),
+) -> StreamingResponse:
+    """Server-Sent Events stream — Resonance Max-Cut × MIDI fusion (B地点第八画面).
+
+    Runs run_quantum_sim() + build_resonance_frame() *frames* times and emits
+    resonance_update / resonance_tick / stream_end events.
+    Used by the RESONANCE_VIZ Flet screen (Phase M, cure-{era}-r5).
+
+    - ``?shapes=LINE,CUBE`` — キャンディ群（カンマ区切り）
+    - ``?round=N``          — 開始ラウンド番号
+    - ``?token=...``        — OPERATOR 権限のベアラートークン
+    - ``?frames=N``         — フレーム数 (1–10)
+    """
+    from cure_oracle.security import _validate_token
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    async def event_generator():
+        for i in range(frames):
+            current_round = round + i
+            try:
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=shape_list,
+                    round_num=current_round,
+                    bars=4,
+                    offline=True,
+                )
+                frame = build_resonance_frame_(result)
+            except Exception:
+                break
+
+            resonance_data = {
+                "frame_id":       frame.frame_id,
+                "born_at":        frame.born_at,
+                "era":            frame.era,
+                "version":        frame.version,
+                "bpm":            frame.bpm,
+                "bars":           frame.bars,
+                "mente_total":    frame.mente_total,
+                "mente_achieved": frame.mente_achieved,
+                "fusion_note":    frame.fusion_note,
+                "fused_shapes":   frame.fused_shapes,
+                "cut_value":      frame.cut_value,
+                "partition_0":    frame.partition_0,
+                "partition_1":    frame.partition_1,
+                "note_count":     len(frame.notes),
+                "ppqn":           frame.ppqn,
+                "channels": [
+                    {
+                        "index":        c.index,
+                        "name":         c.name,
+                        "coin_labels":  c.coin_labels,
+                        "note_count":   c.note_count,
+                        "avg_velocity": c.avg_velocity,
+                        "cut_weight":   c.cut_weight,
+                        "active":       c.active,
+                    }
+                    for c in frame.channels
+                ],
+            }
+            yield (
+                f"event: resonance_update\n"
+                f"data: {_json.dumps({'type': 'resonance_update', 'data': resonance_data})}\n\n"
+            )
+
+            await asyncio.sleep(2.0)
+
+            tick_data = {
+                "type":           "resonance_tick",
+                "frame_index":    i,
+                "era":            frame.era,
+                "bpm":            frame.bpm,
+                "mente_total":    frame.mente_total,
+                "cut_value":      frame.cut_value,
+                "mente_achieved": frame.mente_achieved,
+            }
+            yield f"event: resonance_tick\ndata: {_json.dumps(tick_data)}\n\n"
 
             await asyncio.sleep(2.0)
 

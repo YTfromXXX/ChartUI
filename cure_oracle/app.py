@@ -14,7 +14,8 @@ Screens
   BIRTH_CERT  — QPU birth certificate viewer
   MENTE       — MENTE 四天王全顕現 checker
   VERIFY      — sig-receipt/1 Merkle verification (B地点)
-  MIDI_VIZ    — MIDI visualizer cure-{era}-r4 (B地点第七画面, Phase L)
+  MIDI_VIZ      — MIDI visualizer cure-{era}-r4 (B地点第七画面, Phase L)
+  RESONANCE_VIZ — Resonance Max-Cut × MIDI fusion cure-{era}-r5 (B地点第八画面, Phase M)
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ except ImportError:
 
 from cure_oracle.app_state import (
     AppState,
-    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ,
+    HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -93,7 +94,7 @@ def _status_dot(passed: bool | None) -> ft.Container:
 # ── nav rail ──────────────────────────────────────────────────────────────────
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
-    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ]
+    views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY, MIDI_VIZ, RESONANCE_VIZ]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -139,6 +140,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.PIANO_OUTLINED,
                 selected_icon=ft.Icons.PIANO,
                 label="MIDI可視化",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.HUB_OUTLINED,
+                selected_icon=ft.Icons.HUB,
+                label="共鳴スコア",
             ),
         ],
         on_change=on_change,
@@ -918,6 +924,164 @@ def _midi_viz_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── RESONANCE_VIZ screen: B地点第八画面 ──────────────────────────────────────
+
+_COIN_COLORS: list[str] = ["#f7931a", "#627eea", "#9945ff", "#00aae4", "#3cc8c8", "#c3a634"]
+
+
+def _resonance_view(state: AppState, page: ft.Page) -> ft.Column:
+    """Phase M — cure-{era}-r5 Resonance Max-Cut × MIDI fusion (B地点第八画面).
+
+    Displays the Resonance Max-Cut partition (6 coins / 4 MIDI channels) and
+    cut-value score produced by the quantum-sim + resonance pipeline.
+    Receives SSE frames from GET /candy/resonance/stream.
+    """
+    rv = state.resonance_viz
+
+    shapes_tf = ft.TextField(
+        value=",".join(rv.shapes), label="形状 (カンマ区切り)",
+        width=200, bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    bars_dd = ft.Dropdown(
+        value="4",
+        options=[ft.dropdown.Option(str(b)) for b in (2, 4, 8, 16)],
+        label="バー数", width=100,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    run_btn  = ft.FilledButton("▶ 共鳴シム実行", bgcolor=_PURPLE, color=_WHITE,
+                               disabled=rv.running)
+    progress = ft.ProgressRing(visible=rv.running, color=_ACCENT, width=24, height=24)
+
+    partition_row = ft.Row(spacing=12, wrap=True)
+    channel_rows  = ft.Column(spacing=6)
+    result_col    = ft.Column(spacing=8)
+
+    def _refresh() -> None:
+        run_btn.disabled  = rv.running
+        progress.visible  = rv.running
+        partition_row.controls.clear()
+        channel_rows.controls.clear()
+        result_col.controls.clear()
+
+        if rv.error:
+            result_col.controls.append(_value(f"エラー: {rv.error}", color=_RED))
+            page.update()
+            return
+
+        frame = rv.current_frame
+        if not frame:
+            page.update()
+            return
+
+        result_col.controls += [
+            ft.Divider(color=_BORDER),
+            ft.Row([
+                ft.Column([_label("era"),        _value(frame["era"], color=_GOLD)],     spacing=2),
+                ft.Column([_label("BPM"),         _value(str(frame["bpm"]), color=_ACCENT)], spacing=2),
+                ft.Column([_label("MENTE"),        _value(
+                    f"{frame['mente_total']:.4f}",
+                    color=_GREEN if frame["mente_achieved"] else _WHITE)], spacing=2),
+                ft.Column([_label("Max-Cut"),      _value(
+                    f"{frame['cut_value']:.4f}", color=_GOLD)], spacing=2),
+                ft.Column([_label("フレーム数"),   _value(str(len(rv.frames)))], spacing=2),
+            ], spacing=24),
+        ]
+
+        # partition display
+        p0 = frame.get("partition_0", [])
+        p1 = frame.get("partition_1", [])
+        coin_labels_all = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE"]
+        for label in coin_labels_all:
+            group = 0 if label in p0 else 1
+            color = _ACCENT if group == 0 else _PURPLE
+            partition_row.controls.append(_card(
+                ft.Column([
+                    ft.Text(label, size=13, color=color, weight=ft.FontWeight.BOLD),
+                    _label(f"G{group}", color=color),
+                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=8,
+            ))
+
+        note = frame.get("fusion_note", "")
+        result_col.controls.append(
+            _label(f"融合: {note[:72]}{'…' if len(note) > 72 else ''}")
+        )
+
+        for ch in frame.get("channels", []):
+            ch_color = _CH_COLORS[ch["index"]]
+            coins_str = ", ".join(ch["coin_labels"]) if ch["coin_labels"] else "—"
+            cw = ch.get("cut_weight", 0.0)
+            channel_rows.controls.append(
+                _card(ft.Row([
+                    ft.Text(ch["name"], size=12, color=ch_color,
+                            weight=ft.FontWeight.BOLD, width=72),
+                    ft.ProgressBar(
+                        value=min(cw / 4.0, 1.0) if cw else 0.0,
+                        color=ch_color, bgcolor=_BORDER, width=120,
+                    ),
+                    ft.Container(width=8),
+                    _label(
+                        f"{coins_str}  wt={cw:.3f}  vel={ch['avg_velocity']:.0f}",
+                        color=ch_color if ch["active"] else _DIM,
+                    ),
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=8)
+            )
+
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_run(_: ft.ControlEvent) -> None:
+        shapes = [s.strip().upper() for s in shapes_tf.value.split(",") if s.strip()]
+        if not shapes:
+            shapes = ["LINE"]
+        await state.run_resonance(shapes=shapes, bars=int(bars_dd.value or "4"))
+
+    run_btn.on_click = on_run
+
+    obs = _observer_info()
+    obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.HUB, color=_ACCENT, size=16),
+        ft.Text(
+            f"B地点 共鳴スコア  cure-{{era}}-r5  Max-Cut QAOA × MIDI  "
+            f"SSE→Flet  {obs['system']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.HUB, color=_ACCENT, size=24),
+            _title("共鳴スコア  cure-{era}-r5", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+        obs_banner,
+
+        _card(ft.Column([
+            _title("シミュレーション設定", size=14, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([shapes_tf, bars_dd], spacing=12, wrap=True),
+            ft.Container(height=8),
+            ft.Row([run_btn, progress], spacing=12),
+        ], spacing=4)),
+
+        _card(ft.Column([
+            _title("Max-Cut パーティション (6コイン)", size=12, color=_DIM),
+            ft.Container(height=4),
+            partition_row,
+        ], spacing=4)),
+
+        _card(ft.Column([
+            _title("MIDI チャンネル重み  (cure-{era}-r5)", size=12, color=_DIM),
+            ft.Container(height=4),
+            channel_rows,
+        ], spacing=4)),
+
+        result_col,
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -934,6 +1098,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _verify_view(state, page)
     if view == MIDI_VIZ:
         return _midi_viz_view(state, page)
+    if view == RESONANCE_VIZ:
+        return _resonance_view(state, page)
     return _home_view(state)
 
 
