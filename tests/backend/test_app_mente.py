@@ -21,9 +21,10 @@ def _make_ft_mock() -> types.ModuleType:
     # Controls: each call returns a fresh MagicMock so attribute assignment works
     for _name in (
         "Column", "Row", "Container", "Text", "Slider",
-        "ProgressBar", "ProgressRing", "ElevatedButton", "OutlinedButton",
-        "TextField", "Dropdown", "NavigationRail", "NavigationRailDestination",
-        "VerticalDivider", "Divider", "Icon", "Expanded",
+        "ProgressBar", "ProgressRing", "FilledButton", "ElevatedButton",
+        "OutlinedButton", "TextField", "Dropdown", "NavigationRail",
+        "NavigationRailDestination", "VerticalDivider", "Divider",
+        "Icon", "Expanded",
     ):
         setattr(ft, _name, MagicMock(side_effect=lambda *a, **kw: MagicMock()))
 
@@ -43,6 +44,11 @@ def _make_ft_mock() -> types.ModuleType:
     ft.border = MagicMock()
     ft.border.all = MagicMock(return_value=MagicMock())
 
+    # flet 1.x uses ft.Border.all(...) as a class method
+    _BorderMock = MagicMock()
+    _BorderMock.all = MagicMock(return_value=MagicMock())
+    ft.Border = _BorderMock
+
     ft.dropdown = MagicMock()
     ft.dropdown.Option = MagicMock(side_effect=lambda *a, **kw: MagicMock())
 
@@ -52,13 +58,12 @@ def _make_ft_mock() -> types.ModuleType:
     return ft
 
 
-# Install mock before cure_oracle.app is ever imported
-if "flet" not in sys.modules:
-    sys.modules["flet"] = _make_ft_mock()
-
-# Remove a stale real import if present (re-import with mock)
-if "cure_oracle.app" in sys.modules:
-    del sys.modules["cure_oracle.app"]
+# Always replace flet with our mock before importing cure_oracle.app
+sys.modules["flet"] = _make_ft_mock()
+# Force re-import of app with the mock
+for _mod in list(sys.modules):
+    if _mod == "cure_oracle.app" or _mod.startswith("cure_oracle.app."):
+        del sys.modules[_mod]
 
 from cure_oracle.app import (       # noqa: E402
     _q_to_slot, _MENTE_CONST, _SLOT_LABELS,

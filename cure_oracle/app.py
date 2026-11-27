@@ -64,7 +64,7 @@ def _card(content: ft.Control, padding: int = 16) -> ft.Container:
     return ft.Container(
         content=content,
         bgcolor=_SURFACE,
-        border=ft.border.all(1, _BORDER),
+        border=ft.Border.all(1, _BORDER),
         border_radius=8,
         padding=padding,
     )
@@ -258,7 +258,7 @@ def _benchmark_view(state: AppState, page: ft.Page) -> ft.Column:
         label="モード", width=110,
         bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
     )
-    run_btn = ft.ElevatedButton(
+    run_btn = ft.FilledButton(
         "▶ 実行", bgcolor=_PURPLE, color=_WHITE,
         disabled=bm.running,
     )
@@ -360,7 +360,7 @@ def _round_view(state: AppState, page: ft.Page) -> ft.Column:
         label="モード", width=110,
         bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
     )
-    run_btn = ft.ElevatedButton(
+    run_btn = ft.FilledButton(
         "⚡ 量子ランダム生成", bgcolor=_PURPLE, color=_WHITE,
         disabled=ro.running,
     )
@@ -597,11 +597,11 @@ def _mente_view(state: AppState, page: ft.Page) -> ft.Column:
     )
 
     # ── action buttons ─────────────────────────────────────────────────────
-    check_btn = ft.ElevatedButton(
+    check_btn = ft.FilledButton(
         "🔮 MENTE チェック", bgcolor=_PURPLE, color=_WHITE,
         disabled=ms.running,
     )
-    birth_btn = ft.ElevatedButton(
+    birth_btn = ft.FilledButton(
         "⭐ 誕生証明書 発行", bgcolor=_GOLD, color="#0a0a1a",
         visible=False,
     )
