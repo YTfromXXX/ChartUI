@@ -48,6 +48,11 @@ from tarot_engine import (
 )
 from tactics_384 import calculate_true_gravity_candy_points
 
+from spiral_candy_grid import router as spiral_grid_router
+from cure_initial import router as cure_initial_router
+from cure_oracle.qpu_router import router as qpu_router
+from cure_oracle.security import SecurityAuditMiddleware
+
 try:
     import MetaTrader5 as mt5
 except ImportError:  # Keep application imports usable in environments without MT5.
@@ -59,6 +64,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ChartUI API")
+app.include_router(spiral_grid_router)
+app.include_router(cure_initial_router)
+app.include_router(qpu_router)
 matrix_manager = TarotMatrixManager()
 magic_ledger = MagicLedgerDB(os.getenv("MAGIC_LEDGER_DB", "magic_ledger.db"))
 mt5_executor = MT5Executor()
@@ -67,10 +75,11 @@ matrix_refresh_task: asyncio.Task[None] | None = None
 
 def _cors_origins() -> list[str]:
     """Parse allowed browser origins from a comma-separated environment variable."""
-    configured = os.getenv("BACKEND_CORS_ORIGINS", "*")
-    return [origin.strip() for origin in configured.split(",") if origin.strip()] or ["*"]
+    configured = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost")
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
 
 
+app.add_middleware(SecurityAuditMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
