@@ -29,6 +29,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from cure_oracle.birth import make_sig_receipt
+from cure_oracle.accelerator import (
+    AcceleratorResult,
+    VirtualAccelerator,
+)
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -519,4 +523,140 @@ def observe_endpoint(
         coordinate_space=_MENTE_AXES,
         basis="四天王座標系 φ×√2",
         observe_receipt=receipt,
+    )
+
+
+# ── Virtual Accelerator endpoint ──────────────────────────────────────────────
+
+class AccelerateRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=10,
+        description="1–10 QPU shapes (duplicates = QPU replication). "
+                    "Valid: CUBE / RING / TREE / LINE / STAR",
+    )
+    shots: Optional[int] = Field(
+        None, ge=1, le=100_000,
+        description="Shots per shape; None = each shape's canonical default",
+    )
+    mode: str = Field(
+        "local",
+        description="Execution mode: local | fake | ibm",
+    )
+    confirm: Optional[str] = Field(
+        None,
+        description=f'Must equal "{CONFIRM}" to authorise a real-QPU run',
+    )
+
+
+class AcceleratorRunResponse(BaseModel):
+    shape:        str
+    q:            float
+    slot:         str
+    delta:        float
+    passed:       bool
+    sig_code:     str
+    backend:      str
+    shots:        int
+    theta_disp:   str
+
+
+class SynthesizedResponse(BaseModel):
+    slots:          dict[str, AcceleratorRunResponse]
+    mente_total:    float
+    mente_achieved: bool
+    four_kings:     bool
+    missing_slots:  list[str]
+
+
+class AccelerateResponse(BaseModel):
+    run_id:          str
+    born_at:         str
+    runs:            list[AcceleratorRunResponse]
+    synthesized:     SynthesizedResponse
+    observe_receipt: dict
+
+
+@router.post("/accelerate", response_model=AccelerateResponse)
+def accelerate_endpoint(
+    req: AccelerateRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> AccelerateResponse:
+    """
+    仮想加速器 — 複数 QPU 形状を並列実行し MENTE 座標で合成する。
+
+    - 同じ形状を複数指定することで QPU プール複製が可能
+    - 各実行結果の q = 1 − δ を四天王スロット(S1–S4)に射影
+    - 同一スロットに複数結果がある場合、最高 q（最大コヒーレンス）を採用
+    - 合成 mente_total ≥ MENTE_CONST で四天王全顕現
+    - sig-receipt/1 を発行（全顕現時は CUBE-φ.618-ε.001）
+    """
+    audit = AuditLogger.get()
+    resource = f"accelerate/{','.join(req.shapes)}/{req.mode}"
+
+    for shape in req.shapes:
+        if shape not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown shape {shape!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}",
+            )
+    if req.mode not in ("local", "fake", "ibm"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown mode {req.mode!r}; valid: local / fake / ibm",
+        )
+    if req.mode == "ibm" and role != Role.QPU_ADMIN:
+        audit.log(role.value, "accelerate.run", resource, "denied",
+                  {"reason": "insufficient_role"})
+        raise HTTPException(status_code=403, detail="QPU_ADMIN role required for ibm mode")
+    if req.shots and req.mode == "ibm" and req.shots > 20_000:
+        raise HTTPException(422, "shots > 20,000 not allowed for ibm mode")
+
+    kwargs: dict = dict(shapes=req.shapes, mode=req.mode)
+    if req.shots is not None:
+        kwargs["shots"] = req.shots
+    if req.mode == "ibm":
+        token = os.environ.get("IBM_QUANTUM_TOKEN")
+        instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+        if not token:
+            raise HTTPException(503, "IBM_QUANTUM_TOKEN environment variable is not set")
+        if not instance:
+            raise HTTPException(503, "IBM_QUANTUM_INSTANCE environment variable is not set")
+        kwargs.update(token=token, instance=instance, confirm=req.confirm)
+
+    try:
+        acc = VirtualAccelerator()
+        result: AcceleratorResult = acc.run(**kwargs)
+    except ValueError as exc:
+        audit.log(role.value, "accelerate.run", resource, "failure",
+                  {"error_type": "ValueError"})
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "accelerate.run", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    audit.log(role.value, "accelerate.run", resource, "success",
+              {"mente_total": result.synthesized.mente_total,
+               "four_kings": result.synthesized.four_kings,
+               "run_count": len(result.runs)})
+
+    def _run_resp(r) -> AcceleratorRunResponse:
+        return AcceleratorRunResponse(
+            shape=r.shape, q=r.q, slot=r.slot, delta=r.delta,
+            passed=r.passed, sig_code=r.sig_code, backend=r.backend,
+            shots=r.shots, theta_disp=r.theta_disp,
+        )
+
+    return AccelerateResponse(
+        run_id=result.run_id,
+        born_at=result.born_at,
+        runs=[_run_resp(r) for r in result.runs],
+        synthesized=SynthesizedResponse(
+            slots={slot: _run_resp(run) for slot, run in result.synthesized.slots.items()},
+            mente_total=result.synthesized.mente_total,
+            mente_achieved=result.synthesized.mente_achieved,
+            four_kings=result.synthesized.four_kings,
+            missing_slots=result.synthesized.missing_slots,
+        ),
+        observe_receipt=result.observe_receipt,
     )
