@@ -1,0 +1,1225 @@
+<title>ポールダンサーの部屋</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#04040a;--surf:#0a0a12;--surf2:#10101c;--surf3:#161624;
+  --border:#1a1a2e;--fg:#eeeeff;--sub:#5555a0;
+  --purple:#b060f8;--gold:#d4aa50;--cyan:#30d8d8;
+  --green:#40df98;--red:#f86868;--pink:#f060b0;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:'JetBrains Mono',monospace;
+  overflow-x:hidden;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));
+}
+
+/* ── STAGE ───────────────────────────────────────────────── */
+#stage{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  overflow:hidden;
+}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;}
+
+/* ── DECK CONTAINER ──────────────────────────────────────── */
+#deck{
+  position:relative;z-index:10;
+  width:100%;max-width:900px;
+  margin:0 auto;
+  min-height:100vh;
+  padding-bottom:80px;
+}
+
+/* ── TOP NAV ─────────────────────────────────────────────── */
+#topnav{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 0 8px;
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.nav-brand{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;}
+.nav-benchmark{
+  display:flex;align-items:center;gap:8px;
+}
+.benchmark-badge{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:.62rem;font-weight:900;letter-spacing:.18em;text-transform:uppercase;
+  padding:2px 10px;border-radius:3px;
+  background:color-mix(in srgb,var(--gold) 15%,var(--surf2));
+  color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);
+  white-space:nowrap;
+}
+.cure-api-nav{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:.7rem;font-weight:800;letter-spacing:.08em;
+  color:var(--cyan);white-space:nowrap;
+}
+.nav-room-title{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:.62rem;font-weight:500;letter-spacing:.04em;
+  color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cure-api-logo-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:6px 14px;
+  border-left:1px solid var(--border);
+  margin-left:4px;
+}
+.cure-api-logo-text{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:.85rem;font-weight:900;letter-spacing:.1em;
+  color:var(--cyan);
+}
+.cure-api-logo-sub{font-size:.5rem;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;}
+.slide-tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.stab{
+  padding:4px 9px;border-radius:5px;border:1px solid var(--border);
+  background:var(--surf2);color:var(--sub);
+  font-size:.6rem;letter-spacing:.06em;cursor:pointer;
+  transition:all .15s;white-space:nowrap;
+}
+.stab.active{background:color-mix(in srgb,var(--purple) 20%,var(--surf2));border-color:var(--purple);color:var(--purple);}
+.stab:hover:not(.active){background:var(--surf3);}
+
+/* ── SERVER BAR ───────────────────────────────────────────── */
+#srvbar{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 0 6px;border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.srv-label{font-size:.6rem;color:var(--sub);white-space:nowrap;}
+#srv-url{
+  flex:1;min-width:160px;background:var(--surf2);border:1px solid var(--border);
+  border-radius:5px;color:var(--fg);font-family:'JetBrains Mono',monospace;
+  font-size:.68rem;padding:4px 8px;outline:none;
+}
+#srv-url:focus{border-color:var(--cyan);}
+#srv-status{font-size:.62rem;padding:2px 7px;border-radius:4px;white-space:nowrap;}
+#srv-status.ok{background:color-mix(in srgb,var(--green) 15%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 25%,transparent);}
+#srv-status.err{background:color-mix(in srgb,var(--red) 15%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 25%,transparent);}
+#srv-status.pend{background:color-mix(in srgb,var(--gold) 15%,var(--surf2));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 25%,transparent);}
+.mini-btn{font-size:.62rem;padding:3px 8px;border-radius:4px;background:var(--surf2);border:1px solid var(--border);color:var(--fg);cursor:pointer;}
+.mini-btn:hover{background:var(--surf3);}
+
+/* ── SLIDE ───────────────────────────────────────────────── */
+.slide{display:none;animation:fadeSlide .4s ease;}
+.slide.active{display:block;}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── SECTION / CARD ───────────────────────────────────────── */
+.card{
+  background:color-mix(in srgb,var(--surf) 90%,transparent);
+  border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;margin-bottom:16px;
+  backdrop-filter:blur(6px);
+}
+.card-header{
+  padding:14px 20px 10px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+}
+.card-title{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);}
+.card-body{padding:16px 20px;}
+
+/* ── SLIDE 0: TITLE ──────────────────────────────────────── */
+.title-slide{padding:40px 0 20px;text-align:center;}
+.title-jp{font-family:'Space Grotesk',sans-serif;font-size:clamp(.9rem,3vw,1.3rem);font-weight:700;letter-spacing:.04em;color:var(--pink);margin-bottom:8px;line-height:1.6;}
+.title-en{font-size:.7rem;color:var(--sub);letter-spacing:.12em;text-transform:uppercase;margin-bottom:28px;}
+.title-logo{font-family:'Space Grotesk',sans-serif;font-size:clamp(2rem,8vw,4rem);font-weight:900;letter-spacing:.06em;color:var(--purple);text-shadow:0 0 60px color-mix(in srgb,var(--purple) 60%,transparent);}
+.title-logo span{color:var(--gold);}
+.title-sub{font-size:.72rem;color:var(--cyan);letter-spacing:.12em;margin-top:6px;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:28px;}
+.stat-cell{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.stat-num{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:900;}
+.stat-lbl{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin-top:3px;}
+
+/* ── QPU SECTION ─────────────────────────────────────────── */
+.qpu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
+.qpu-card{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+.qpu-name{font-size:.72rem;font-weight:700;color:var(--gold);letter-spacing:.04em;margin-bottom:6px;}
+.qpu-name.best{color:var(--green);}
+.qpu-row{display:flex;justify-content:space-between;font-size:.65rem;color:var(--sub);margin-bottom:3px;}
+.qpu-row span{color:var(--fg);}
+.qpu-score-bar{height:5px;background:var(--surf3);border-radius:3px;margin-top:8px;overflow:hidden;}
+.qpu-score-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--purple),var(--cyan));transition:width .5s;}
+.qpu-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.58rem;font-weight:700;letter-spacing:.06em;margin-top:5px;}
+.qpu-badge.best{background:color-mix(in srgb,var(--green) 20%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);}
+.qpu-badge.op{background:color-mix(in srgb,var(--cyan) 15%,var(--surf2));color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 25%,transparent);}
+
+/* ── SYMBOL SCROLLER ─────────────────────────────────────── */
+.sym-row{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 0;flex-wrap:wrap;}
+.sym-scroll-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.sym-label{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);}
+.sym-scroll{position:relative;width:150px;height:60px;background:var(--surf2);border:1px solid var(--border);border-radius:9px;overflow:hidden;cursor:pointer;user-select:none;}
+.sym-scroll::before,.sym-scroll::after{content:'';position:absolute;left:0;right:0;height:16px;z-index:2;pointer-events:none;}
+.sym-scroll::before{top:0;background:linear-gradient(to bottom,var(--surf2),transparent);}
+.sym-scroll::after{bottom:0;background:linear-gradient(to top,var(--surf2),transparent);}
+.sym-reel{display:flex;flex-direction:column;align-items:center;transition:transform .18s cubic-bezier(.22,1,.36,1);}
+.sym-item{height:60px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:1.1rem;font-weight:800;letter-spacing:.04em;padding:0 10px;width:150px;text-align:center;}
+.sym-item.active{color:var(--gold);}
+.sym-item:not(.active){color:var(--sub);font-size:.85rem;}
+.sym-nav{display:flex;gap:5px;}
+.sym-btn{width:26px;height:26px;border-radius:5px;background:var(--surf2);border:1px solid var(--border);color:var(--fg);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem;}
+.sym-btn:hover{background:var(--surf3);}
+.sym-x{font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:700;color:var(--sub);padding:0 4px;align-self:flex-end;padding-bottom:24px;}
+
+/* ── SCORE CARDS ─────────────────────────────────────────── */
+.score-row{display:flex;gap:10px;flex-wrap:wrap;}
+.sc-card{flex:1;min-width:110px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;}
+.sc-lbl{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin-bottom:5px;}
+.sc-val{font-family:'Space Grotesk',sans-serif;font-size:1.7rem;font-weight:900;line-height:1;}
+.sc-val.total{color:var(--gold);}
+.sc-val.be{color:var(--green);}
+.sc-val.pe{color:var(--red);}
+.sc-sub{font-size:.6rem;color:var(--sub);margin-top:3px;}
+
+/* ── WAVE CANVAS ─────────────────────────────────────────── */
+#waveCanvas{width:100%;height:160px;display:block;border-radius:8px;}
+.wave-legend{display:flex;gap:16px;padding:8px 0 4px;font-size:.65rem;flex-wrap:wrap;}
+.wl-item{display:flex;align-items:center;gap:5px;}
+.wl-dot{width:10px;height:3px;border-radius:2px;}
+
+/* ── FIB CANVAS ──────────────────────────────────────────── */
+#fibCanvas2{width:100%;height:140px;display:block;border-radius:8px;}
+.fib-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;}
+.fib-zone{font-size:.65rem;padding:3px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;}
+.fib-zone.long{background:color-mix(in srgb,var(--green) 20%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);}
+.fib-zone.short{background:color-mix(in srgb,var(--red) 20%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);}
+.fib-zone.neutral{background:color-mix(in srgb,var(--purple) 15%,var(--surf2));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 30%,transparent);}
+
+/* ── HANDLE ──────────────────────────────────────────────── */
+.handle-track{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.htick{width:28px;height:28px;border-radius:5px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;transition:all .3s;background:var(--surf2);}
+.htick.long{background:color-mix(in srgb,var(--green) 18%,var(--surf2));border-color:color-mix(in srgb,var(--green) 30%,transparent);color:var(--green);}
+.htick.short{background:color-mix(in srgb,var(--red) 18%,var(--surf2));border-color:color-mix(in srgb,var(--red) 30%,transparent);color:var(--red);}
+.htick.empty{color:var(--border);}
+.handle-trend{margin-left:auto;font-size:.65rem;font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:.04em;}
+.handle-trend.long{color:var(--green);}
+.handle-trend.short{color:var(--red);}
+.handle-trend.neutral{color:var(--sub);}
+
+/* ── 48 ACCOUNTS ──────────────────────────────────────────── */
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:5px;}
+.acct-cell{aspect-ratio:1;border-radius:6px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;background:var(--surf2);}
+.acct-cell:hover{transform:scale(1.08);z-index:2;}
+.acct-num{font-size:.48rem;color:var(--sub);}
+.acct-pl{font-size:.58rem;font-weight:700;}
+.acct-pl.pos{color:var(--green);}
+.acct-pl.neg{color:var(--red);}
+.acct-pl.zero{color:var(--sub);}
+.acct-cell.long{border-color:color-mix(in srgb,var(--green) 25%,transparent);background:color-mix(in srgb,var(--green) 8%,var(--surf2));}
+.acct-cell.short{border-color:color-mix(in srgb,var(--red) 25%,transparent);background:color-mix(in srgb,var(--red) 8%,var(--surf2));}
+.acct-cell.hold{border-color:color-mix(in srgb,var(--gold) 20%,transparent);background:color-mix(in srgb,var(--gold) 6%,var(--surf2));}
+.acct-cell.active-round{box-shadow:0 0 0 1px var(--purple);}
+.sym-tag{position:absolute;bottom:2px;right:3px;font-size:.4rem;color:var(--sub);}
+.totals-bar{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.tot-item{flex:1;min-width:90px;background:var(--surf);border:1px solid var(--border);border-radius:7px;padding:8px 10px;text-align:center;}
+.tot-label{font-size:.55rem;color:var(--sub);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;}
+.tot-val{font-family:'Space Grotesk',sans-serif;font-size:.9rem;font-weight:700;}
+
+/* ── FEED ─────────────────────────────────────────────────── */
+.feed-list{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto;}
+.feed-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surf);border:1px solid var(--border);border-radius:6px;font-size:.68rem;}
+.feed-time{color:var(--sub);min-width:55px;}
+.feed-sym{font-weight:700;min-width:65px;}
+.feed-dir.long{color:var(--green);}
+.feed-dir.short{color:var(--red);}
+.feed-str{flex:1;}
+.feed-nonce{font-size:.55rem;color:var(--sub);font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;}
+
+/* ── RUN BTN ──────────────────────────────────────────────── */
+.run-btn{
+  display:block;width:100%;padding:13px;margin:10px 0 16px;
+  font-family:'Space Grotesk',sans-serif;font-size:.88rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  background:linear-gradient(135deg,var(--purple),color-mix(in srgb,var(--purple) 60%,var(--cyan)));
+  border:none;color:#fff;border-radius:9px;cursor:pointer;
+  transition:opacity .15s,transform .1s;position:relative;overflow:hidden;
+}
+.run-btn::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);}
+.run-btn:hover{opacity:.88;}
+.run-btn:active{transform:scale(.98);}
+.run-btn.running{opacity:.6;cursor:wait;}
+
+/* ── NONCE SECTION ───────────────────────────────────────── */
+.nonce-box{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.68rem;font-family:'JetBrains Mono',monospace;word-break:break-all;color:var(--cyan);min-height:40px;}
+.cert-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.cert-pill{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surf2);font-size:.65rem;display:flex;align-items:center;gap:6px;}
+.cert-dot{width:7px;height:7px;border-radius:50%;}
+.cert-pill.ok .cert-dot{background:var(--green);box-shadow:0 0 6px var(--green);}
+.cert-pill.pend .cert-dot{background:var(--gold);}
+
+/* ── BOTTOM NAV ───────────────────────────────────────────── */
+#botnav{
+  position:fixed;bottom:0;left:0;right:0;z-index:20;
+  background:color-mix(in srgb,var(--bg) 95%,transparent);
+  backdrop-filter:blur(10px);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+}
+.bnav-btn{
+  padding:5px 10px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surf2);color:var(--sub);font-size:.6rem;letter-spacing:.05em;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.bnav-btn:hover{background:var(--surf3);}
+.bnav-btn.active{background:color-mix(in srgb,var(--purple) 22%,var(--surf2));border-color:var(--purple);color:var(--purple);}
+.bnav-label{font-size:.5rem;display:block;text-align:center;margin-top:1px;}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+
+<!-- STAGE CANVAS (ambient animation) -->
+<div id="stage"><canvas id="stageCanvas"></canvas></div>
+
+<div id="deck">
+
+<!-- SERVER BAR -->
+<div id="srvbar">
+  <span class="srv-label">API SERVER</span>
+  <input id="srv-url" value="https://feisty-freedom-production-c06a0335.up.railway.app" onchange="pingServer()">
+  <span id="srv-status" class="pend">— —</span>
+  <button class="mini-btn" onclick="pingServer()">Test</button>
+</div>
+
+<!-- TOP NAV -->
+<div id="topnav">
+  <div class="nav-brand">
+    <div class="nav-benchmark">
+      <span class="benchmark-badge">benchmark</span>
+      <span class="cure-api-nav">Cure-API</span>
+    </div>
+    <div class="nav-room-title">マーメイドシアター<span style="opacity:.5;font-size:.85em;"> (仮)</span></div>
+  </div>
+  <div class="cure-api-logo-wrap">
+    <div class="cure-api-logo-text">CURE</div>
+    <div class="cure-api-logo-sub">oracle api</div>
+  </div>
+  <div class="slide-tabs">
+    <button class="stab active" onclick="goSlide(0)">① Title</button>
+    <button class="stab" onclick="goSlide(1)">② QPU</button>
+    <button class="stab" onclick="goSlide(2)">③ MENTE</button>
+    <button class="stab" onclick="goSlide(3)">④ Fib</button>
+    <button class="stab" onclick="goSlide(4)">⑤ Waves</button>
+    <button class="stab" onclick="goSlide(5)">⑥ Pool48</button>
+    <button class="stab" onclick="goSlide(6)">⑦ Oracle</button>
+    <button class="stab" onclick="goSlide(7)">⑧ Nonce</button>
+  </div>
+</div>
+
+<!-- ══ SLIDE 0: TITLE ════════════════════════════════════════ -->
+<div class="slide active" id="slide-0">
+  <div class="title-slide">
+    <div class="title-jp">マーメイドシアター<span style="opacity:.45;font-size:.8em;letter-spacing:.06em;"> (仮)</span></div>
+    <div class="title-en">Establishing realistic hair physics through game development · pole dance motion as the foundation</div>
+
+    <!-- Pole Dancer Icon -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px;margin:20px 0 10px;">
+      <svg width="96" height="120" viewBox="0 0 96 120" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 18px rgba(176,96,248,.6))">
+        <defs>
+          <linearGradient id="pole-glow" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#30d8d8" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="#b060f8" stop-opacity=".6"/>
+          </linearGradient>
+          <linearGradient id="body-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#f060b0"/>
+            <stop offset="100%" stop-color="#b060f8"/>
+          </linearGradient>
+        </defs>
+        <!-- vertical pole -->
+        <rect x="46" y="4" width="4" height="112" rx="2" fill="url(#pole-glow)" opacity=".85"/>
+        <!-- pole shimmer -->
+        <rect x="47" y="4" width="1.5" height="112" rx="1" fill="#fff" opacity=".18"/>
+
+        <!-- head (circle) -->
+        <circle cx="58" cy="18" r="7" fill="url(#body-grad)"/>
+
+        <!-- torso — arched away from pole (right side) -->
+        <path d="M48 26 Q70 30 66 50" stroke="url(#body-grad)" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+        <!-- right arm — reaching up and gripping pole -->
+        <path d="M58 28 Q52 20 48 16" stroke="#f060b0" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+        <!-- left arm — extended outward -->
+        <path d="M60 36 Q76 32 80 26" stroke="#d4aa50" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+
+        <!-- hips pivot around pole -->
+        <path d="M66 50 Q48 54 48 62" stroke="url(#body-grad)" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+        <!-- right leg — extended high outward -->
+        <path d="M66 50 Q80 44 84 36" stroke="#b060f8" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+        <!-- left leg — sweeping down and back -->
+        <path d="M48 62 Q38 76 40 90" stroke="#30d8d8" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+
+        <!-- foot left -->
+        <circle cx="40" cy="92" r="3" fill="#30d8d8" opacity=".9"/>
+        <!-- foot right (pointed) -->
+        <circle cx="86" cy="34" r="2.5" fill="#b060f8" opacity=".9"/>
+
+        <!-- glow dots on grip points -->
+        <circle cx="48" cy="16" r="3" fill="#30d8d8" opacity=".8"/>
+        <circle cx="48" cy="62" r="3" fill="#f060b0" opacity=".8"/>
+
+        <!-- floor line -->
+        <line x1="20" y1="116" x2="76" y2="116" stroke="#1a1a3e" stroke-width="1.5"/>
+        <line x1="30" y1="116" x2="66" y2="116" stroke="#b060f8" stroke-width=".8" opacity=".4"/>
+      </svg>
+
+      <!-- Cure-API logo text -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:clamp(1.6rem,6vw,2.6rem);font-weight:900;letter-spacing:.12em;color:var(--cyan);text-shadow:0 0 40px color-mix(in srgb,var(--cyan) 55%,transparent);">CURE<span style="color:var(--purple);">-API</span></div>
+        <div style="font-size:.62rem;color:var(--sub);letter-spacing:.16em;text-transform:uppercase;">quantum certified signal engine</div>
+      </div>
+    </div>
+
+    <div class="title-sub">CURE-API · <span style="color:var(--gold)">benchmark</span> · RAILWAY LIVE</div>
+
+    <!-- Vision statement -->
+    <div style="margin:22px auto 0;max-width:580px;text-align:left;display:flex;flex-direction:column;gap:10px;">
+      <div style="background:color-mix(in srgb,var(--pink) 8%,var(--surf2));border:1px solid color-mix(in srgb,var(--pink) 20%,transparent);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--pink);margin-bottom:6px;">GAME DEVELOPMENT VISION</div>
+        <div style="font-size:.72rem;line-height:1.75;color:var(--fg);">
+          ポールダンス的動作を基盤に、<span style="color:var(--pink);font-weight:700;">髪型のリアルな揺れ</span>をゲーム制作を通じて確立する。<br>
+          Motion physics from pole dance forms the core engine for next-generation hair simulation.
+        </div>
+      </div>
+      <div style="background:color-mix(in srgb,var(--cyan) 8%,var(--surf2));border:1px solid color-mix(in srgb,var(--cyan) 20%,transparent);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px;">CURE-API ROADMAP</div>
+        <div style="font-size:.72rem;line-height:1.75;color:var(--fg);">
+          <span style="color:var(--cyan);font-weight:700;">量子暗号</span>的アプローチによるシグナル認証に加え、<br>
+          <span style="color:var(--gold);font-weight:700;">ゲーミング業界のデータセンター</span>としての役割も目指す。<br>
+          Quantum-certified signal engine × Gaming infrastructure.
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="stat-num" style="color:var(--pink)">髪</div><div class="stat-lbl">Hair Physics</div></div>
+      <div class="stat-cell"><div class="stat-num" style="color:var(--cyan)">QPU</div><div class="stat-lbl">Quantum Signal</div></div>
+      <div class="stat-cell"><div class="stat-num" style="color:var(--gold)">DC</div><div class="stat-lbl">Game Data Center</div></div>
+      <div class="stat-cell"><div class="stat-num" style="color:var(--gold)">99.60</div><div class="stat-lbl">Best Backend</div></div>
+      <div class="stat-cell"><div class="stat-num" style="color:var(--green)">48</div><div class="stat-lbl">Account Pool</div></div>
+      <div class="stat-cell"><div class="stat-num" style="color:var(--purple)">13</div><div class="stat-lbl">QPU Bits</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 1: QPU ENGINE ════════════════════════════════════ -->
+<div class="slide" id="slide-1">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">QPU Engine · 量子プロセッサー</div>
+      <div style="font-size:.65rem;color:var(--cyan)" id="qpu-last-update">— —</div>
+    </div>
+    <div class="card-body">
+      <div style="font-size:.68rem;color:var(--sub);margin-bottom:12px;">
+        13-bit QPU partition: q0–q4 = Symbol A signal · q5–q9 = Symbol B signal · q10 = CAPTURE · q11 = CRASH · q12 = PASS
+      </div>
+      <div class="qpu-grid" id="qpu-grid">
+        <div class="qpu-card"><div class="qpu-name best">cure_synth_ideal_v1</div>
+          <div class="qpu-row">Queue: <span>0</span></div>
+          <div class="qpu-row">Gate error: <span>0.000</span></div>
+          <div class="qpu-row">Latency: <span>80ms</span></div>
+          <div class="qpu-row">Shots: <span>9999</span></div>
+          <div class="qpu-score-bar"><div class="qpu-score-fill" style="width:99.6%"></div></div>
+          <div class="qpu-badge best">★ BEST · 99.60</div>
+        </div>
+        <div class="qpu-card"><div class="qpu-name">cure_synth_eagle_r3</div>
+          <div class="qpu-row">Queue: <span>4</span></div>
+          <div class="qpu-row">Gate error: <span>0.004</span></div>
+          <div class="qpu-row">Latency: <span>420ms</span></div>
+          <div class="qpu-row">Shots: <span>2000</span></div>
+          <div class="qpu-score-bar"><div class="qpu-score-fill" style="width:94.9%"></div></div>
+          <div class="qpu-badge op">● OP · 94.90</div>
+        </div>
+        <div class="qpu-card"><div class="qpu-name">cure_synth_heron_r2</div>
+          <div class="qpu-row">Queue: <span>11</span></div>
+          <div class="qpu-row">Gate error: <span>0.002</span></div>
+          <div class="qpu-row">Latency: <span>680ms</span></div>
+          <div class="qpu-row">Shots: <span>1800</span></div>
+          <div class="qpu-score-bar"><div class="qpu-score-fill" style="width:90.35%"></div></div>
+          <div class="qpu-badge op">● OP · 90.35</div>
+        </div>
+        <div class="qpu-card"><div class="qpu-name">cure_synth_falcon_r1</div>
+          <div class="qpu-row">Queue: <span>2</span></div>
+          <div class="qpu-row">Gate error: <span>0.012</span></div>
+          <div class="qpu-row">Latency: <span>210ms</span></div>
+          <div class="qpu-row">Shots: <span>2000</span></div>
+          <div class="qpu-score-bar"><div class="qpu-score-fill" style="width:92.45%"></div></div>
+          <div class="qpu-badge op">● OP · 92.45</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="mini-btn" onclick="refreshQPU()">↻ Refresh Pool Status</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 2: MENTE SIMULATOR ══════════════════════════════ -->
+<div class="slide" id="slide-2">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">MENTE Simulator</div>
+      <div id="mente-round" style="font-size:.65rem;color:var(--pink)">ROUND — —</div>
+    </div>
+    <div class="card-body">
+      <div class="sym-row">
+        <div class="sym-scroll-wrap">
+          <div class="sym-label">SYMBOL A</div>
+          <div class="sym-scroll" id="scroll-a2">
+            <div class="sym-reel" id="reel-a2"></div>
+          </div>
+          <div class="sym-nav">
+            <button class="sym-btn" onclick="shiftMente('a',-1)">▲</button>
+            <button class="sym-btn" onclick="shiftMente('a', 1)">▼</button>
+          </div>
+        </div>
+        <div class="sym-x">×</div>
+        <div class="sym-scroll-wrap">
+          <div class="sym-label">SYMBOL B</div>
+          <div class="sym-scroll" id="scroll-b2">
+            <div class="sym-reel" id="reel-b2"></div>
+          </div>
+          <div class="sym-nav">
+            <button class="sym-btn" onclick="shiftMente('b',-1)">▲</button>
+            <button class="sym-btn" onclick="shiftMente('b', 1)">▼</button>
+          </div>
+        </div>
+      </div>
+      <div class="score-row" style="margin-top:14px;">
+        <div class="sc-card"><div class="sc-lbl">Total Score</div><div class="sc-val total" id="m-total">— —</div><div class="sc-sub" id="m-total-sub">awaiting QPU</div></div>
+        <div class="sc-card"><div class="sc-lbl">BE Bull</div><div class="sc-val be" id="m-be">— —</div><div class="sc-sub" id="m-be-sub">Bull Entertainer</div></div>
+        <div class="sc-card"><div class="sc-lbl">PE Bear</div><div class="sc-val pe" id="m-pe">— —</div><div class="sc-sub" id="m-pe-sub">Bear Entertainer</div></div>
+      </div>
+      <!-- signal bars -->
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+        <div>
+          <div style="font-size:.6rem;color:var(--sub);display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span id="m-sig-a-label">SYM A signal</span><span id="m-sig-a-pct">0%</span>
+          </div>
+          <div style="height:7px;background:var(--surf3);border-radius:4px;overflow:hidden;">
+            <div id="m-sig-a-fill" style="height:100%;border-radius:4px;width:0%;background:linear-gradient(90deg,var(--cyan),var(--gold));transition:width .4s;"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:.6rem;color:var(--sub);display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span id="m-sig-b-label">SYM B signal</span><span id="m-sig-b-pct">0%</span>
+          </div>
+          <div style="height:7px;background:var(--surf3);border-radius:4px;overflow:hidden;">
+            <div id="m-sig-b-fill" style="height:100%;border-radius:4px;width:0%;background:linear-gradient(90deg,var(--purple),var(--gold));transition:width .4s;"></div>
+          </div>
+        </div>
+      </div>
+      <!-- event bits -->
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;">
+        <div class="cert-pill pend" id="m-ev-q10"><div class="cert-dot"></div>q10 CAPTURE</div>
+        <div class="cert-pill pend" id="m-ev-q11"><div class="cert-dot"></div>q11 CRASH</div>
+        <div class="cert-pill pend" id="m-ev-q12"><div class="cert-dot"></div>q12 PASS</div>
+        <div class="cert-pill pend" id="m-ev-nonce" style="margin-left:auto;"><div class="cert-dot"></div><span id="m-nonce-short">nonce: — —</span></div>
+      </div>
+      <button class="run-btn" id="run-mente" onclick="runMente()">▶ RUN MENTE PREDICT</button>
+      <!-- Analysis result box -->
+      <div id="mente-analysis" style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.68rem;line-height:1.7;min-height:60px;color:var(--sub);">
+        — 解析結果がここに表示されます —
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 3: FIBONACCI ACCELERATOR ════════════════════════ -->
+<div class="slide" id="slide-3">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Fibonacci Accelerator</div>
+      <div class="fib-zone neutral" id="fib-zone-badge2">NEUTRAL</div>
+    </div>
+    <div class="card-body">
+      <div class="fib-controls">
+        <span style="font-size:.62rem;color:var(--sub)">Levels:</span>
+        <span style="font-size:.62rem;color:var(--green)">▬ 0.618 ACCEL LONG</span>
+        <span style="font-size:.62rem;color:var(--gold)">- - signal</span>
+        <span style="font-size:.62rem;color:var(--red)">▬ 0.382 ACCEL SHORT</span>
+      </div>
+      <canvas id="fibCanvas2"></canvas>
+      <div style="font-size:.62rem;color:var(--sub);margin-top:8px;">
+        Signal strength &gt;0.618 = ACCEL LONG zone · &lt;0.382 = ACCEL SHORT zone · 0.382–0.618 = neutral
+      </div>
+      <!-- Handle -->
+      <div style="margin-top:16px;">
+        <div style="font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);margin-bottom:8px;">航続ハンドル · Sustained Handle</div>
+        <div class="handle-track" id="handle-track2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 4: WAVE COLLISION ARENA ══════════════════════════ -->
+<div class="slide" id="slide-4">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Wave Collision Arena</div>
+      <div style="font-size:.65rem;color:var(--pink)">BE × PE 衝突波形</div>
+    </div>
+    <div class="card-body">
+      <canvas id="waveCanvas"></canvas>
+      <div class="wave-legend">
+        <div class="wl-item"><div class="wl-dot" style="background:var(--green)"></div><span style="font-size:.62rem">BE · Bull Entertainer</span></div>
+        <div class="wl-item"><div class="wl-dot" style="background:var(--red)"></div><span style="font-size:.62rem">PE · Bear Entertainer</span></div>
+        <div class="wl-item"><div class="wl-dot" style="background:var(--gold)"></div><span style="font-size:.62rem">Combined signal strength</span></div>
+        <div class="wl-item"><div class="wl-dot" style="background:var(--purple);width:4px;height:4px;border-radius:50%"></div><span style="font-size:.62rem">Collision point</span></div>
+      </div>
+      <div style="font-size:.65rem;color:var(--sub);margin-top:4px;line-height:1.6;">
+        BE wave (green) と PE wave (red) の衝突点を追跡。ポールダンサーの軌跡のように、各ラウンドの力学が可視化される。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 5: 48 ACCOUNT POOL ══════════════════════════════ -->
+<div class="slide" id="slide-5">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">48 Account Pool</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="mini-btn" onclick="setView2('all')" id="v2-all">ALL</button>
+        <button class="mini-btn" onclick="setView2('long')" id="v2-long">LONG</button>
+        <button class="mini-btn" onclick="setView2('short')" id="v2-short">SHORT</button>
+        <button class="mini-btn" onclick="setView2('hold')" id="v2-hold">HOLD</button>
+        <button class="mini-btn" style="color:var(--gold);border-color:color-mix(in srgb,var(--gold) 30%,transparent);" onclick="resetAccounts2()">Reset48</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="acct-grid" id="acct-grid2"></div>
+      <div class="totals-bar">
+        <div class="tot-item"><div class="tot-label">Total P&L</div><div class="tot-val" id="tot-pl2" style="color:var(--gold)">$0.00</div></div>
+        <div class="tot-item"><div class="tot-label">Long</div><div class="tot-val" id="tot-long2" style="color:var(--green)">0</div></div>
+        <div class="tot-item"><div class="tot-label">Short</div><div class="tot-val" id="tot-short2" style="color:var(--red)">0</div></div>
+        <div class="tot-item"><div class="tot-label">Hold</div><div class="tot-val" id="tot-hold2" style="color:var(--gold)">48</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 6: ORACLE PREDICT LAB ══════════════════════════ -->
+<div class="slide" id="slide-6">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Oracle Predict Lab</div>
+      <div id="oracle-round" class="cert-pill pend"><div class="cert-dot"></div>ROUND — —</div>
+    </div>
+    <div class="card-body">
+      <div class="sym-row">
+        <div class="sym-scroll-wrap">
+          <div class="sym-label">SYMBOL A</div>
+          <div class="sym-scroll" id="scroll-a3">
+            <div class="sym-reel" id="reel-a3"></div>
+          </div>
+          <div class="sym-nav">
+            <button class="sym-btn" onclick="shiftOracle('a',-1)">▲</button>
+            <button class="sym-btn" onclick="shiftOracle('a', 1)">▼</button>
+          </div>
+        </div>
+        <div class="sym-x">×</div>
+        <div class="sym-scroll-wrap">
+          <div class="sym-label">SYMBOL B</div>
+          <div class="sym-scroll" id="scroll-b3">
+            <div class="sym-reel" id="reel-b3"></div>
+          </div>
+          <div class="sym-nav">
+            <button class="sym-btn" onclick="shiftOracle('b',-1)">▲</button>
+            <button class="sym-btn" onclick="shiftOracle('b', 1)">▼</button>
+          </div>
+        </div>
+      </div>
+      <button class="run-btn" id="run-oracle" onclick="runOracle()">▶ RUN /oracle/predict</button>
+      <div class="feed-list" id="feed-list2">
+        <div class="feed-item" style="justify-content:center;color:var(--sub);">— run predict to populate —</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 7: NONCE CERTIFICATE ════════════════════════════ -->
+<div class="slide" id="slide-7">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Nonce Certificate</div>
+      <div style="font-size:.62rem;color:var(--sub)">sha256 · QPU verified</div>
+    </div>
+    <div class="card-body">
+      <div style="font-size:.65rem;color:var(--sub);margin-bottom:10px;">
+        nonce = sha256(json.dumps({"round":N,"bits":bitstring,"qpu_s":seconds,"session":session_id}, sort_keys=True))
+      </div>
+      <div class="nonce-box" id="nonce-display">— run predict to generate nonce —</div>
+      <div class="cert-row" id="cert-row">
+        <div class="cert-pill pend"><div class="cert-dot"></div>round: — —</div>
+        <div class="cert-pill pend"><div class="cert-dot"></div>backend: — —</div>
+        <div class="cert-pill pend"><div class="cert-dot"></div>symbol: — —</div>
+        <div class="cert-pill pend"><div class="cert-dot"></div>direction: — —</div>
+        <div class="cert-pill pend"><div class="cert-dot"></div>score: — —</div>
+      </div>
+      <div style="margin-top:16px;font-size:.65rem;color:var(--sub);line-height:1.7;">
+        Each predict round generates a cryptographic nonce that certifies the quantum measurement outcome.
+        The nonce binds the QPU bitstring, session ID, and timestamp — a tamper-evident seal on every trade signal.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- #deck -->
+
+<!-- BOTTOM NAV -->
+<div id="botnav">
+  <button class="bnav-btn active" onclick="goSlide(0)">① Title</button>
+  <button class="bnav-btn" onclick="goSlide(1)">② QPU</button>
+  <button class="bnav-btn" onclick="goSlide(2)">③ MENTE</button>
+  <button class="bnav-btn" onclick="goSlide(3)">④ Fib</button>
+  <button class="bnav-btn" onclick="goSlide(4)">⑤ Waves</button>
+  <button class="bnav-btn" onclick="goSlide(5)">⑥ Pool</button>
+  <button class="bnav-btn" onclick="goSlide(6)">⑦ Lab</button>
+  <button class="bnav-btn" onclick="goSlide(7)">⑧ Nonce</button>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const SYMBOLS_BASE = [
+  'USD/JPY','EUR/USD','GBP/USD','AUD/USD','USD/CAD',
+  'USD/CHF','NZD/USD','EUR/JPY','GBP/JPY','XAU/USD',
+  'BTC/USD','ETH/USD','SOL/USD','MENTE/USD'
+];
+const SYMBOLS_MENTE = [
+  'MENTE/USD','MENTE/BTC','MENTE/ETH','MENTE/JPY',
+  'MENTE/EUR','MENTE/GBP','MENTE/SOL','MENTE/XAU',
+  'MENTE/USDT','USD/JPY','EUR/USD','GBP/USD',
+  'AUD/USD','USD/CAD','NZD/USD','XAU/USD',
+  'BTC/USD','ETH/USD','SOL/USD'
+];
+
+function apiBase(){
+  const h = location.hostname;
+  if(h!=='localhost' && h!=='127.0.0.1' && !h.startsWith('192.168.')){
+    return location.origin;
+  }
+  return (document.getElementById('srv-url')?.value||'https://feisty-freedom-production-c06a0335.up.railway.app').replace(/\/$/,'');
+}
+
+// ── Slide navigation ──────────────────────────────────────
+let currentSlide = 0;
+function goSlide(n){
+  document.querySelectorAll('.slide').forEach((s,i)=>s.classList.toggle('active',i===n));
+  document.querySelectorAll('.stab').forEach((b,i)=>b.classList.toggle('active',i===n));
+  document.querySelectorAll('.bnav-btn').forEach((b,i)=>b.classList.toggle('active',i===n));
+  currentSlide=n;
+  if(n===4) requestAnimationFrame(drawWaveCanvas);
+  if(n===3) requestAnimationFrame(drawFibCanvas2);
+}
+
+// ── Server ping ───────────────────────────────────────────
+async function pingServer(){
+  const el=document.getElementById('srv-status');
+  el.className='pend'; el.textContent='connecting…';
+  try{
+    const r=await fetch(apiBase()+'/pool/status',{signal:AbortSignal.timeout(3000)});
+    if(!r.ok) throw new Error(r.status);
+    const pool=await r.json();
+    el.className='ok'; el.textContent='● ONLINE · '+pool.length+' QPU';
+    // update QPU cards from live data
+    updateQPUCards(pool);
+  }catch(e){
+    el.className='err'; el.textContent='✕ OFFLINE';
+  }
+}
+
+function updateQPUCards(pool){
+  document.getElementById('qpu-last-update').textContent='Updated '+new Date().toLocaleTimeString();
+  // Find best
+  let best=pool.reduce((b,p)=>(p.score||0)>(b.score||0)?p:b, pool[0]);
+  const grid=document.getElementById('qpu-grid');
+  grid.innerHTML='';
+  pool.forEach(p=>{
+    const isBest=p.name===best.name;
+    const score=p.score||0;
+    const div=document.createElement('div');
+    div.className='qpu-card';
+    div.innerHTML=`<div class="qpu-name${isBest?' best':''}">${p.name}</div>
+      <div class="qpu-row">Queue: <span>${p.queue_len}</span></div>
+      <div class="qpu-row">Gate error: <span>${p.avg_gate_error.toFixed(3)}</span></div>
+      <div class="qpu-row">Latency: <span>${p.latency_ms}ms</span></div>
+      <div class="qpu-row">Shots: <span>${p.available_shots}</span></div>
+      <div class="qpu-score-bar"><div class="qpu-score-fill" style="width:${score}%"></div></div>
+      <div class="qpu-badge ${isBest?'best':'op'}">${isBest?'★ BEST':'● OP'} · ${score.toFixed(2)}</div>`;
+    grid.appendChild(div);
+  });
+}
+
+async function refreshQPU(){
+  await pingServer();
+}
+
+// ── Reel builder ──────────────────────────────────────────
+function buildReel(id, active, symbols){
+  const reel=document.getElementById('reel-'+id);
+  reel.innerHTML='';
+  const n=symbols.length;
+  for(let d=-1;d<=1;d++){
+    const idx=((active+d)%n+n)%n;
+    const div=document.createElement('div');
+    div.className='sym-item'+(d===0?' active':'');
+    div.textContent=symbols[idx];
+    reel.appendChild(div);
+  }
+}
+
+// ── MENTE slide ───────────────────────────────────────────
+const menteState={symA:0,symB:1,round:0};
+buildReel('a2',menteState.symA,SYMBOLS_MENTE);
+buildReel('b2',menteState.symB,SYMBOLS_MENTE);
+function shiftMente(ab,dir){
+  if(ab==='a') menteState.symA=((menteState.symA+dir)%SYMBOLS_MENTE.length+SYMBOLS_MENTE.length)%SYMBOLS_MENTE.length;
+  else         menteState.symB=((menteState.symB+dir)%SYMBOLS_MENTE.length+SYMBOLS_MENTE.length)%SYMBOLS_MENTE.length;
+  buildReel('a2',menteState.symA,SYMBOLS_MENTE);
+  buildReel('b2',menteState.symB,SYMBOLS_MENTE);
+  document.getElementById('m-sig-a-label').textContent=SYMBOLS_MENTE[menteState.symA]+' sig';
+  document.getElementById('m-sig-b-label').textContent=SYMBOLS_MENTE[menteState.symB]+' sig';
+}
+
+async function runMente(){
+  const btn=document.getElementById('run-mente');
+  btn.classList.add('running'); btn.textContent='⟳ CALLING…';
+  const symPair=encodeURIComponent(SYMBOLS_MENTE[menteState.symA]+' × '+SYMBOLS_MENTE[menteState.symB]);
+  try{
+    const res=await fetch(apiBase()+'/oracle/predict/'+symPair+'?shots=500',{
+      headers:{'X-Session-Id':'pd-room-mente-'+Date.now()},
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    menteState.round=d.round_num;
+    document.getElementById('mente-round').textContent='ROUND '+String(d.round_num).padStart(3,'0');
+    document.getElementById('m-total').textContent=d.scores.total.toFixed(1);
+    document.getElementById('m-be').textContent='+'+d.scores.be.toFixed(1);
+    document.getElementById('m-pe').textContent='-'+d.scores.pe.toFixed(1);
+    document.getElementById('m-total-sub').textContent=d.signal.symbol_a.direction+'×'+d.signal.symbol_b.direction;
+    document.getElementById('m-be-sub').textContent='q='+d.signal.symbol_a.active_qubits+'/5·'+d.signal.symbol_a.direction;
+    document.getElementById('m-pe-sub').textContent='q='+d.signal.symbol_b.active_qubits+'/5·'+d.signal.symbol_b.direction;
+    const aSig=d.signal.symbol_a.strength,bSig=d.signal.symbol_b.strength;
+    document.getElementById('m-sig-a-fill').style.width=(aSig*100)+'%';
+    document.getElementById('m-sig-b-fill').style.width=(bSig*100)+'%';
+    document.getElementById('m-sig-a-pct').textContent=(aSig*100).toFixed(0)+'%';
+    document.getElementById('m-sig-b-pct').textContent=(bSig*100).toFixed(0)+'%';
+    setMenteEv('m-ev-q10',d.events.q10_capture,'q10 CAPTURE');
+    setMenteEv('m-ev-q11',d.events.q11_crash,'q11 CRASH');
+    setMenteEv('m-ev-q12',d.events.q12_pass,'q12 PASS');
+    document.getElementById('m-ev-nonce').className='cert-pill ok';
+    document.getElementById('m-nonce-short').textContent='nonce: '+d.contract_nonce.slice(0,10)+'…';
+    // analysis
+    const dir=d.signal.symbol_a.direction;
+    const str=(aSig*100).toFixed(0);
+    const zone=aSig>0.618?'ACCEL LONG':aSig<0.382?'ACCEL SHORT':'NEUTRAL';
+    document.getElementById('mente-analysis').innerHTML=`
+      <span style="color:var(--cyan)">Symbol:</span> ${d.symbol}<br>
+      <span style="color:var(--cyan)">Direction:</span> <span style="color:${dir==='LONG'?'var(--green)':'var(--red)'}">${dir}</span>
+      &nbsp;&nbsp;<span style="color:var(--cyan)">Strength:</span> ${str}% &nbsp; <span style="color:var(--cyan)">Fib Zone:</span> ${zone}<br>
+      <span style="color:var(--cyan)">Backend:</span> ${d.backend} &nbsp; <span style="color:var(--cyan)">Round:</span> ${d.round_num}<br>
+      <span style="color:var(--cyan)">BE Score:</span> <span style="color:var(--green)">${d.scores.be.toFixed(1)}</span>
+      &nbsp; <span style="color:var(--cyan)">PE Score:</span> <span style="color:var(--red)">${d.scores.pe.toFixed(1)}</span>
+      &nbsp; <span style="color:var(--cyan)">Total:</span> <span style="color:var(--gold)">${d.scores.total.toFixed(1)}</span>
+    `;
+    // push to wave/fib histories
+    updateSharedState(d);
+    btn.classList.remove('running'); btn.textContent='▶ RUN MENTE PREDICT';
+  }catch(e){
+    btn.classList.remove('running'); btn.textContent='▶ RUN MENTE PREDICT';
+    document.getElementById('mente-analysis').textContent='Error: '+e.message;
+  }
+}
+
+function setMenteEv(id,on,label){
+  const el=document.getElementById(id);
+  el.className='cert-pill '+(on?'ok':'pend');
+  el.innerHTML=`<div class="cert-dot"></div>${label}`;
+}
+
+// ── Shared state (wave/fib/handle driven by any predict) ──
+const sharedHistory=[]; // {be,pe,strength,dir,symbol,round}
+const handleHist2=[];
+const FIB_LEVELS=[0,0.236,0.382,0.5,0.618,0.786,1.0];
+const FIB_LABELS=['0','0.236','0.382','0.5','0.618','0.786','1.0'];
+
+function updateSharedState(d){
+  const strength=(d.signal.symbol_a.strength+d.signal.symbol_b.strength)/2;
+  const beNorm=d.scores.be/100, peNorm=d.scores.pe/100;
+  const dir=d.signal.symbol_a.direction;
+  sharedHistory.push({be:beNorm,pe:peNorm,strength,dir,symbol:d.symbol,round:d.round_num});
+  if(sharedHistory.length>40) sharedHistory.shift();
+  handleHist2.push(dir);
+  if(handleHist2.length>10) handleHist2.shift();
+
+  // zone
+  const badge=document.getElementById('fib-zone-badge2');
+  if(badge){
+    if(strength>0.618){badge.className='fib-zone long';badge.textContent='⬆ ACCEL LONG';}
+    else if(strength<0.382){badge.className='fib-zone short';badge.textContent='⬇ ACCEL SHORT';}
+    else{badge.className='fib-zone neutral';badge.textContent='◼ NEUTRAL';}
+  }
+  // nonce slide
+  updateNonceSlide(d);
+  // accounts
+  refreshAccounts2();
+  drawWaveCanvas();
+  drawFibCanvas2();
+  renderHandle2();
+}
+
+// ── Wave canvas ───────────────────────────────────────────
+function drawWaveCanvas(){
+  const canvas=document.getElementById('waveCanvas');
+  if(!canvas) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.clientWidth,H=160;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const st=getComputedStyle(document.documentElement);
+  const colBg=st.getPropertyValue('--surf2').trim();
+  const colBorder=st.getPropertyValue('--border').trim();
+  const colGreen=st.getPropertyValue('--green').trim();
+  const colRed=st.getPropertyValue('--red').trim();
+  const colGold=st.getPropertyValue('--gold').trim();
+  const colPurple=st.getPropertyValue('--purple').trim();
+  const colSub=st.getPropertyValue('--sub').trim();
+  const padL=12,padR=12,padT=10,padB=10;
+  const cW=W-padL-padR,cH=H-padT-padB;
+
+  ctx.fillStyle=colBg; ctx.fillRect(0,0,W,H);
+
+  // grid
+  for(let i=0;i<=4;i++){
+    const y=padT+cH*(i/4);
+    ctx.strokeStyle=colBorder; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+  }
+
+  if(sharedHistory.length<2){
+    ctx.fillStyle=colSub; ctx.font='11px JetBrains Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('— run predict to generate wave —',W/2,H/2);
+    return;
+  }
+
+  const drawWave=(key,color,alpha=0.8)=>{
+    ctx.beginPath();
+    sharedHistory.forEach((pt,i)=>{
+      const x=padL+(i/(sharedHistory.length-1))*cW;
+      const y=padT+cH*(1-pt[key]);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.globalAlpha=alpha;
+    ctx.stroke(); ctx.globalAlpha=1;
+  };
+  drawWave('be',colGreen);
+  drawWave('pe',colRed);
+
+  // combined gold line
+  ctx.beginPath();
+  sharedHistory.forEach((pt,i)=>{
+    const x=padL+(i/(sharedHistory.length-1))*cW;
+    const y=padT+cH*(1-pt.strength);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=colGold; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // collision points (where BE and PE cross)
+  for(let i=1;i<sharedHistory.length;i++){
+    const a=sharedHistory[i-1],b=sharedHistory[i];
+    const crossedBefore=a.be>a.pe, crossedAfter=b.be>b.pe;
+    if(crossedBefore!==crossedAfter){
+      const frac=(a.be-a.pe)/((a.be-a.pe)-(b.be-b.pe));
+      const cx=padL+((i-1+frac)/(sharedHistory.length-1))*cW;
+      const cy=padT+cH*(1-(a.be+frac*(b.be-a.be)));
+      ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+      ctx.fillStyle=colPurple; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1;
+      ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.stroke();
+    }
+  }
+
+  // current state dots
+  const last=sharedHistory[sharedHistory.length-1];
+  const lx=padL+cW;
+  [[last.be,colGreen],[last.pe,colRed],[last.strength,colGold]].forEach(([v,c])=>{
+    const ly=padT+cH*(1-v);
+    ctx.beginPath(); ctx.arc(lx,ly,4,0,Math.PI*2);
+    ctx.fillStyle=c; ctx.fill();
+  });
+}
+
+// ── Fib canvas #2 ─────────────────────────────────────────
+function drawFibCanvas2(){
+  const canvas=document.getElementById('fibCanvas2');
+  if(!canvas) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.clientWidth,H=140;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const st=getComputedStyle(document.documentElement);
+  const colBg=st.getPropertyValue('--surf2').trim();
+  const colBorder=st.getPropertyValue('--border').trim();
+  const colGreen=st.getPropertyValue('--green').trim();
+  const colRed=st.getPropertyValue('--red').trim();
+  const colGold=st.getPropertyValue('--gold').trim();
+  const colSub=st.getPropertyValue('--sub').trim();
+  const padL=44,padR=12,padT=8,padB=18;
+  const cW=W-padL-padR,cH=H-padT-padB;
+
+  ctx.fillStyle=colBg; ctx.fillRect(0,0,W,H);
+  const yLong=padT+cH*(1-0.618),yShort=padT+cH*(1-0.382);
+  ctx.fillStyle='rgba(64,223,152,0.07)'; ctx.fillRect(padL,padT,cW,yLong-padT);
+  ctx.fillStyle='rgba(248,104,104,0.07)'; ctx.fillRect(padL,yShort,cW,padT+cH-yShort);
+
+  FIB_LEVELS.forEach((lv,i)=>{
+    const y=padT+cH*(1-lv);
+    ctx.strokeStyle=lv===0.618?colGreen:lv===0.382?colRed:colBorder;
+    ctx.lineWidth=(lv===0.618||lv===0.382)?1.5:0.7;
+    ctx.setLineDash(lv===0.5?[4,3]:[]);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=lv===0.618?colGreen:lv===0.382?colRed:colSub;
+    ctx.font='9px JetBrains Mono, monospace';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(FIB_LABELS[i],padL-4,y);
+  });
+
+  if(sharedHistory.length<2){
+    ctx.fillStyle=colSub; ctx.font='11px JetBrains Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('— run predict to populate —',padL+cW/2,padT+cH/2);
+    return;
+  }
+
+  [[`be`,colGreen],[`pe`,colRed]].forEach(([k,c])=>{
+    ctx.beginPath();
+    sharedHistory.forEach((pt,i)=>{
+      const x=padL+(i/(sharedHistory.length-1))*cW;
+      const y=padT+cH*(1-pt[k]);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=c; ctx.lineWidth=1.8; ctx.globalAlpha=0.7;
+    ctx.stroke(); ctx.globalAlpha=1;
+  });
+
+  ctx.beginPath();
+  sharedHistory.forEach((pt,i)=>{
+    const x=padL+(i/(sharedHistory.length-1))*cW;
+    const y=padT+cH*(1-pt.strength);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=colGold; ctx.lineWidth=2.2; ctx.setLineDash([6,3]);
+  ctx.stroke(); ctx.setLineDash([]);
+
+  const last=sharedHistory[sharedHistory.length-1];
+  const cx2=padL+cW,cy2=padT+cH*(1-last.strength);
+  ctx.beginPath(); ctx.arc(cx2,cy2,5,0,Math.PI*2);
+  ctx.fillStyle=colGold; ctx.fill();
+  ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+// ── Handle #2 ─────────────────────────────────────────────
+function renderHandle2(){
+  const track=document.getElementById('handle-track2');
+  if(!track) return;
+  track.innerHTML='';
+  for(let i=0;i<10;i++){
+    const tick=document.createElement('div');
+    const val=handleHist2[i];
+    if(val===undefined){tick.className='htick empty';tick.textContent='·';}
+    else if(val==='LONG'){tick.className='htick long';tick.textContent='▲';}
+    else{tick.className='htick short';tick.textContent='▼';}
+    track.appendChild(tick);
+  }
+  if(handleHist2.length>=3){
+    const recent=handleHist2.slice(-5);
+    const longs=recent.filter(v=>v==='LONG').length;
+    const trend=document.createElement('div');
+    if(longs>=4){trend.className='handle-trend long';trend.textContent='▲ TREND LONG';}
+    else if(longs<=1){trend.className='handle-trend short';trend.textContent='▼ TREND SHORT';}
+    else{trend.className='handle-trend neutral';trend.textContent='◼ MIXED';}
+    track.appendChild(trend);
+  }
+}
+
+// ── Oracle Lab slide ──────────────────────────────────────
+const oracleState={symA:0,symB:1,round:0,feedItems:[]};
+buildReel('a3',oracleState.symA,SYMBOLS_BASE);
+buildReel('b3',oracleState.symB,SYMBOLS_BASE);
+function shiftOracle(ab,dir){
+  if(ab==='a') oracleState.symA=((oracleState.symA+dir)%SYMBOLS_BASE.length+SYMBOLS_BASE.length)%SYMBOLS_BASE.length;
+  else         oracleState.symB=((oracleState.symB+dir)%SYMBOLS_BASE.length+SYMBOLS_BASE.length)%SYMBOLS_BASE.length;
+  buildReel('a3',oracleState.symA,SYMBOLS_BASE);
+  buildReel('b3',oracleState.symB,SYMBOLS_BASE);
+}
+
+async function runOracle(){
+  const btn=document.getElementById('run-oracle');
+  btn.classList.add('running'); btn.textContent='⟳ CALLING…';
+  const symPair=encodeURIComponent(SYMBOLS_BASE[oracleState.symA]+' × '+SYMBOLS_BASE[oracleState.symB]);
+  try{
+    const res=await fetch(apiBase()+'/oracle/predict/'+symPair+'?shots=500',{
+      headers:{'X-Session-Id':'pd-room-oracle-'+Date.now()},
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    oracleState.round=d.round_num;
+    document.getElementById('oracle-round').className='cert-pill ok';
+    document.getElementById('oracle-round').innerHTML='<div class="cert-dot"></div>ROUND '+String(d.round_num).padStart(3,'0');
+    addFeedItem2(d);
+    updateSharedState(d);
+    btn.classList.remove('running'); btn.textContent='▶ RUN /oracle/predict';
+  }catch(e){
+    btn.classList.remove('running'); btn.textContent='▶ RUN /oracle/predict';
+  }
+}
+
+function addFeedItem2(d){
+  const feed=document.getElementById('feed-list2');
+  if(feed.children[0]?.textContent.includes('populate')) feed.innerHTML='';
+  const now=new Date();
+  const ts=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  const dir=d.signal.symbol_a.direction;
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`<span class="feed-time">${ts}</span>
+    <span class="feed-sym">${d.symbol}</span>
+    <span class="feed-dir ${dir.toLowerCase()}">${dir}</span>
+    <span class="feed-str">str:${(d.signal.symbol_a.strength*100).toFixed(0)}%·${d.backend}</span>
+    <span class="feed-nonce">${d.contract_nonce}</span>`;
+  feed.insertBefore(item,feed.firstChild);
+  oracleState.feedItems.push(item);
+  if(oracleState.feedItems.length>30){feed.removeChild(feed.lastChild);oracleState.feedItems.shift();}
+}
+
+// ── Nonce slide ───────────────────────────────────────────
+function updateNonceSlide(d){
+  document.getElementById('nonce-display').textContent=d.contract_nonce;
+  const dir=d.signal.symbol_a.direction;
+  document.getElementById('cert-row').innerHTML=`
+    <div class="cert-pill ok"><div class="cert-dot"></div>round: ${d.round_num}</div>
+    <div class="cert-pill ok"><div class="cert-dot"></div>backend: ${d.backend}</div>
+    <div class="cert-pill ok"><div class="cert-dot"></div>symbol: ${d.symbol}</div>
+    <div class="cert-pill ok" style="color:${dir==='LONG'?'var(--green)':'var(--red)'}"><div class="cert-dot"></div>direction: ${dir}</div>
+    <div class="cert-pill ok"><div class="cert-dot"></div>score: ${d.scores.total.toFixed(1)}</div>`;
+}
+
+// ── 48 Account Pool (slide 5) ─────────────────────────────
+let acctView2='all', acctRound2=0;
+
+async function refreshAccounts2(){
+  try{
+    const res=await fetch(apiBase()+'/oracle/accounts',{signal:AbortSignal.timeout(4000)});
+    if(!res.ok) return;
+    const d=await res.json();
+    renderAccounts2(d.accounts,d.summary);
+  }catch(_){}
+}
+
+function renderAccounts2(accounts,summary){
+  const grid=document.getElementById('acct-grid2');
+  if(!grid) return;
+  grid.innerHTML='';
+  accounts.forEach(acc=>{
+    const pos=(acc.position||'HOLD').toLowerCase();
+    if(acctView2!=='all'&&pos!==acctView2) return;
+    const isActive=acc.round_num===acctRound2;
+    const cell=document.createElement('div');
+    cell.className='acct-cell '+pos+(isActive?' active-round':'');
+    const plClass=acc.pl>0?'pos':acc.pl<0?'neg':'zero';
+    const plSign=acc.pl>0?'+':'';
+    const symTag=acc.symbol?acc.symbol.split(/[/× ]/)[0]:'';
+    cell.innerHTML=`<div class="acct-num">#${String(acc.id).padStart(2,'0')}</div>
+      <div class="acct-pl ${plClass}">${plSign}${acc.pl.toFixed(0)}</div>
+      ${symTag?`<div class="sym-tag">${symTag}</div>`:''}`;
+    grid.appendChild(cell);
+  });
+  const pl=summary.total_pl;
+  document.getElementById('tot-pl2').textContent='$'+(pl>=0?'+':'')+pl.toFixed(2);
+  document.getElementById('tot-pl2').style.color=pl>=0?'var(--green)':'var(--red)';
+  document.getElementById('tot-long2').textContent=summary.long_count;
+  document.getElementById('tot-short2').textContent=summary.short_count;
+  document.getElementById('tot-hold2').textContent=summary.hold_count;
+}
+
+function setView2(v){
+  acctView2=v;
+  ['all','long','short','hold'].forEach(k=>{
+    const btn=document.getElementById('v2-'+k);
+    if(btn) btn.style.borderColor=k===v?'var(--purple)':'';
+  });
+  refreshAccounts2();
+}
+
+async function resetAccounts2(){
+  try{await fetch(apiBase()+'/oracle/accounts/reset',{method:'POST',signal:AbortSignal.timeout(4000)});}catch(_){}
+  acctRound2=0;
+  await refreshAccounts2();
+}
+
+// ── Ambient stage animation ───────────────────────────────
+(function stageAnim(){
+  const canvas=document.getElementById('stageCanvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  let W,H,particles=[];
+
+  function resize(){
+    W=canvas.width=window.innerWidth;
+    H=canvas.height=window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize',()=>{resize();});
+
+  for(let i=0;i<28;i++){
+    particles.push({
+      x:Math.random()*1920,y:Math.random()*1080,
+      vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,
+      r:Math.random()*1.8+.5,
+      hue:Math.random()<.5?270:180
+    });
+  }
+
+  let frame=0;
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    frame++;
+    particles.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0)p.x=W; if(p.x>W)p.x=0;
+      if(p.y<0)p.y=H; if(p.y>H)p.y=0;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${p.hue},80%,70%,.35)`; ctx.fill();
+    });
+    // subtle polar wave behind
+    ctx.save();
+    ctx.translate(W*.5,H*.5);
+    for(let ring=0;ring<3;ring++){
+      const r=120+ring*80+Math.sin(frame*.012+ring)*12;
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.strokeStyle=`hsla(${270+ring*30},60%,55%,.04)`;
+      ctx.lineWidth=20; ctx.stroke();
+    }
+    ctx.restore();
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+// ── Init ──────────────────────────────────────────────────
+renderHandle2();
+drawFibCanvas2();
+drawWaveCanvas();
+pingServer().then(()=>refreshAccounts2());
+</script>

@@ -1,0 +1,797 @@
+<title>METADOGG ORACLE API</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#06060a;--surf:#0c0c14;--surf2:#12121e;--surf3:#181828;
+  --border:#1e1e32;--fg:#e8e8f8;--sub:#6060a0;
+  --purple:#a060f0;--gold:#c8a84a;--cyan:#22c8c8;
+  --green:#3ecf8e;--red:#f06060;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f4f4fa;--surf:#fff;--surf2:#ebebf8;--surf3:#ddddf0;
+  --border:#d0d0e8;--fg:#0a0a1a;--sub:#6060a0;color-scheme:light;
+}}
+:root[data-theme="dark"]{--bg:#06060a;--surf:#0c0c14;--surf2:#12121e;--surf3:#181828;--border:#1e1e32;--fg:#e8e8f8;--sub:#6060a0;color-scheme:dark;}
+
+*,*::before,*::after{box-sizing:border-box;}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:'JetBrains Mono',monospace;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px));
+  overflow-x:hidden;
+}
+
+/* circuit bg */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(90deg, var(--border) 1px, transparent 1px),
+    linear-gradient(0deg, var(--border) 1px, transparent 1px);
+  background-size:40px 40px;
+  opacity:.35;
+}
+.page{position:relative;z-index:1;max-width:860px;margin:0 auto;}
+
+/* ── HEADER ───────────────────────────────────────────────── */
+.header{display:flex;align-items:center;gap:20px;padding:28px 0 20px;border-bottom:1px solid var(--border);}
+.logo-wrap{flex-shrink:0;}
+.logo-title{flex:1;}
+.logo-label{font-family:'Space Grotesk',sans-serif;font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--sub);margin-bottom:3px;}
+.logo-name{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.1rem,4vw,1.6rem);font-weight:900;letter-spacing:.04em;line-height:1;}
+.logo-name .dot{color:var(--purple);}
+.logo-sub{font-size:.68rem;color:var(--sub);margin-top:4px;letter-spacing:.06em;}
+.version-badge{font-size:.6rem;background:color-mix(in srgb,var(--purple) 15%,var(--surf2));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 30%,transparent);border-radius:3px;padding:2px 7px;letter-spacing:.08em;white-space:nowrap;}
+
+/* METADOGG SVG Logo */
+svg.mdlogo{width:72px;height:72px;}
+
+/* ── ORACLE PANEL ─────────────────────────────────────────── */
+.oracle-panel{margin:28px 0;background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.oracle-top{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.oracle-label{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);}
+.round-badge{font-size:.7rem;color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 25%,transparent);border-radius:4px;padding:2px 8px;background:color-mix(in srgb,var(--cyan) 10%,transparent);}
+
+/* symbol scrollers */
+.sym-row{display:flex;align-items:center;justify-content:center;gap:16px;padding:28px 24px 20px;flex-wrap:wrap;}
+.sym-scroll-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.sym-scroll-label{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);}
+.sym-scroll{position:relative;width:160px;height:64px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;user-select:none;}
+.sym-scroll::before,.sym-scroll::after{
+  content:'';position:absolute;left:0;right:0;height:18px;z-index:2;pointer-events:none;
+}
+.sym-scroll::before{top:0;background:linear-gradient(to bottom,var(--surf2),transparent);}
+.sym-scroll::after{bottom:0;background:linear-gradient(to top,var(--surf2),transparent);}
+.sym-reel{display:flex;flex-direction:column;align-items:center;transition:transform .18s cubic-bezier(.22,1,.36,1);}
+.sym-item{height:64px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:800;letter-spacing:.04em;padding:0 12px;width:160px;text-align:center;}
+.sym-item.active{color:var(--gold);}
+.sym-item:not(.active){color:var(--sub);font-size:.9rem;}
+.sym-nav{display:flex;gap:6px;}
+.sym-btn{width:28px;height:28px;border-radius:6px;background:var(--surf2);border:1px solid var(--border);color:var(--fg);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.75rem;transition:background .1s;}
+.sym-btn:hover{background:var(--surf3);}
+.sym-x{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700;color:var(--sub);padding:0 4px;align-self:flex-end;padding-bottom:28px;}
+
+/* scores */
+.score-row{display:flex;gap:12px;padding:0 24px 24px;flex-wrap:wrap;justify-content:center;}
+.score-card{flex:1;min-width:120px;max-width:200px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;}
+.sc-label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);margin-bottom:6px;}
+.sc-val{font-family:'Space Grotesk',sans-serif;font-size:1.8rem;font-weight:900;line-height:1;}
+.sc-val.total{color:var(--gold);}
+.sc-val.be{color:var(--green);}
+.sc-val.pe{color:var(--red);}
+.sc-sub{font-size:.65rem;color:var(--sub);margin-top:4px;}
+
+/* signal bars */
+.sig-row{padding:0 24px 20px;display:flex;gap:10px;flex-wrap:wrap;}
+.sig-bar-wrap{flex:1;min-width:140px;}
+.sig-bar-label{font-size:.62rem;color:var(--sub);margin-bottom:5px;display:flex;justify-content:space-between;}
+.sig-bar-track{height:8px;background:var(--surf3);border-radius:4px;overflow:hidden;}
+.sig-bar-fill{height:100%;border-radius:4px;transition:width .4s ease;}
+.sig-a .sig-bar-fill{background:linear-gradient(90deg,var(--cyan),color-mix(in srgb,var(--cyan) 60%,var(--gold)));}
+.sig-b .sig-bar-fill{background:linear-gradient(90deg,var(--purple),var(--gold));}
+
+/* event bits */
+.ev-row{padding:0 24px 20px;display:flex;gap:8px;flex-wrap:wrap;}
+.ev-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surf2);font-size:.7rem;}
+.ev-dot{width:7px;height:7px;border-radius:50%;}
+.ev-pill.on .ev-dot{background:var(--green);box-shadow:0 0 6px var(--green);}
+.ev-pill.off .ev-dot{background:var(--border);}
+.ev-pill.on{border-color:color-mix(in srgb,var(--green) 30%,transparent);}
+
+/* ── 48 ACCOUNTS ──────────────────────────────────────────── */
+.acct-section{margin:0 0 28px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap;}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);}
+.acct-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:4px 10px;border-radius:5px;background:var(--surf2);border:1px solid var(--border);color:var(--fg);cursor:pointer;transition:all .12s;}
+.ctrl-btn:hover{background:var(--surf3);}
+.ctrl-btn.active{background:color-mix(in srgb,var(--purple) 20%,var(--surf2));border-color:var(--purple);color:var(--purple);}
+.ctrl-btn.reset{border-color:color-mix(in srgb,var(--gold) 30%,transparent);color:var(--gold);}
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:5px;}
+.acct-cell{aspect-ratio:1;border-radius:6px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;background:var(--surf2);}
+.acct-cell:hover{transform:scale(1.08);z-index:2;}
+.acct-num{font-size:.5rem;color:var(--sub);}
+.acct-pl{font-size:.6rem;font-weight:700;}
+.acct-pl.pos{color:var(--green);}
+.acct-pl.neg{color:var(--red);}
+.acct-pl.zero{color:var(--sub);}
+.acct-cell.long{border-color:color-mix(in srgb,var(--green) 25%,transparent);background:color-mix(in srgb,var(--green) 8%,var(--surf2));}
+.acct-cell.short{border-color:color-mix(in srgb,var(--red) 25%,transparent);background:color-mix(in srgb,var(--red) 8%,var(--surf2));}
+.acct-cell.hold{border-color:color-mix(in srgb,var(--gold) 20%,transparent);background:color-mix(in srgb,var(--gold) 6%,var(--surf2));}
+.acct-cell.active-round{box-shadow:0 0 0 1px var(--purple);}
+.acct-cell .sym-tag{position:absolute;bottom:2px;right:3px;font-size:.42rem;color:var(--sub);}
+
+/* totals bar */
+.totals-bar{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.tot-item{flex:1;min-width:100px;background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center;}
+.tot-label{font-size:.58rem;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;}
+.tot-val{font-family:'Space Grotesk',sans-serif;font-size:1rem;font-weight:700;}
+
+/* ── PREDICT FEED ─────────────────────────────────────────── */
+.feed-section{margin:0 0 28px;}
+.feed-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;}
+.feed-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surf);border:1px solid var(--border);border-radius:7px;font-size:.72rem;}
+.feed-time{color:var(--sub);min-width:60px;}
+.feed-sym{font-weight:700;min-width:70px;}
+.feed-dir{min-width:50px;}
+.feed-dir.long{color:var(--green);}
+.feed-dir.short{color:var(--red);}
+.feed-str{flex:1;}
+.feed-nonce{font-size:.58rem;color:var(--sub);font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;}
+
+/* ── RUN BTN ──────────────────────────────────────────────── */
+.run-btn{
+  display:block;width:100%;padding:14px;margin:4px 0 24px;
+  font-family:'Space Grotesk',sans-serif;font-size:.9rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  background:linear-gradient(135deg,var(--purple),color-mix(in srgb,var(--purple) 60%,var(--cyan)));
+  border:none;color:#fff;border-radius:10px;cursor:pointer;
+  transition:opacity .15s,transform .1s;
+  position:relative;overflow:hidden;
+}
+.run-btn::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);
+}
+.run-btn:hover{opacity:.88;}
+.run-btn:active{transform:scale(.98);}
+.run-btn.running{opacity:.6;cursor:wait;}
+
+/* server config bar */
+.server-bar{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:0;flex-wrap:wrap;}
+.srv-label{font-size:.62rem;color:var(--sub);letter-spacing:.08em;white-space:nowrap;}
+.srv-input{flex:1;min-width:180px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:5px 9px;outline:none;}
+.srv-input:focus{border-color:var(--cyan);}
+.srv-status{font-size:.65rem;padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.srv-status.ok{background:color-mix(in srgb,var(--green) 15%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 25%,transparent);}
+.srv-status.err{background:color-mix(in srgb,var(--red) 15%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 25%,transparent);}
+.srv-status.pend{background:color-mix(in srgb,var(--gold) 15%,var(--surf2));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 25%,transparent);}
+/* scrollbar */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── BEST BACKEND BADGE ───────────────────────────────────── */
+.best-backend-badge{
+  display:flex;align-items:center;gap:7px;
+  padding:4px 11px;border-radius:6px;
+  background:color-mix(in srgb,var(--gold) 12%,var(--surf2));
+  border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);
+  font-size:.65rem;font-family:'JetBrains Mono',monospace;white-space:nowrap;
+}
+.bbb-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
+.bbb-name{color:var(--gold);font-weight:700;letter-spacing:.04em;}
+.bbb-score{color:var(--fg);opacity:.75;}
+.bbb-label{font-size:.55rem;color:var(--sub);letter-spacing:.08em;}
+
+/* ── FIB ACCELERATOR ──────────────────────────────────────── */
+.fib-section{margin:0 0 20px;}
+.fib-panel{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.fib-header{padding:14px 20px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.fib-title{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);}
+.fib-zone-badge{font-size:.65rem;padding:3px 10px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.04em;transition:all .3s;}
+.fib-zone-badge.long{background:color-mix(in srgb,var(--green) 20%,var(--surf2));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);}
+.fib-zone-badge.short{background:color-mix(in srgb,var(--red) 20%,var(--surf2));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);}
+.fib-zone-badge.neutral{background:color-mix(in srgb,var(--purple) 15%,var(--surf2));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 30%,transparent);}
+.fib-canvas-wrap{padding:0 16px 12px;position:relative;}
+canvas#fibCanvas{width:100%;height:140px;display:block;border-radius:6px;}
+
+/* ── 航続ハンドル ─────────────────────────────────────────── */
+.handle-section{padding:12px 20px 16px;border-top:1px solid var(--border);}
+.handle-label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);margin-bottom:8px;}
+.handle-track{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+.handle-tick{width:28px;height:28px;border-radius:5px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;transition:all .3s;background:var(--surf2);}
+.handle-tick.long{background:color-mix(in srgb,var(--green) 18%,var(--surf2));border-color:color-mix(in srgb,var(--green) 30%,transparent);color:var(--green);}
+.handle-tick.short{background:color-mix(in srgb,var(--red) 18%,var(--surf2));border-color:color-mix(in srgb,var(--red) 30%,transparent);color:var(--red);}
+.handle-tick.empty{color:var(--border);}
+.handle-trend{margin-left:auto;font-size:.65rem;font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:.04em;}
+.handle-trend.long{color:var(--green);}
+.handle-trend.short{color:var(--red);}
+.handle-trend.neutral{color:var(--sub);}
+</style>
+
+<div class="page">
+
+<!-- SERVER CONFIG BAR -->
+<div class="server-bar">
+  <span class="srv-label">API SERVER</span>
+  <input class="srv-input" id="srv-url" value="https://feisty-freedom-production-c06a0335.up.railway.app" placeholder="https://feisty-freedom-production-c06a0335.up.railway.app" onchange="pingServer()">
+  <span class="srv-status pend" id="srv-status">— —</span>
+  <button class="ctrl-btn" onclick="pingServer()" style="white-space:nowrap">Test</button>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo-wrap">
+    <svg class="mdlogo" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="circ" width="8" height="8" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="4" x2="8" y2="4" stroke="#a060f0" stroke-width=".6" opacity=".4"/>
+          <line x1="4" y1="0" x2="4" y2="8" stroke="#22c8c8" stroke-width=".6" opacity=".3"/>
+        </pattern>
+        <clipPath id="headclip"><polygon points="20,8 52,8 60,20 60,52 36,64 12,52 12,20"/></clipPath>
+      </defs>
+      <!-- head -->
+      <polygon points="20,8 52,8 60,20 60,52 36,64 12,52 12,20" fill="#0c0c14" stroke="#1e1e32" stroke-width="1"/>
+      <rect x="12" y="8" width="48" height="56" fill="url(#circ)" clip-path="url(#headclip)"/>
+      <!-- glitch strips -->
+      <rect x="12" y="22" width="48" height="2" fill="#a060f0" opacity=".25"/>
+      <rect x="12" y="38" width="48" height="1" fill="#22c8c8" opacity=".2"/>
+      <!-- ears -->
+      <polygon points="20,8 12,0 24,8" fill="#0c0c14" stroke="#1e1e32"/>
+      <polygon points="52,8 60,0 48,8" fill="#0c0c14" stroke="#1e1e32"/>
+      <!-- purple glasses -->
+      <rect x="17" y="29" width="14" height="10" rx="5" fill="#300050" stroke="#a060f0" stroke-width="1.2"/>
+      <rect x="41" y="29" width="14" height="10" rx="5" fill="#300050" stroke="#a060f0" stroke-width="1.2"/>
+      <line x1="31" y1="34" x2="41" y2="34" stroke="#a060f0" stroke-width="1"/>
+      <!-- lens shine -->
+      <ellipse cx="22" cy="31.5" rx="2" ry="1.5" fill="#a060f0" opacity=".5"/>
+      <ellipse cx="46" cy="31.5" rx="2" ry="1.5" fill="#a060f0" opacity=".5"/>
+      <!-- nose -->
+      <rect x="33" y="40" width="6" height="4" rx="2" fill="#c8a84a" opacity=".8"/>
+      <!-- circuit dots -->
+      <circle cx="18" cy="20" r="1.5" fill="#22c8c8" opacity=".6"/>
+      <circle cx="54" cy="20" r="1.5" fill="#22c8c8" opacity=".6"/>
+      <line x1="18" y1="20" x2="26" y2="20" stroke="#22c8c8" stroke-width=".7" opacity=".4"/>
+      <line x1="54" y1="20" x2="46" y2="20" stroke="#22c8c8" stroke-width=".7" opacity=".4"/>
+      <!-- barcode bottom -->
+      <rect x="22" y="58" width="1.5" height="4" fill="#c8a84a" opacity=".7"/>
+      <rect x="25" y="58" width="1" height="4" fill="#c8a84a" opacity=".5"/>
+      <rect x="27" y="58" width="2" height="4" fill="#c8a84a" opacity=".7"/>
+      <rect x="30" y="58" width="1" height="4" fill="#c8a84a" opacity=".5"/>
+      <rect x="32" y="58" width="1.5" height="4" fill="#c8a84a" opacity=".7"/>
+      <rect x="35" y="58" width="1" height="4" fill="#c8a84a" opacity=".5"/>
+      <rect x="37" y="58" width="2" height="4" fill="#c8a84a" opacity=".7"/>
+      <rect x="40" y="58" width="1" height="4" fill="#c8a84a" opacity=".5"/>
+      <rect x="42" y="58" width="1.5" height="4" fill="#c8a84a" opacity=".7"/>
+      <rect x="45" y="58" width="1" height="4" fill="#c8a84a" opacity=".5"/>
+      <rect x="47" y="58" width="2" height="4" fill="#c8a84a" opacity=".7"/>
+    </svg>
+  </div>
+  <div class="logo-title">
+    <div class="logo-label">oracle api · v1.0</div>
+    <div class="logo-name">M<span class="dot">.</span>ETADOGG<span class="dot">.</span>GG</div>
+    <div class="logo-sub">QUANTUM CERTIFIED SIGNAL ENGINE</div>
+  </div>
+  <div class="version-badge">QPU LIVE</div>
+</div>
+
+<!-- ORACLE PANEL -->
+<div class="oracle-panel">
+  <div class="oracle-top">
+    <div>
+      <div class="oracle-label">/ oracle / predict</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div class="best-backend-badge">
+        <div class="bbb-dot"></div>
+        <div>
+          <div class="bbb-label">BEST BACKEND</div>
+          <div class="bbb-name">cure_synth_ideal_v1</div>
+        </div>
+        <div class="bbb-score">score: 99.60 ✓</div>
+      </div>
+      <div id="round-badge" class="round-badge">ROUND — —</div>
+    </div>
+  </div>
+
+  <!-- Symbol scrollers -->
+  <div class="sym-row">
+    <div class="sym-scroll-wrap">
+      <div class="sym-scroll-label">SYMBOL A</div>
+      <div class="sym-scroll" id="scroll-a">
+        <div class="sym-reel" id="reel-a"></div>
+      </div>
+      <div class="sym-nav">
+        <button class="sym-btn" onclick="shiftSym('a',-1)">▲</button>
+        <button class="sym-btn" onclick="shiftSym('a', 1)">▼</button>
+      </div>
+    </div>
+
+    <div class="sym-x">×</div>
+
+    <div class="sym-scroll-wrap">
+      <div class="sym-scroll-label">SYMBOL B</div>
+      <div class="sym-scroll" id="scroll-b">
+        <div class="sym-reel" id="reel-b"></div>
+      </div>
+      <div class="sym-nav">
+        <button class="sym-btn" onclick="shiftSym('b',-1)">▲</button>
+        <button class="sym-btn" onclick="shiftSym('b', 1)">▼</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Score cards -->
+  <div class="score-row">
+    <div class="score-card">
+      <div class="sc-label">Total Score</div>
+      <div class="sc-val total" id="sc-total">— —</div>
+      <div class="sc-sub" id="sc-total-sub">awaiting QPU</div>
+    </div>
+    <div class="score-card">
+      <div class="sc-label">BE  Bull</div>
+      <div class="sc-val be" id="sc-be">— —</div>
+      <div class="sc-sub" id="sc-be-sub">Bull Entertainer</div>
+    </div>
+    <div class="score-card">
+      <div class="sc-label">PE  Bear</div>
+      <div class="sc-val pe" id="sc-pe">— —</div>
+      <div class="sc-sub" id="sc-pe-sub">Bear Entertainer</div>
+    </div>
+  </div>
+
+  <!-- Signal bars -->
+  <div class="sig-row">
+    <div class="sig-bar-wrap sig-a">
+      <div class="sig-bar-label"><span id="sig-a-label">SYM A signal</span><span id="sig-a-pct">0%</span></div>
+      <div class="sig-bar-track"><div class="sig-bar-fill" id="sig-a-fill" style="width:0%"></div></div>
+    </div>
+    <div class="sig-bar-wrap sig-b">
+      <div class="sig-bar-label"><span id="sig-b-label">SYM B signal</span><span id="sig-b-pct">0%</span></div>
+      <div class="sig-bar-track"><div class="sig-bar-fill" id="sig-b-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Event bits -->
+  <div class="ev-row">
+    <div class="ev-pill off" id="ev-q10">
+      <div class="ev-dot"></div>q10 CAPTURE
+    </div>
+    <div class="ev-pill off" id="ev-q11">
+      <div class="ev-dot"></div>q11 CRASH
+    </div>
+    <div class="ev-pill off" id="ev-q12">
+      <div class="ev-dot"></div>q12 PASS
+    </div>
+    <div class="ev-pill off" id="ev-nonce" style="margin-left:auto;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <div class="ev-dot"></div><span id="nonce-short">nonce: — —</span>
+    </div>
+  </div>
+</div>
+
+<!-- FIB ACCELERATOR + 航続ハンドル -->
+<div class="fib-section">
+  <div class="fib-panel">
+    <div class="fib-header">
+      <div class="fib-title">Fibonacci Accelerator</div>
+      <div class="fib-zone-badge neutral" id="fib-zone-badge">NEUTRAL</div>
+    </div>
+    <div class="fib-canvas-wrap">
+      <canvas id="fibCanvas" height="140"></canvas>
+    </div>
+    <div class="handle-section">
+      <div class="handle-label">航続ハンドル · Sustained Handle</div>
+      <div class="handle-track" id="handle-track"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RUN BUTTON -->
+<button class="run-btn" id="run-btn" onclick="runPredict()">
+  ▶ RUN /oracle/predict
+</button>
+
+<!-- 48 ACCOUNTS -->
+<div class="acct-section">
+  <div class="section-head">
+    <div class="section-title">48 Account Pool</div>
+    <div class="acct-controls">
+      <button class="ctrl-btn active" onclick="setView('all')">ALL</button>
+      <button class="ctrl-btn" onclick="setView('long')">LONG</button>
+      <button class="ctrl-btn" onclick="setView('short')">SHORT</button>
+      <button class="ctrl-btn" onclick="setView('hold')">HOLD</button>
+      <button class="ctrl-btn reset" onclick="resetAccounts()">Reset48</button>
+    </div>
+  </div>
+  <div class="acct-grid" id="acct-grid"></div>
+  <div class="totals-bar">
+    <div class="tot-item"><div class="tot-label">Total P&L</div><div class="tot-val" id="tot-pl" style="color:var(--gold)">$0.00</div></div>
+    <div class="tot-item"><div class="tot-label">Long Accounts</div><div class="tot-val" id="tot-long" style="color:var(--green)">0</div></div>
+    <div class="tot-item"><div class="tot-label">Short Accounts</div><div class="tot-val" id="tot-short" style="color:var(--red)">0</div></div>
+    <div class="tot-item"><div class="tot-label">Hold</div><div class="tot-val" id="tot-hold" style="color:var(--gold)">48</div></div>
+    <div class="tot-item"><div class="tot-label">Active Round</div><div class="tot-val" id="tot-round" style="color:var(--purple)">—</div></div>
+  </div>
+</div>
+
+<!-- PREDICT FEED -->
+<div class="feed-section">
+  <div class="section-head">
+    <div class="section-title">Predict Feed</div>
+    <button class="ctrl-btn" onclick="clearFeed()">Clear</button>
+  </div>
+  <div class="feed-list" id="feed-list">
+    <div class="feed-item" style="justify-content:center;color:var(--sub);font-size:.72rem;">— run /oracle/predict to populate feed —</div>
+  </div>
+</div>
+
+</div><!-- .page -->
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const SYMBOLS = [
+  'USD/JPY','EUR/USD','GBP/USD','AUD/USD','USD/CAD',
+  'USD/CHF','NZD/USD','EUR/JPY','GBP/JPY','XAU/USD',
+  'BTC/USD','ETH/USD','SOL/USD','MENTE/USD'
+];
+
+const state = { symA:0, symB:1, round:0, view:'all', feedItems:[] };
+function apiBase(){
+  // 同一オリジン（Railway等）から配信されている場合はそのまま使う
+  const h = location.hostname;
+  if(h !== 'localhost' && h !== '127.0.0.1' && !h.startsWith('192.168.')){
+    return location.origin;
+  }
+  return (document.getElementById('srv-url')?.value || 'http://localhost:8700').replace(/\/$/,'');
+}
+
+// ── Server ping ───────────────────────────────────────────
+async function pingServer(){
+  const el = document.getElementById('srv-status');
+  el.className='srv-status pend'; el.textContent='connecting…';
+  try{
+    const r = await fetch(apiBase()+'/pool/status',{signal:AbortSignal.timeout(3000)});
+    if(!r.ok) throw new Error(r.status);
+    const pool = await r.json();
+    el.className='srv-status ok';
+    el.textContent='● ONLINE · '+pool.length+' QPU';
+  }catch(e){
+    el.className='srv-status err';
+    el.textContent='✕ OFFLINE';
+  }
+}
+
+// ── Reel builder ──────────────────────────────────────────
+function buildReel(id, active){
+  const reel = document.getElementById('reel-'+id);
+  reel.innerHTML='';
+  const n=SYMBOLS.length;
+  for(let d=-1;d<=1;d++){
+    const idx=((active+d)%n+n)%n;
+    const div=document.createElement('div');
+    div.className='sym-item'+(d===0?' active':'');
+    div.textContent=SYMBOLS[idx];
+    reel.appendChild(div);
+  }
+}
+function shiftSym(ab,dir){
+  if(ab==='a') state.symA=((state.symA+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
+  else          state.symB=((state.symB+dir)%SYMBOLS.length+SYMBOLS.length)%SYMBOLS.length;
+  buildReel(ab, ab==='a'?state.symA:state.symB);
+  updateSigLabels();
+}
+function updateSigLabels(){
+  document.getElementById('sig-a-label').textContent=SYMBOLS[state.symA]+' sig';
+  document.getElementById('sig-b-label').textContent=SYMBOLS[state.symB]+' sig';
+}
+
+// ── Run predict → real API ────────────────────────────────
+async function runPredict(){
+  const btn=document.getElementById('run-btn');
+  btn.classList.add('running');
+  btn.textContent='⟳  CALLING /oracle/predict…';
+
+  const symPair=encodeURIComponent(SYMBOLS[state.symA]+' × '+SYMBOLS[state.symB]);
+  const url=apiBase()+'/oracle/predict/'+symPair+'?shots=500';
+
+  try{
+    const res=await fetch(url,{
+      headers:{'X-Session-Id':'metadogg-home-'+Date.now()},
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+
+    // scores
+    state.round=d.round_num;
+    document.getElementById('sc-total').textContent=d.scores.total.toFixed(1);
+    document.getElementById('sc-be').textContent='+'+d.scores.be.toFixed(1);
+    document.getElementById('sc-pe').textContent='-'+d.scores.pe.toFixed(1);
+    document.getElementById('sc-total-sub').textContent=d.signal.symbol_a.direction+'×'+d.signal.symbol_b.direction;
+    document.getElementById('sc-be-sub').textContent='q='+d.signal.symbol_a.active_qubits+'/5 · '+d.signal.symbol_a.direction;
+    document.getElementById('sc-pe-sub').textContent='q='+d.signal.symbol_b.active_qubits+'/5 · '+d.signal.symbol_b.direction;
+
+    // signal bars
+    const aSig=d.signal.symbol_a.strength, bSig=d.signal.symbol_b.strength;
+    document.getElementById('sig-a-fill').style.width=(aSig*100)+'%';
+    document.getElementById('sig-b-fill').style.width=(bSig*100)+'%';
+    document.getElementById('sig-a-pct').textContent=(aSig*100).toFixed(0)+'%';
+    document.getElementById('sig-b-pct').textContent=(bSig*100).toFixed(0)+'%';
+
+    // events
+    setEv('ev-q10',d.events.q10_capture,'q10 CAPTURE');
+    setEv('ev-q11',d.events.q11_crash,  'q11 CRASH');
+    setEv('ev-q12',d.events.q12_pass,   'q12 PASS');
+    document.getElementById('ev-nonce').classList.add('on');
+    document.getElementById('nonce-short').textContent='nonce: '+d.contract_nonce.slice(0,10)+'…';
+    document.getElementById('round-badge').textContent='ROUND '+String(d.round_num).padStart(3,'0');
+
+    addFeedItem(d);
+    updateFibAccel(d);
+    updateHandle(d);
+
+    // pull 48-account state from server
+    await refreshAccounts();
+
+    btn.classList.remove('running');
+    btn.textContent='▶ RUN /oracle/predict';
+  }catch(e){
+    btn.classList.remove('running');
+    btn.textContent='▶ RUN /oracle/predict';
+    const srv=document.getElementById('srv-status');
+    srv.className='srv-status err';
+    srv.textContent='✕ '+e.message;
+  }
+}
+
+function setEv(id,on,label){
+  const el=document.getElementById(id);
+  el.className='ev-pill '+(on?'on':'off');
+  el.innerHTML=`<div class="ev-dot"></div>${label}`;
+}
+
+// ── Accounts — pulled from server ────────────────────────
+async function refreshAccounts(){
+  try{
+    const res=await fetch(apiBase()+'/oracle/accounts',{signal:AbortSignal.timeout(4000)});
+    if(!res.ok) return;
+    const d=await res.json();
+    renderAccountsFromServer(d.accounts, d.summary);
+  }catch(_){}
+}
+
+function renderAccountsFromServer(accounts, summary){
+  const grid=document.getElementById('acct-grid');
+  grid.innerHTML='';
+
+  accounts.forEach(acc=>{
+    const pos=(acc.position||'HOLD').toLowerCase();
+    if(state.view!=='all' && pos!==state.view) return;
+
+    const isActive=acc.round_num===state.round;
+    const cell=document.createElement('div');
+    cell.className='acct-cell '+pos+(isActive?' active-round':'');
+    cell.title=`#${acc.id} ${acc.symbol||'—'}\n${pos.toUpperCase()}\nP&L: $${acc.pl}`;
+
+    const plClass=acc.pl>0?'pos':acc.pl<0?'neg':'zero';
+    const plSign=acc.pl>0?'+':'';
+    const symTag=acc.symbol?acc.symbol.split(/[/× ]/)[0]:'';
+    cell.innerHTML=`<div class="acct-num">#${String(acc.id).padStart(2,'0')}</div>
+<div class="acct-pl ${plClass}">${plSign}${acc.pl.toFixed(0)}</div>
+${symTag?`<div class="sym-tag">${symTag}</div>`:''}`;
+    grid.appendChild(cell);
+  });
+
+  const pl=summary.total_pl;
+  document.getElementById('tot-pl').textContent='$'+(pl>=0?'+':'')+pl.toFixed(2);
+  document.getElementById('tot-pl').style.color=pl>=0?'var(--green)':'var(--red)';
+  document.getElementById('tot-long').textContent=summary.long_count;
+  document.getElementById('tot-short').textContent=summary.short_count;
+  document.getElementById('tot-hold').textContent=summary.hold_count;
+  document.getElementById('tot-round').textContent=state.round||'—';
+}
+
+function setView(v){
+  state.view=v;
+  document.querySelectorAll('.ctrl-btn').forEach(b=>{
+    b.classList.toggle('active',b.textContent.toLowerCase()===v||(v==='all'&&b.textContent==='ALL'));
+  });
+  refreshAccounts();
+}
+
+async function resetAccounts(){
+  try{
+    await fetch(apiBase()+'/oracle/accounts/reset',{method:'POST',signal:AbortSignal.timeout(4000)});
+  }catch(_){}
+  state.round=0;
+  ['sc-total','sc-be','sc-pe'].forEach(id=>document.getElementById(id).textContent='— —');
+  document.getElementById('round-badge').textContent='ROUND — —';
+  ['ev-q10','ev-q11','ev-q12'].forEach(id=>setEv(id,false,document.getElementById(id).textContent.replace(/^.*?(q\d+)/,'$1')));
+  document.getElementById('feed-list').innerHTML='<div class="feed-item" style="justify-content:center;color:var(--sub);font-size:.72rem;">— run /oracle/predict to populate feed —</div>';
+  await refreshAccounts();
+}
+
+// ── Feed ──────────────────────────────────────────────────
+function addFeedItem(d){
+  const feed=document.getElementById('feed-list');
+  if(feed.children[0]?.textContent.includes('populate')) feed.innerHTML='';
+
+  const now=new Date();
+  const ts=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+  const dir=d.signal.symbol_a.direction;
+  const str=(d.signal.symbol_a.strength*100).toFixed(0);
+
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`
+    <span class="feed-time">${ts}</span>
+    <span class="feed-sym">${d.symbol}</span>
+    <span class="feed-dir ${dir.toLowerCase()}">${dir}</span>
+    <span class="feed-str">str:${str}% · ${d.backend}</span>
+    <span class="feed-nonce">${d.contract_nonce}</span>`;
+  feed.insertBefore(item,feed.firstChild);
+
+  state.feedItems.push(item);
+  if(state.feedItems.length>50){feed.removeChild(feed.lastChild);state.feedItems.shift();}
+}
+
+function clearFeed(){
+  document.getElementById('feed-list').innerHTML='<div class="feed-item" style="justify-content:center;color:var(--sub);font-size:.72rem;">— run /oracle/predict to populate feed —</div>';
+  state.feedItems=[];
+}
+
+// ── Fibonacci Accelerator ─────────────────────────────────
+const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+const FIB_LABELS = ['0','0.236','0.382','0.5','0.618','0.786','1.0'];
+const fibHistory = []; // {be, pe, strength}
+
+function updateFibAccel(d){
+  const strength = (d.signal.symbol_a.strength + d.signal.symbol_b.strength) / 2;
+  const beNorm = d.scores.be / 100;
+  const peNorm = d.scores.pe / 100;
+  fibHistory.push({be:beNorm, pe:peNorm, strength});
+  if(fibHistory.length > 40) fibHistory.shift();
+
+  // zone badge
+  const badge = document.getElementById('fib-zone-badge');
+  if(strength > 0.618){
+    badge.className='fib-zone-badge long'; badge.textContent='⬆ ACCEL LONG';
+  } else if(strength < 0.382){
+    badge.className='fib-zone-badge short'; badge.textContent='⬇ ACCEL SHORT';
+  } else {
+    badge.className='fib-zone-badge neutral'; badge.textContent='◼ NEUTRAL';
+  }
+
+  drawFibCanvas();
+}
+
+function drawFibCanvas(){
+  const canvas = document.getElementById('fibCanvas');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = 140;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const style = getComputedStyle(document.documentElement);
+  const colBg = style.getPropertyValue('--surf2').trim() || '#12121e';
+  const colBorder = style.getPropertyValue('--border').trim() || '#1e1e32';
+  const colGreen = style.getPropertyValue('--green').trim() || '#3ecf8e';
+  const colRed = style.getPropertyValue('--red').trim() || '#f06060';
+  const colPurple = style.getPropertyValue('--purple').trim() || '#a060f0';
+  const colSub = style.getPropertyValue('--sub').trim() || '#6060a0';
+  const colGold = style.getPropertyValue('--gold').trim() || '#c8a84a';
+  const padL=44, padR=12, padT=8, padB=18;
+  const cW=W-padL-padR, cH=H-padT-padB;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=colBg; ctx.fillRect(0,0,W,H);
+
+  // fib zone fills
+  const yLong = padT + cH*(1-0.618);
+  const yShort = padT + cH*(1-0.382);
+  ctx.fillStyle='rgba(62,207,142,0.07)';
+  ctx.fillRect(padL,padT,cW,yLong-padT);
+  ctx.fillStyle='rgba(240,96,96,0.07)';
+  ctx.fillRect(padL,yShort,cW,padT+cH-yShort);
+
+  // fib level lines + labels
+  FIB_LEVELS.forEach((lv,i)=>{
+    const y = padT + cH*(1-lv);
+    ctx.strokeStyle = lv===0.618?colGreen:lv===0.382?colRed:colBorder;
+    ctx.lineWidth = (lv===0.618||lv===0.382)?1.5:0.7;
+    ctx.setLineDash(lv===0.5?[4,3]:[]);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = lv===0.618?colGreen:lv===0.382?colRed:colSub;
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(FIB_LABELS[i], padL-4, y);
+  });
+
+  if(fibHistory.length < 2){ return; }
+
+  // BE wave (green)
+  const drawWave = (key, color) => {
+    ctx.beginPath();
+    fibHistory.forEach((pt,i)=>{
+      const x = padL + (i/(fibHistory.length-1))*cW;
+      const y = padT + cH*(1-pt[key]);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.globalAlpha=0.75;
+    ctx.stroke(); ctx.globalAlpha=1;
+  };
+  drawWave('be', colGreen);
+  drawWave('pe', colRed);
+
+  // signal strength weaving line (gold) — the "vehicle navigating fib levels"
+  ctx.beginPath();
+  fibHistory.forEach((pt,i)=>{
+    const x = padL + (i/(fibHistory.length-1))*cW;
+    const y = padT + cH*(1-pt.strength);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=colGold; ctx.lineWidth=2.2; ctx.setLineDash([6,3]);
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // current cursor dot
+  const last = fibHistory[fibHistory.length-1];
+  const cx2 = padL+cW;
+  const cy2 = padT + cH*(1-last.strength);
+  ctx.beginPath(); ctx.arc(cx2,cy2,5,0,Math.PI*2);
+  ctx.fillStyle=colGold; ctx.fill();
+  ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+// ── 航続ハンドル ──────────────────────────────────────────
+const handleHistory = []; // 'LONG' | 'SHORT'
+const HANDLE_MAX = 10;
+
+function updateHandle(d){
+  const dir = d.signal.symbol_a.direction; // 'LONG' or 'SHORT'
+  handleHistory.push(dir);
+  if(handleHistory.length > HANDLE_MAX) handleHistory.shift();
+  renderHandle();
+}
+
+function renderHandle(){
+  const track = document.getElementById('handle-track');
+  if(!track) return;
+  track.innerHTML='';
+
+  for(let i=0; i<HANDLE_MAX; i++){
+    const tick = document.createElement('div');
+    const val = handleHistory[i];
+    if(val === undefined){
+      tick.className='handle-tick empty'; tick.textContent='·';
+    } else if(val==='LONG'){
+      tick.className='handle-tick long'; tick.textContent='▲';
+    } else {
+      tick.className='handle-tick short'; tick.textContent='▼';
+    }
+    track.appendChild(tick);
+  }
+
+  // trend label
+  if(handleHistory.length >= 3){
+    const recent = handleHistory.slice(-5);
+    const longs = recent.filter(v=>v==='LONG').length;
+    const shorts = recent.filter(v=>v==='SHORT').length;
+    const trend = document.createElement('div');
+    if(longs >= 4){ trend.className='handle-trend long'; trend.textContent='▲ TREND LONG'; }
+    else if(shorts >= 4){ trend.className='handle-trend short'; trend.textContent='▼ TREND SHORT'; }
+    else { trend.className='handle-trend neutral'; trend.textContent='◼ MIXED'; }
+    track.appendChild(trend);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────
+buildReel('a',state.symA);
+buildReel('b',state.symB);
+updateSigLabels();
+renderHandle(); // init empty handle
+drawFibCanvas(); // init empty fib
+pingServer().then(()=>refreshAccounts());
+</script>

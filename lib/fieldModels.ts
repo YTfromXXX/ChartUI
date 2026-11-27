@@ -75,6 +75,7 @@ export type FieldDiagnostics = {
   metaRippleTimestamp?: number;
   metaPreviousArcanaId?: number;
   metaTargetArcanaId?: number;
+  metaNesting?: MetaNesting;
   usdIndex?: number;
   btcProxyPrice?: number;
   btcVolatility?: number;
@@ -1291,6 +1292,7 @@ function metaSimulator(seed: number): FieldSimulator {
   let syntheticBtcPrice = 65000;
   let metaCurrentArcanaId = 11;
   let metaInterferenceLatched = false;
+  const nestingLatch = createMetaNestingLatch(7);
   filter.reset(index);
 
   return (now, btcAnchor) => {
@@ -1433,6 +1435,25 @@ function metaSimulator(seed: number): FieldSimulator {
     const projectedAngle = phaseShift
       ? Math.atan2(metaArcana.y, metaArcana.x)
       : quantizedAngle + microTremor;
+    const xauVolatility = clamp(Math.abs(commonGlobal - commonUsd * 0.35) * 800, 0, 1);
+    const nestingChildren: MetaNestingChild[] = [
+      ...relativeAssets.slice(1).map((asset, childIndex) => ({
+        symbol: asset.symbol,
+        weight: design.assets[childIndex + 1].weight,
+        correlation: asset.rollingCorrelation,
+        peerRelativePercent: asset.peerRelativePercent,
+        volatility: Math.abs(asset.peerRelativePercent),
+      })),
+      { symbol: 'XAUUSD', weight: 0.1, correlation: meanCorrelation, peerRelativePercent: commonGlobal - commonUsd * 0.35, volatility: xauVolatility },
+    ];
+    const metaNesting = buildMetaNesting(
+      { symbol: relativeAssets[0].symbol, mass: pulsarMass, dispersion: relativeDispersion },
+      nestingChildren,
+      quantization.stepIndex,
+      nestingLatch,
+      orientedReturnHistories[0].length >= 20,
+      now,
+    );
     const tick: KnotTick = {
       ...makeTick(now, filteredIndex, rawPrevious, 0.0015, false),
       angle: projectedAngle,
@@ -1471,6 +1492,7 @@ function metaSimulator(seed: number): FieldSimulator {
       metaRippleTimestamp: quantization.changed ? now : 0,
       metaPreviousArcanaId: phaseShift ? previousArcanaId : metaArcana.id,
       metaTargetArcanaId: metaArcana.id,
+      metaNesting,
       usdIndex,
       xauUsdPrice: syntheticXauUsd,
       xauVolatility: clamp(Math.abs(commonGlobal - commonUsd * 0.35) * 800, 0, 1),
@@ -1512,6 +1534,7 @@ function metaSimulator(seed: number): FieldSimulator {
         metaRippleTimestamp: quantization.changed ? now : 0,
         metaPreviousArcanaId: phaseShift ? previousArcanaId : metaArcana.id,
         metaTargetArcanaId: metaArcana.id,
+        metaNesting,
       },
       diagnostics,
     };
@@ -2127,3 +2150,105 @@ export function calculateCryptoPositionMetrics(position: CryptoPositionState, cu
 }
 
 export const DETECTOR_EDGE_NAMES = ['LR', 'B', 'LL', 'UL', 'T', 'UR'] as const;
+
+export type MetaPolyhedronKind = 'tetrahedron' | 'octahedron' | 'cube' | 'icosahedron' | 'dodecahedron' | 'geodesic';
+
+/** Maps an index weight (0..1 of the heaviest member) to a polyhedron: more weight = more vertices. */
+export function polyhedronForWeight(weight: number): { kind: MetaPolyhedronKind; vertexCount: number } {
+  const w = Number.isFinite(weight) ? Math.max(0, Math.min(1, weight)) : 0;
+  if (w < 0.2) return { kind: 'tetrahedron', vertexCount: 4 };
+  if (w < 0.35) return { kind: 'octahedron', vertexCount: 6 };
+  if (w < 0.5) return { kind: 'cube', vertexCount: 8 };
+  if (w < 0.7) return { kind: 'icosahedron', vertexCount: 12 };
+  if (w < 0.9) return { kind: 'dodecahedron', vertexCount: 20 };
+  return { kind: 'geodesic', vertexCount: 42 };
+}
+
+export type MetaNestingShell = {
+  symbol: string;
+  weight: number;
+  kind: MetaPolyhedronKind;
+  vertexCount: number;
+  mass: number;
+  wellDepth: number;
+  correlation: number;
+  broken: boolean;
+  slipSteps: number;
+  stepIndex: number;
+  slipStartedAt: number;
+};
+
+export type MetaNesting = {
+  parentSymbol: string;
+  parentMass: number;
+  parentWellDepth: number;
+  outerStepIndex: number;
+  shells: MetaNestingShell[];
+  slipCount: number;
+  ready: boolean;
+  slipTimestamp: number;
+};
+
+export type MetaNestingLatch = { broken: boolean[]; startedAt: number[]; lastSlip: number };
+export type MetaNestingChild = { symbol: string; weight: number; correlation: number; peerRelativePercent: number; volatility: number };
+
+export const META_NESTING_BREAK = 0.15;
+export const META_NESTING_RECOVER = 0.35;
+
+export function createMetaNestingLatch(count: number): MetaNestingLatch {
+  return { broken: Array(count).fill(false), startedAt: Array(count).fill(0), lastSlip: 0 };
+}
+
+/**
+ * Nested polyhedra: while every child correlation holds, inner shells share the outer 15° step (one rigid body).
+ * A child whose correlation falls below 0.15 (hysteresis: recovers above 0.35) slips by its own whole 15° steps.
+ */
+export function buildMetaNesting(
+  parent: { symbol: string; mass: number; dispersion: number },
+  children: readonly MetaNestingChild[],
+  outerStepIndex: number,
+  latch: MetaNestingLatch,
+  ready: boolean,
+  now: number,
+): MetaNesting {
+  const maxWeight = Math.max(1e-9, ...children.map((child) => child.weight));
+  const shells = children.map((child, index): MetaNestingShell => {
+    const correlation = Number.isFinite(child.correlation) ? child.correlation : 0;
+    if (!ready) latch.broken[index] = false;
+    else if (!latch.broken[index] && correlation < META_NESTING_BREAK) {
+      latch.broken[index] = true;
+      latch.startedAt[index] = now;
+      latch.lastSlip = now;
+    } else if (latch.broken[index] && correlation > META_NESTING_RECOVER) latch.broken[index] = false;
+    const broken = latch.broken[index];
+    const magnitude = Math.max(1, Math.min(6, Math.round((META_NESTING_RECOVER - correlation) * 8)));
+    const slipSteps = broken ? magnitude * (child.peerRelativePercent < 0 ? -1 : 1) : 0;
+    const relativeWeight = child.weight / maxWeight;
+    const poly = polyhedronForWeight(relativeWeight);
+    const mass = Math.max(0, Math.min(1, relativeWeight * 0.65 + Math.min(0.35, Math.abs(child.peerRelativePercent) * 0.6 + child.volatility * 0.2)));
+    return {
+      symbol: child.symbol,
+      weight: child.weight,
+      kind: poly.kind,
+      vertexCount: poly.vertexCount,
+      mass,
+      wellDepth: mass,
+      correlation,
+      broken,
+      slipSteps,
+      stepIndex: outerStepIndex + slipSteps,
+      slipStartedAt: latch.startedAt[index],
+    };
+  });
+  const parentMass = Math.max(0, Math.min(1, parent.mass / 3 + Math.min(0.25, parent.dispersion * 0.05)));
+  return {
+    parentSymbol: parent.symbol,
+    parentMass,
+    parentWellDepth: parentMass,
+    outerStepIndex,
+    shells,
+    slipCount: shells.filter((shell) => shell.broken).length,
+    ready,
+    slipTimestamp: latch.lastSlip,
+  };
+}

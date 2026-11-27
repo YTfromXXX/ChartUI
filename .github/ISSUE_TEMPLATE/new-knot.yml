@@ -1,0 +1,31 @@
+name: New knot
+description: Propose a knot type for the cube ladder (one knot per glass cube of 8 candles).
+title: "[knot] "
+labels: ["knot"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `docs/design-rules.md` first. A knot is accepted when its drawn curve gives the crossing
+        count you state here, checked with `lib/knotCrossings.ts` / `knot_crossings.py`.
+        Draw your own diagrams; do not copy third-party knot illustrations.
+  - type: input
+    id: name
+    attributes: { label: Knot name (English / Japanese), placeholder: "Bowline bend / もやい結びベンド" }
+    validations: { required: true }
+  - type: input
+    id: crossings
+    attributes: { label: Front-view crossing count, description: "Existing types use 0, 0, 1, 2, 3, 4.", placeholder: "5" }
+    validations: { required: true }
+  - type: textarea
+    id: candles
+    attributes:
+      label: Which 8 candles tie this knot?
+      description: The candlestick shape inside one cube that should be read as this knot, and how it differs from the six existing types (coil, hitch, loop, bend, stopper, figure-eight).
+    validations: { required: true }
+  - type: textarea
+    id: curve
+    attributes: { label: Curve, description: "How to draw it inside a unit cube (formula or points), entering at the floor centre and leaving at the ceiling centre." }
+  - type: textarea
+    id: test
+    attributes: { label: Test, description: "A candle sequence that must classify as this knot, and one that must not." }

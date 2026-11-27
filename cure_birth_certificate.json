@@ -1,0 +1,27 @@
+{
+  "certificate_id": "add435abfe106be3",
+  "game_token": "add435abfe106be3",
+  "born_at": "2026-11-19T04:47:41+00:00",
+  "backend": "ibm_marrakesh",
+  "bitstring": "0100110011111",
+  "teleport_angle_a": 180.0,
+  "teleport_angle_b": 324.0,
+  "active_guides_a": [
+    "スハル-A0",
+    "スハル-A2",
+    "スハル-A3"
+  ],
+  "active_guides_b": [
+    "リナリス-B0",
+    "リナリス-B3",
+    "リナリス-B4"
+  ],
+  "events": {
+    "entanglement_shot": true,
+    "superposition_dash": true,
+    "luna_event": true
+  },
+  "qpu_seconds": 0,
+  "midwife": "Luna + エーリアル",
+  "round": 4
+}

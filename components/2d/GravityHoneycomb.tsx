@@ -1,3 +1,4 @@
+import type { MetaNesting } from '@/lib/fieldModels';
 export type GravityCenter = {
   side: 'bid' | 'ask';
   price: number;
@@ -576,6 +577,10 @@ export function detectorCrossings(width: number, height: number, from: Point2, t
   return hits;
 }
 
+let latestDetectorMask = 0;
+/** Latest crossed-edge mask of the Crypto detector (read by the sigil HUD without prop plumbing). */
+export function getLatestDetectorMask() { return latestDetectorMask; }
+
 export type CryptoDetectorInput = {
   entry: Point2;
   tip: Point2;
@@ -642,9 +647,109 @@ export function drawCryptoDetectorHoneycomb(ctx: CanvasRenderingContext2D, width
   ctx.stroke();
   ctx.setLineDash([]);
   const last = hits.at(-1);
+  latestDetectorMask = last?.mask ?? 0;
   const reading = describeDetectorMask(last?.mask ?? 0);
   ctx.fillStyle = '#fde68a';
   ctx.font = '10px ui-monospace, monospace';
   ctx.fillText(`DETECTOR ${last ? `c${last.cell}` : 'idle'} · ${reading.label} · ${reading.bits} · hits ${hits.length}`, 24, height - 34);
+  ctx.restore();
+}
+
+function hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, rotation: number) {
+  ctx.beginPath();
+  for (let side = 0; side < 6; side += 1) {
+    const angle = rotation + side * Math.PI / 3;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (side === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+const STEP_RADIANS = Math.PI / 12;
+
+/** Hierarchical Meta honeycomb: one large parent cell fractally split into 6 child cells, each sinking as its own bowl. */
+export function drawMetaHierarchicalHoneycomb(ctx: CanvasRenderingContext2D, width: number, height: number, nesting: MetaNesting, now: number) {
+  const layout = metalLayout(width, height);
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  ctx.strokeStyle = '#67e8f9';
+  ctx.lineWidth = 0.6;
+  for (let column = 0; column < layout.columns; column += 1) {
+    for (let row = 0; row < layout.rows; row += 1) {
+      hexPath(ctx, layout.originX + column * layout.horizontalStep, layout.originY + row * layout.verticalStep + (column % 2) * layout.verticalStep / 2, layout.radius, 0);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const small = Math.min(width, height) * 0.13;
+  const distance = Math.sqrt(3) * small;
+  const parentRadius = distance + small * 1.15;
+
+  const bowl = (x: number, y: number, radius: number, depth: number, rotation: number, rgb: string) => {
+    const gradient = ctx.createRadialGradient(x, y, radius * 0.05, x, y, radius);
+    gradient.addColorStop(0, `rgba(2,6,23,${0.25 + depth * 0.6})`);
+    gradient.addColorStop(1, `rgba(${rgb},${0.02 + depth * 0.08})`);
+    hexPath(ctx, x, y, radius, rotation);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    for (let ring = 1; ring <= 4; ring += 1) {
+      hexPath(ctx, x, y, radius * (1 - ring * 0.2 * (0.55 + depth * 0.45)), rotation);
+      ctx.strokeStyle = `rgba(${rgb},${0.12 + depth * 0.22 * (ring / 4)})`;
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    }
+  };
+
+  const parentRotation = Math.PI / 6;
+  bowl(cx, cy, parentRadius, nesting.parentWellDepth, parentRotation, '103,232,249');
+  hexPath(ctx, cx, cy, parentRadius, parentRotation);
+  ctx.strokeStyle = 'rgba(103,232,249,0.55)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  ctx.fillStyle = '#e0f2fe';
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${nesting.parentSymbol} · mass ${(nesting.parentMass * 100).toFixed(0)}%`, cx, cy + 3);
+
+  nesting.shells.slice(0, 6).forEach((shell, index) => {
+    const angle = Math.PI / 6 + index * Math.PI / 3;
+    const x = cx + Math.cos(angle) * distance;
+    const y = cy + Math.sin(angle) * distance;
+    const rgb = shell.broken ? '251,113,133' : '165,243,252';
+    const age = shell.broken ? Math.max(0, 1 - (now - shell.slipStartedAt) / 1800) : 0;
+    const shake = shell.broken ? Math.sin(now * 0.05 + index * 2.1) * (1 + age * 2.5) : 0;
+    bowl(x, y, small * 0.94, shell.wellDepth, 0, rgb);
+    hexPath(ctx, x, y, small * 0.94, 0);
+    ctx.strokeStyle = `rgba(${rgb},0.7)`;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    const innerRotation = (shell.stepIndex - nesting.outerStepIndex) * STEP_RADIANS;
+    hexPath(ctx, x + shake, y - shake, small * 0.5, innerRotation);
+    ctx.strokeStyle = shell.broken ? `rgba(253,164,175,${0.7 + age * 0.3})` : 'rgba(254,240,138,0.8)';
+    ctx.lineWidth = shell.broken ? 1.8 : 1.1;
+    ctx.stroke();
+    if (shell.broken) {
+      ctx.strokeStyle = `rgba(251,113,133,${0.35 + age * 0.5})`;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (let crack = 0; crack < 3; crack += 1) {
+        const crackAngle = innerRotation + crack * 2.1 + index;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(crackAngle) * small * 0.9, y + Math.sin(crackAngle) * small * 0.9);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = shell.broken ? '#fecdd3' : '#cffafe';
+    ctx.fillText(shell.symbol, x, y - small * 0.62);
+    ctx.fillText(`ρ ${shell.correlation.toFixed(2)}${shell.broken ? ` · ${shell.slipSteps > 0 ? '+' : ''}${shell.slipSteps * 15}°` : ''}`, x, y + small * 0.78);
+  });
+  ctx.fillStyle = nesting.slipCount > 0 ? '#fda4af' : '#fde68a';
+  ctx.textAlign = 'left';
+  ctx.fillText(nesting.ready ? (nesting.slipCount > 0 ? `HIERARCHY · ${nesting.slipCount} SHELL SLIP` : 'HIERARCHY · RIGID (outer 15° step)') : 'HIERARCHY · correlation warming', 24, height - 34);
   ctx.restore();
 }

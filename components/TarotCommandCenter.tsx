@@ -1,11 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, Crown, Radio, ShieldAlert, Sparkles, Wifi, WifiOff } from "lucide-react";
+import { Activity, Crown, Expand, Radio, ShieldAlert, Sparkles, Wifi, WifiOff, MoveHorizontal } from "lucide-react";
 import { CandlestickSeries, ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from "lightweight-charts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePortfolioMock } from "@/hooks/useMarketStream";
 import SingularityOverload from "@/components/SingularityOverload";
+import { useCureAPIStore, type SimulationMode } from "@/lib/cureApiStore";
+import ArchitectOrders from "@/components/architect/ArchitectOrders";
 
 type Phase = "WATER" | "WOOD" | "FIRE" | "EARTH" | "METAL";
 type Status = { macro: string; meso: string; micro: string };
@@ -214,6 +216,8 @@ export default function TarotCommandCenter() {
   const [birthSymbol, setBirthSymbol] = useState<string | null>(null);
   const { portfolio, pendingSymbol, beginAdd, resolveAdd } = usePortfolioMock();
   const [overdrive, setOverdrive] = useState(false);
+  const simulationMode = useCureAPIStore((state) => state.simulationMode);
+  const setSimulationMode = useCureAPIStore((state) => state.setSimulationMode);
   const pendingSymbolRef = useRef<string | null>(null);
   const arrivalTimerRef = useRef<number | null>(null);
   const style = phaseStyle[signal.wuxing_phase];
@@ -286,7 +290,27 @@ export default function TarotCommandCenter() {
         <motion.div className="absolute inset-0 pointer-events-none" animate={isEmperor ? { opacity: [0.2, 0.7, 0.25], boxShadow: ["inset 0 0 30px rgba(234,179,8,.15)", "inset 0 0 100px rgba(234,179,8,.4)", "inset 0 0 30px rgba(234,179,8,.15)"] } : { opacity: 0.15 }} transition={{ duration: 2.8, repeat: Infinity }} />
         <header className="relative flex items-center justify-between border-b border-white/10 px-5 py-5 sm:px-8">
           <div><p className="font-mono text-[10px] uppercase tracking-[0.4em] text-stone-500">Signal doctrine / 07</p><h1 className="mt-1 text-2xl font-medium tracking-tight sm:text-3xl">CHARTUI COMMAND CENTER</h1></div>
-          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-stone-400">{connected ? <Wifi className="h-4 w-4 text-emerald-400" /> : <WifiOff className="h-4 w-4 text-stone-600" />} {connected ? "Live feed" : "Demo relay"}</div>
+          <div className="flex flex-wrap items-center justify-end gap-3 font-mono text-[10px] uppercase tracking-widest text-stone-400">
+            <div className="flex items-center gap-2" aria-label="Hypothesis projection mode">
+              {([
+                ['hypothesisA', 'expand', Expand],
+                ['hypothesisB', 'extend', MoveHorizontal],
+              ] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={`Switch projection to hypothesis ${mode === 'hypothesisA' ? 'A expand' : 'B extend'}`}
+                  aria-pressed={simulationMode === mode}
+                  title={`Hypothesis ${mode === 'hypothesisA' ? 'A · expand' : 'B · extend'}`}
+                  onClick={() => setSimulationMode(mode as SimulationMode)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${simulationMode === mode ? 'border-cyan-200/70 bg-cyan-100/15 text-cyan-100 shadow-[0_0_16px_rgba(103,232,249,.25)]' : 'border-white/15 text-stone-500 hover:border-white/40 hover:text-white'}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">{connected ? <Wifi className="h-4 w-4 text-emerald-400" /> : <WifiOff className="h-4 w-4 text-stone-600" />} {connected ? "Live feed" : "Demo relay"}</div>
+          </div>
         </header>
 
         <div className="relative grid gap-8 p-5 sm:p-8 lg:grid-cols-[0.85fr_1.6fr]">
@@ -304,6 +328,7 @@ export default function TarotCommandCenter() {
           {archetype === "TOWER" && <motion.p className="mt-2 font-mono text-xs text-red-200/70" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 0.8, repeat: Infinity }}>BREAKOUT EVENT / RECALIBRATE VECTOR</motion.p>}
         </motion.div></AnimatePresence>
           <PortfolioHex portfolio={portfolio} pendingSymbol={pendingSymbol} birthSymbol={birthSymbol} onAdd={handleAdd} />
+          <ArchitectOrders />
           <section className="border-t border-white/10 px-5 py-6 sm:px-8" aria-label="Active position physics field">
             <div className="mb-4 flex items-end justify-between gap-4">
               <div><p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-200/55">Position physics / {activePositions.length} knots</p><h2 className="mt-1 text-xl text-stone-100">{activePositions.length <= 3 ? "KNOT SELECTION" : activePositions.length <= 7 ? "ARCANA FORMATION" : "FIELD SATURATION"}</h2></div>

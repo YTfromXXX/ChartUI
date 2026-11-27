@@ -1,0 +1,1006 @@
+<title>博物館 フィジカルプロンプトチェス完全版</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&display=swap">
+<style>
+/* Museum Physical Prompt Chess — dark-first, concrete/steel aesthetic */
+/* Layout: sticky header + 3-hall tab navigation */
+:root {
+  --bg: #0e0f12; --surf: #161820; --surf2: #1e2130; --border: #272a38;
+  --fg: #e8e4de; --sub: #686d80; --dim: #3a3f52;
+  --cyan: #22b8c8; --orange: #f29b30; --gold: #f5c542; --red: #c8001a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f0ede8; --surf: #ffffff; --surf2: #eae7e2; --border: #d0ccc6;
+    --fg: #1a1a1e; --sub: #6a6870; --dim: #d8d4cf; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f0ede8; --surf: #ffffff; --surf2: #eae7e2; --border: #d0ccc6;
+  --fg: #1a1a1e; --sub: #6a6870; --dim: #d8d4cf; color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left,0px));
+  padding-right: max(16px, env(safe-area-inset-right,0px));
+  padding-block: 0;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto;
+  height: env(safe-area-inset-top,0px); z-index: 11; background: var(--bg);
+}
+h2 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:1rem; font-weight:600; text-wrap:balance; }
+h3 { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.85rem; font-weight:500; }
+
+/* ── Header ─────────────────────── */
+.site-header {
+  position: sticky; top: env(safe-area-inset-top,0px);
+  background: var(--bg); border-bottom: 1px solid var(--border); z-index:10;
+}
+.header-inner {
+  max-width:920px; margin:0 auto;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding-block: 10px;
+}
+.header-title { font-family:'Space Grotesk',system-ui,sans-serif; font-size:.95rem; font-weight:700; }
+.header-eye { font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; color:var(--sub); flex:1; }
+.cert-badge {
+  font-family:'Space Grotesk',monospace; font-size:.7rem; color:var(--gold);
+  border:1px solid var(--gold); border-radius:3px; padding:2px 7px; letter-spacing:.05em;
+  white-space:nowrap;
+}
+
+/* ── Nav tabs ───────────────────── */
+.nav-tabs {
+  max-width:920px; margin:0 auto;
+  display:flex; overflow-x:auto; scrollbar-width:none;
+  border-bottom:1px solid var(--border);
+}
+.nav-tabs::-webkit-scrollbar { display:none; }
+.tab-btn {
+  flex-shrink:0; background:none; border:none;
+  border-bottom:2px solid transparent; color:var(--sub); cursor:pointer;
+  font-family:'Space Grotesk',system-ui,sans-serif;
+  font-size:.78rem; font-weight:500; letter-spacing:.03em;
+  padding:8px 16px; transition:color .15s, border-color .15s;
+}
+.tab-btn:hover { color:var(--fg); }
+.tab-btn.active { color:var(--fg); border-bottom-color:var(--cyan); }
+
+/* ── Main ──────────────────────── */
+.main { max-width:920px; margin:0 auto; padding-block:20px; }
+.hall { display:none; }
+.hall.active { display:block; }
+
+/* ── Cards ─────────────────────── */
+.card {
+  background:var(--surf); border:1px solid var(--border);
+  border-radius:8px; padding:14px;
+}
+.section-label {
+  font-size:.65rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--sub); margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* ── Hall 1: QPU状態 ───────────── */
+.qpu-top { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+@media(max-width:580px){ .qpu-top { grid-template-columns:1fr; } }
+
+.bitstring-row {
+  display:flex; gap:3px; flex-wrap:wrap; margin-top:8px; align-items:flex-end;
+}
+.bit-cell { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.bit-val {
+  font-family:'Space Grotesk',monospace; font-size:.9rem; font-weight:700;
+  width:18px; text-align:center; line-height:1.2;
+}
+.bit-idx { font-size:.5rem; color:var(--sub); line-height:1; }
+.bit-cell.a .bit-val  { color:var(--cyan); }
+.bit-cell.b .bit-val  { color:var(--orange); }
+.bit-cell.ev .bit-val { color:var(--dim); }
+.bit-cell.ev.on .bit-val { color:var(--gold); }
+.separator { width:1px; height:28px; background:var(--border); align-self:center; margin-inline:3px; }
+
+.meta-table { width:100%; border-collapse:collapse; font-size:.78rem; }
+.meta-table td { padding:4px 6px; border-bottom:1px solid var(--border); }
+.meta-table td:first-child { color:var(--sub); width:46%; }
+.meta-table tr:last-child td { border:none; }
+.guide-a { color:var(--cyan); }
+.guide-b { color:var(--orange); }
+
+.event-gauges { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+@media(max-width:420px){ .event-gauges { grid-template-columns:1fr; } }
+
+.e-gauge {
+  background:var(--surf); border:1px solid var(--border); border-radius:8px;
+  padding:12px 10px; text-align:center; transition:border-color .3s, background .3s;
+}
+.e-gauge.fired {
+  border-color:var(--gold);
+  background:color-mix(in srgb, var(--gold) 8%, var(--surf));
+}
+.e-gauge-icon {
+  width:40px; height:40px; border-radius:50%;
+  border:2px solid var(--border); margin:0 auto 8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.1rem; transition:border-color .3s, box-shadow .3s;
+}
+.e-gauge.fired .e-gauge-icon {
+  border-color:var(--gold);
+  box-shadow:0 0 14px color-mix(in srgb, var(--gold) 50%, transparent);
+}
+.e-gauge-name { font-family:'Space Grotesk',sans-serif; font-size:.72rem; font-weight:500; margin-bottom:4px; }
+.e-gauge-bit { font-family:monospace; font-size:.65rem; color:var(--sub); }
+.e-gauge.fired .e-gauge-bit { color:var(--gold); }
+
+.trigger-list { width:100%; }
+.trig-row { display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--border); }
+.trig-row:last-child { border:none; }
+.trig-bit {
+  font-family:monospace; font-size:.72rem; color:var(--gold);
+  background:var(--surf2); border-radius:3px; padding:2px 6px;
+  min-width:30px; text-align:center; flex-shrink:0;
+}
+.trig-desc { font-size:.78rem; min-width:0; }
+.trig-desc strong { color:var(--fg); }
+
+/* ── Hall 2: シミュレーター ──────── */
+.sim-layout { display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:start; }
+@media(max-width:620px){ .sim-layout { grid-template-columns:1fr; } }
+
+.floor-tabs { display:flex; gap:4px; margin-bottom:8px; }
+.floor-tab {
+  background:var(--surf); border:1px solid var(--border); border-radius:4px;
+  color:var(--sub); cursor:pointer;
+  font-family:'Space Grotesk',sans-serif; font-size:.72rem; padding:3px 10px;
+}
+.floor-tab.active { border-color:var(--cyan); color:var(--cyan); background:var(--surf2); }
+
+.chess-grid { display:grid; grid-template-columns:18px repeat(5,38px); gap:2px; user-select:none; }
+.chess-axis { display:flex; align-items:center; justify-content:center; color:var(--sub); font-size:.6rem; }
+.chess-cell {
+  width:38px; height:38px; background:var(--surf); border:1px solid var(--border);
+  border-radius:3px; display:flex; align-items:center; justify-content:center;
+  font-size:.85rem; position:relative; transition:background .1s, border-color .1s;
+}
+.chess-cell.piece-w { background:color-mix(in srgb,var(--cyan) 18%,var(--surf)); border-color:var(--cyan); color:var(--cyan); }
+.chess-cell.piece-b { background:color-mix(in srgb,var(--orange) 18%,var(--surf)); border-color:var(--orange); color:var(--orange); }
+.chess-cell.both { background:color-mix(in srgb,var(--red) 20%,var(--surf)); border-color:var(--red); color:var(--red); }
+.chess-cell.dead { opacity:.25; }
+.piece-id { font-family:'Space Grotesk',monospace; font-size:.6rem; color:var(--sub); position:absolute; bottom:2px; right:3px; }
+
+.sim-controls { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:12px; }
+.btn {
+  background:var(--surf2); border:1px solid var(--border); border-radius:5px;
+  color:var(--fg); cursor:pointer;
+  font-family:'Space Grotesk',sans-serif; font-size:.78rem; font-weight:500;
+  padding:5px 12px; transition:background .1s;
+}
+.btn:hover:not(:disabled) { background:var(--border); }
+.btn.primary { border-color:var(--cyan); color:var(--cyan); }
+.btn.primary:hover:not(:disabled) { background:color-mix(in srgb,var(--cyan) 10%,var(--surf2)); }
+.btn:disabled { opacity:.4; cursor:default; }
+.sim-status { font-family:'Space Grotesk',monospace; font-size:.75rem; color:var(--sub); margin-left:auto; }
+
+.sim-event-meters {
+  display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;
+}
+.sim-meter {
+  display:flex; align-items:center; gap:5px;
+  background:var(--surf); border:1px solid var(--border); border-radius:5px;
+  padding:4px 10px; font-size:.72rem; font-family:'Space Grotesk',sans-serif;
+  transition:border-color .3s, background .3s;
+}
+.sim-meter.on { border-color:var(--gold); background:color-mix(in srgb,var(--gold) 8%,var(--surf)); color:var(--gold); }
+.sim-meter .dot {
+  width:7px; height:7px; border-radius:50%; background:var(--border);
+  flex-shrink:0; transition:background .3s;
+}
+.sim-meter.on .dot { background:var(--gold); box-shadow:0 0 6px var(--gold); }
+
+.turn-log {
+  background:var(--surf); border:1px solid var(--border); border-radius:8px;
+  max-height:260px; overflow-y:auto; font-size:.74rem;
+}
+.log-row {
+  display:flex; gap:7px; padding:4px 10px;
+  border-bottom:1px solid var(--border); align-items:center;
+}
+.log-row:last-child { border:none; }
+.log-row.quantum-row { background:color-mix(in srgb,var(--gold) 7%,var(--surf)); }
+.log-n { font-family:monospace; font-variant-numeric:tabular-nums; color:var(--sub); min-width:28px; font-size:.68rem; }
+.tag {
+  font-size:.62rem; letter-spacing:.04em; padding:1px 5px;
+  border-radius:3px; flex-shrink:0; font-weight:600;
+}
+.tag-crash  { background:color-mix(in srgb,var(--red) 20%,transparent); color:var(--red); border:1px solid var(--red); }
+.tag-capture { background:color-mix(in srgb,var(--gold) 20%,transparent); color:var(--gold); border:1px solid var(--gold); }
+.tag-pass   { background:color-mix(in srgb,var(--cyan) 20%,transparent); color:var(--cyan); border:1px solid var(--cyan); }
+.tag-quantum { background:color-mix(in srgb,var(--gold) 25%,transparent); color:var(--gold); border:1px solid var(--gold); font-size:.65rem; }
+.log-text { min-width:0; color:var(--sub); }
+
+/* ── Hall 3: FIKU ───────────────── */
+.fiku-filter { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.filter-btn {
+  background:var(--surf2); border:1px solid var(--border); border-radius:4px;
+  color:var(--sub); cursor:pointer; font-size:.72rem; font-family:'Space Grotesk',sans-serif;
+  padding:3px 10px;
+}
+.filter-btn.active { border-color:var(--cyan); color:var(--cyan); background:color-mix(in srgb,var(--cyan) 8%,var(--surf2)); }
+
+.fiku-detail-panel {
+  background:var(--surf); border:1px solid var(--cyan);
+  border-radius:8px; padding:14px; margin-bottom:14px;
+  display:none;
+}
+.fiku-detail-panel.show { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+.fiku-detail-kanji { font-size:2.5rem; line-height:1; flex-shrink:0; }
+.fiku-detail-body h3 { margin-bottom:4px; }
+.fiku-vec-pill {
+  display:inline-block; font-family:monospace; font-size:.72rem;
+  background:var(--surf2); border-radius:3px; padding:2px 7px; margin-right:6px;
+  color:var(--cyan);
+}
+.fiku-joseki-text { font-size:.78rem; color:var(--sub); margin-top:6px; line-height:1.6; }
+
+.fiku-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:8px; }
+.fiku-card {
+  background:var(--surf); border:1px solid var(--border); border-radius:6px;
+  padding:9px 10px; cursor:pointer; transition:border-color .15s, background .15s;
+}
+.fiku-card:hover { border-color:var(--cyan); background:var(--surf2); }
+.fiku-card.selected { border-color:var(--cyan); background:color-mix(in srgb,var(--cyan) 8%,var(--surf)); }
+.fiku-card.ev-type { border-color:color-mix(in srgb,var(--gold) 30%,var(--border)); }
+.fiku-card.ev-type:hover { border-color:var(--gold); }
+.fiku-card.ev-type.selected { border-color:var(--gold); background:color-mix(in srgb,var(--gold) 8%,var(--surf)); }
+.fiku-card[hidden] { display:none; }
+.fiku-num { font-size:.6rem; letter-spacing:.08em; color:var(--sub); margin-bottom:3px; }
+.fiku-k { font-size:1.2rem; line-height:1; margin-bottom:3px; }
+.fiku-name { font-family:'Space Grotesk',sans-serif; font-size:.72rem; font-weight:500; margin-bottom:2px; }
+.fiku-v { font-family:monospace; font-size:.62rem; color:var(--sub); }
+
+/* ── Floor 4F (luna layer) ──────── */
+.floor-tab.f4 { border-color:color-mix(in srgb,#c8c0f8 40%,var(--border)); color:#c8c0f8; }
+.floor-tab.f4.active { border-color:#c8c0f8; color:#c8c0f8; background:color-mix(in srgb,#c8c0f8 12%,var(--surf2)); }
+.floor-expand-notice {
+  display:none; padding:7px 10px; margin-bottom:8px;
+  background:color-mix(in srgb,#c8c0f8 8%,var(--surf));
+  border:1px solid #c8c0f8; border-radius:6px;
+  font-size:.75rem; color:#c8c0f8;
+}
+.floor-expand-notice.show { display:block; }
+.chess-cell.piece-luna { background:color-mix(in srgb,#c8c0f8 15%,var(--surf)); border-color:#c8c0f8; color:#c8c0f8; }
+
+/* ── Assist popup ───────────────── */
+.assist-popup {
+  display:none; margin-top:10px; padding:9px 12px;
+  background:var(--surf2);
+  border:1px solid color-mix(in srgb,var(--gold) 40%,var(--border));
+  border-radius:7px; font-size:.75rem;
+}
+.assist-popup.show { display:block; }
+.assist-head { font-weight:600; color:var(--sub); font-size:.65rem; margin-bottom:5px; letter-spacing:.06em; text-transform:uppercase; }
+.assist-hint { padding:2px 0; }
+.assist-label { font-weight:600; }
+.assist-label.q10 { color:var(--gold); }
+.assist-label.q11 { color:var(--red); }
+.assist-detail { color:var(--sub); }
+</style>
+
+<!-- ── Header ── -->
+<header class="site-header">
+  <div class="header-inner">
+    <span class="header-eye">博物館 · IBM量子キャンペーン</span>
+    <span class="header-title">フィジカルプロンプトチェス完全版</span>
+    <span class="cert-badge" id="cert-id-badge">add435abfe106be3</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" data-hall="qpu">第1室 QPU状態</button>
+    <button class="tab-btn" data-hall="sim">第2室 200問シミュレーター</button>
+    <button class="tab-btn" data-hall="fiku">第3室 28 FIKU形カタログ</button>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- ══ HALL 1: QPU状態 ══════════════════════════════════════════ -->
+<section class="hall active" id="hall-qpu">
+  <div class="section-label">量子誕生証明書 — Round 3 · ibm_marrakesh</div>
+
+  <div class="qpu-top">
+    <div class="card">
+      <h2 style="margin-bottom:10px">ビット列（13量子ビット）</h2>
+      <div class="bitstring-row" id="bitstring-display"></div>
+      <div style="display:flex;gap:16px;margin-top:10px;font-size:.68rem;flex-wrap:wrap">
+        <span><span style="color:var(--cyan)">■</span> スハル (A, q0-q4)</span>
+        <span><span style="color:var(--orange)">■</span> リナリス (B, q5-q9)</span>
+        <span><span style="color:var(--gold)">■</span> イベント (q10-q12)</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="meta-table">
+        <tr><td>バックエンド</td><td>ibm_marrakesh</td></tr>
+        <tr><td>ラウンド</td><td>3</td></tr>
+        <tr><td>量子ビット数</td><td>13 (ガイド×10 + イベント×3)</td></tr>
+        <tr><td>スハル テレポート</td><td class="guide-a">36.00°</td></tr>
+        <tr><td>リナリス テレポート</td><td class="guide-b">360.00°</td></tr>
+        <tr><td>アクティブ A</td><td class="guide-a">A0 · A1 · A3</td></tr>
+        <tr><td>アクティブ B</td><td class="guide-b">B0 · B1 · B3 · B4</td></tr>
+        <tr><td>Born</td><td style="font-size:.72rem">2026-11-19T01:51:25Z</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-label">量子イベントゲージ（現在のステータス）</div>
+  <div class="event-gauges" id="event-gauges">
+    <div class="e-gauge" id="eg-es">
+      <div class="e-gauge-icon">⚡</div>
+      <div class="e-gauge-name">もつれた射撃</div>
+      <div style="font-size:.65rem;color:var(--sub);margin-bottom:4px">entanglement_shot</div>
+      <div class="e-gauge-bit" id="eg-es-bit">q10 = 0 · 未発火</div>
+    </div>
+    <div class="e-gauge" id="eg-sd">
+      <div class="e-gauge-icon">💫</div>
+      <div class="e-gauge-name">重ね合わせダッシュ</div>
+      <div style="font-size:.65rem;color:var(--sub);margin-bottom:4px">superposition_dash</div>
+      <div class="e-gauge-bit" id="eg-sd-bit">q11 = 0 · 未発火</div>
+    </div>
+    <div class="e-gauge" id="eg-le">
+      <div class="e-gauge-icon">🌙</div>
+      <div class="e-gauge-name">ルナイベント</div>
+      <div style="font-size:.65rem;color:var(--sub);margin-bottom:4px">luna_event</div>
+      <div class="e-gauge-bit" id="eg-le-bit">q12 = 0 · 未発火</div>
+    </div>
+  </div>
+
+  <div class="section-label">チェス発火条件（次のQPU実行で発火するために必要なゲーム状態）</div>
+  <div class="card">
+    <div class="trigger-list">
+      <div class="trig-row">
+        <span class="trig-bit">q10</span>
+        <div class="trig-desc">
+          <strong>もつれた射撃</strong> — CAPTURE イベントが最上層（3F）で発生したとき。
+          取る側と取られる側が最高点で交わる瞬間が「もつれ（エンタングルメント）」に対応する。
+        </div>
+      </div>
+      <div class="trig-row">
+        <span class="trig-bit">q11</span>
+        <div class="trig-desc">
+          <strong>重ね合わせダッシュ</strong> — CRASH イベント（双方が同一区画に向かう）が発生したとき。
+          二つの状態が同時に同じ場所を目指す様子が量子の重ね合わせ状態を表す。
+        </div>
+      </div>
+      <div class="trig-row">
+        <span class="trig-bit">q12</span>
+        <div class="trig-desc">
+          <strong>ルナイベント</strong> — PASS イベント（双方が入れ替わり、誰も取られない）が発生したとき。
+          完全な鏡像スワップ。ルナ（月）＝反射・対称性の象徴。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;padding:10px 14px;background:var(--surf2);border-radius:6px;font-size:.76rem;color:var(--sub)">
+    現在のラウンド3では全イベントが未発火（q10=q11=q12=0）。
+    第2室のシミュレーターで200問を走らせ、どのターンで各イベントが初めて発火するかを確認できます。
+    次のQPU実行でビット列の対応する量子ビットが1になればゲームに特殊効果が生じます。
+  </div>
+</section>
+
+<!-- ══ HALL 2: シミュレーター ════════════════════════════════════ -->
+<section class="hall" id="hall-sim">
+  <div class="section-label">フィジカルプロンプトチェス — 200問 自動シミュレーション</div>
+
+  <div class="sim-event-meters" id="sim-event-meters">
+    <div class="sim-meter" id="sm-es"><div class="dot"></div>もつれた射撃 (q10)</div>
+    <div class="sim-meter" id="sm-sd"><div class="dot"></div>重ね合わせダッシュ (q11)</div>
+    <div class="sim-meter" id="sm-le"><div class="dot"></div>ルナイベント (q12)</div>
+    <span style="font-size:.7rem;color:var(--sub);margin-left:auto" id="sim-event-count">発火: 0 / 3</span>
+  </div>
+
+  <div class="sim-layout">
+    <!-- Left: board -->
+    <div>
+      <div class="floor-tabs" id="floor-tabs">
+        <button class="floor-tab active" data-f="2">3F（上）</button>
+        <button class="floor-tab" data-f="1">2F（中）</button>
+        <button class="floor-tab" data-f="0">1F（下）</button>
+      </div>
+      <div id="floor-expand-notice" class="floor-expand-notice">🌙 ルナイベント発火 — 4F 解放 · 新しいレイヤーが開きました</div>
+      <div class="chess-grid" id="chess-board"></div>
+      <div style="margin-top:8px;font-size:.65rem;color:var(--sub)">
+        <span style="color:var(--cyan)">◆</span> 白（スハル側）
+        <span style="color:var(--orange);margin-left:8px">◆</span> 黒（リナリス側）
+      </div>
+    </div>
+    <!-- Right: controls + log -->
+    <div>
+      <div class="sim-controls">
+        <button class="btn primary" id="btn-play">▶ 実行</button>
+        <button class="btn" id="btn-step" disabled>1手進む</button>
+        <button class="btn" id="btn-reset">リセット</button>
+        <button class="btn" id="btn-r4mode" title="q10/q11発火を優先するAIに切替">⚡ R4攻略</button>
+        <span class="sim-status" id="sim-status">ターン 0 / 200</span>
+      </div>
+      <div id="assist-popup" class="assist-popup"></div>
+      <div class="section-label" style="margin-bottom:8px">イベントログ</div>
+      <div class="turn-log" id="turn-log">
+        <div class="log-row" style="color:var(--sub);font-size:.72rem;padding:12px">
+          ▶ 実行ボタンで200問シミュレーションを開始します。
+          量子イベント（もつれ・衝突・すれ違い）が発火すると上のゲージが点灯します。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:14px;padding:10px 14px;background:var(--surf2);border-radius:6px;font-size:.75rem;color:var(--sub)">
+    シード: 証明書ID <code style="color:var(--gold)">add435abfe106be3</code> の前8桁をLCGシードとして使用。
+    同じ証明書からは常に同じ200問の対局が再現されます。
+    CPU同士の自動対局で、取り・衝突・すれ違いの各イベントがQPU量子ビットq10-q12の発火条件です。
+  </div>
+</section>
+
+<!-- ══ HALL 3: FIKU形カタログ ════════════════════════════════════ -->
+<section class="hall" id="hall-fiku">
+  <div class="section-label">28 FIKU形 — フィジカルプロンプトチェス完全版 定石集</div>
+
+  <div class="fiku-filter">
+    <button class="filter-btn active" data-filter="all">すべて (28)</button>
+    <button class="filter-btn" data-filter="move">移動形 (24)</button>
+    <button class="filter-btn" data-filter="event">イベント形 (4)</button>
+    <button class="filter-btn" data-filter="xy">XY平面</button>
+    <button class="filter-btn" data-filter="xz">XZ/YZ昇降</button>
+    <button class="filter-btn" data-filter="zz">Z2跳躍</button>
+  </div>
+
+  <div class="fiku-detail-panel" id="fiku-detail"></div>
+  <div class="fiku-grid" id="fiku-grid"></div>
+</section>
+
+</div><!-- /main -->
+
+<script>
+// ──────────────────────────────────────────
+// DATA
+// ──────────────────────────────────────────
+const CERT = {
+  id: 'add435abfe106be3',
+  bitstring: '0100110011111',  // Round 4 ibm_marrakesh
+  guides_a: ['A0','A2','A3'],  // active (teleport 180°)
+  guides_b: ['B0','B3','B4'],  // active (teleport 324°)
+  events: { es: true, sd: true, le: true }
+};
+
+// 28 FIKU forms
+const FIKU = [
+  // XY plane (floor stays) — F01-F08
+  { n:'F01',k:'東東北',name:'前進突破',vec:[+2,+1,0],group:'xy',
+    joseki:'前方へ力強く出る一手。相手が横に動いたとき最も効果が高い。衝突(F25)を避けながら前進する基本形。' },
+  { n:'F02',k:'東東南',name:'前進かわし',vec:[+2,-1,0],group:'xy',
+    joseki:'前進しながら一マス下がる。追撃をかわしつつ前線を維持する。F01と対になる守備的前進形。' },
+  { n:'F03',k:'西西北',name:'後退突破',vec:[-2,+1,0],group:'xy',
+    joseki:'後退しながら上に出る。追撃を誘い込む罠として使う。見た目に反して攻撃的な退路形。' },
+  { n:'F04',k:'西西南',name:'後退かわし',vec:[-2,-1,0],group:'xy',
+    joseki:'最も「引いた」平面移動形。次のターンの布石として有効。急ぎすぎた前進を修正する形。' },
+  // XZ plane (y stays) — F05-F08
+  { n:'F05',k:'前昇突',name:'前進昇',vec:[+2,0,+1],group:'xz',
+    joseki:'前進しながら一層上がる。コーナーの制圧と上層確保を同時に行う。もつれ発火(q10)の前触れ。' },
+  { n:'F06',k:'前降突',name:'前進降',vec:[+2,0,-1],group:'xz',
+    joseki:'前進しながら一層降りる。底層の区画を素早く占有するための基本。' },
+  { n:'F07',k:'後昇突',name:'後退昇',vec:[-2,0,+1],group:'xz',
+    joseki:'最上層（3F）への退避に使う。3Fは衝突や取りが起きやすく、イベント発火の舞台。' },
+  { n:'F08',k:'後降突',name:'後退降',vec:[-2,0,-1],group:'xz',
+    joseki:'最下層への引き退き。次のターンに底層から一気に攻める準備形。' },
+  // YX plane (floor stays) — F09-F12
+  { n:'F09',k:'北北東',name:'側進突破',vec:[+1,+2,0],group:'xy',
+    joseki:'横方向への大きな跳躍。F01と組み合わせると衝突(CRASH)を意図的に誘発できる。' },
+  { n:'F10',k:'北北西',name:'側進かわし',vec:[-1,+2,0],group:'xy',
+    joseki:'横かつ後退。防御的な側方移動形。F09のミラー。' },
+  { n:'F11',k:'南南東',name:'逆側突破',vec:[+1,-2,0],group:'xy',
+    joseki:'後方への横進。敵の背後を取る長距離移動形。' },
+  { n:'F12',k:'南南西',name:'逆側かわし',vec:[-1,-2,0],group:'xy',
+    joseki:'最も引いた横進形。最終手段として取り置く。全24移動形の終点。' },
+  // YZ plane (x stays) — F13-F16
+  { n:'F13',k:'側昇突',name:'側進昇',vec:[0,+2,+1],group:'xz',
+    joseki:'x座標を固定したまま斜め上へ大きく動く。すれ違い(PASS)の前触れになることが多い。' },
+  { n:'F14',k:'側降突',name:'側進降',vec:[0,+2,-1],group:'xz',
+    joseki:'x固定で斜め下へ。底層の制圧と側方移動を同時に行う効率形。' },
+  { n:'F15',k:'逆昇突',name:'逆側昇',vec:[0,-2,+1],group:'xz',
+    joseki:'後方斜め上。上層制圧の補助形として使う。F13の対。' },
+  { n:'F16',k:'逆降突',name:'逆側降',vec:[0,-2,-1],group:'xz',
+    joseki:'後方斜め下。底層への撤退形。x座標を変えずに最深部へ退く。' },
+  // ZX plane (y stays) — F17-F20
+  { n:'F17',k:'昇昇東',name:'昇突破',vec:[+1,0,+2],group:'zz',
+    joseki:'2層を一気に跳び上がる最速の上昇形。もつれた射撃(q10)の発火に直結する定石。3F着地後に衝突を誘う。' },
+  { n:'F18',k:'昇昇西',name:'昇かわし',vec:[-1,0,+2],group:'zz',
+    joseki:'後退しながら2層上がる。頂上逃げ形。上層を確保しながら攻撃を避ける。' },
+  { n:'F19',k:'降降東',name:'降突破',vec:[+1,0,-2],group:'zz',
+    joseki:'2層を一気に降りる最速の降下形。底層制圧の最速手。' },
+  { n:'F20',k:'降降西',name:'降かわし',vec:[-1,0,-2],group:'zz',
+    joseki:'後退しながら2層降りる。底層逃げ形。F18の下版。' },
+  // ZY plane (x stays) — F21-F24
+  { n:'F21',k:'上上北',name:'昇側',vec:[0,+1,+2],group:'zz',
+    joseki:'x固定で2層上、y+1。サポート形として後方から全体を上げる。' },
+  { n:'F22',k:'上上南',name:'昇逆側',vec:[0,-1,+2],group:'zz',
+    joseki:'x固定で2層上、y-1。F21の対称形。上層制圧の対角補助。' },
+  { n:'F23',k:'下下北',name:'降側',vec:[0,+1,-2],group:'zz',
+    joseki:'x固定で2層下、y+1。底層固定形。F21の下版。' },
+  { n:'F24',k:'下下南',name:'降逆側',vec:[0,-1,-2],group:'zz',
+    joseki:'最も沈んだ形。x固定で2層下、y-1。底層を完全制圧する最終形。F01との対称が全体を閉じる。' },
+  // Event forms — F25-F28
+  { n:'F25',k:'衝突',name:'CRASH',vec:null,group:'event',
+    joseki:'双方が同一区画へ向かった瞬間。両者元の位置に戻る。量子対応：重ね合わせ状態（q11）。同時に同じ場所を目指す行為が重ね合わせの比喩。' },
+  { n:'F26',k:'取り',name:'CAPTURE',vec:null,group:'event',
+    joseki:'動かない相手の区画に着地する。その相手は駒を失う。量子対応：波束収縮（q10）。3Fでの取りがもつれた射撃イベントに対応。' },
+  { n:'F27',k:'すれ違い',name:'PASS',vec:null,group:'event',
+    joseki:'双方が互いの元の位置へ同時に移動する完全な入れ替わり。誰も取られない。量子対応：スワップゲート・ルナイベント（q12）。鏡像対称性の具現化。' },
+  { n:'F28',k:'駐車',name:'STAY',vec:null,group:'event',
+    joseki:'プロンプトが解読できない、または合法手がない。その騎士は動かない。量子対応：デコヒーレンス。意図が実現できない状態。次ターンに再試行する。' },
+];
+
+// ──────────────────────────────────────────
+// CHESS ENGINE
+// ──────────────────────────────────────────
+const SIZE=5, FILES='abcde';
+let floorCount=3, floor4Unlocked=false, round4Mode=false;
+function sqN(s){ return FILES[s.x]+(s.y+1)+'@'+(s.f+1)+'F'; }
+function same(a,b){ return a.x===b.x&&a.y===b.y&&a.f===b.f; }
+function inside(s,floors=floorCount){ return s.x>=0&&s.y>=0&&s.f>=0&&s.x<SIZE&&s.y<SIZE&&s.f<floors; }
+
+const STEPS=(()=>{
+  const out=[], ax=['x','y','f'];
+  for(const a of ax) for(const b of ax) if(a!==b)
+    for(const sa of[-2,2]) for(const sb of[-1,1]){
+      const d={x:0,y:0,f:0}; d[a]=sa; d[b]=sb; out.push(d);
+    }
+  return out;
+})();
+
+function legal(p,pieces,floors=floorCount){
+  return STEPS.map(d=>({x:p.at.x+d.x,y:p.at.y+d.y,f:p.at.f+d.f}))
+    .filter(s=>inside(s,floors)&&!pieces.some(q=>q.alive&&q.color===p.color&&same(q.at,s)));
+}
+
+function initPieces(){
+  return [
+    {id:'W1',color:'white',at:{x:1,y:0,f:0},alive:true},
+    {id:'W2',color:'white',at:{x:3,y:0,f:0},alive:true},
+    {id:'W3',color:'white',at:{x:0,y:0,f:1},alive:true},
+    {id:'W4',color:'white',at:{x:4,y:0,f:1},alive:true},
+    {id:'B1',color:'black',at:{x:1,y:4,f:2},alive:true},
+    {id:'B2',color:'black',at:{x:3,y:4,f:2},alive:true},
+    {id:'B3',color:'black',at:{x:0,y:4,f:1},alive:true},
+    {id:'B4',color:'black',at:{x:4,y:4,f:1},alive:true},
+  ];
+}
+
+function lcg(seed){
+  let s=seed>>>0;
+  return ()=>{ s=Math.imul(s,1664525)+1013904223>>>0; return s/0xFFFFFFFF; };
+}
+
+function cpuMove(color,pieces,rnd,floors=floorCount,r4=false,qFired={es:false,sd:false,le:false}){
+  const mine=pieces.filter(p=>p.alive&&p.color===color);
+  const foes=pieces.filter(p=>p.alive&&p.color!==color);
+  let best=null;
+  const rndWeight = r4 ? 0.3 : 1.5; // less randomness in r4 → more deterministic
+  for(const p of mine) for(const to of legal(p,pieces,floors)){
+    const cap=foes.some(f=>same(f.at,to))?10:0;
+    const dist=foes.length?Math.min(...foes.map(f=>Math.abs(f.at.x-to.x)+Math.abs(f.at.y-to.y)+Math.abs(f.at.f-to.f))):5;
+    // q10: heavy bonus for capture on 3F
+    const q10b = r4&&!qFired.es&&cap>0&&to.f===2 ? 90 : 0;
+    // q10 approach: reward moving to 3F at all
+    const f3b  = r4&&!qFired.es&&to.f===2 ? 18 : 0;
+    const sc=cap+(5-dist)+rnd()*rndWeight+q10b+f3b;
+    if(!best||sc>best.sc) best={id:p.id,to,sc};
+  }
+  return best?{id:best.id,to:best.to}:null;
+}
+
+function runTurn(pieces,wm,bm){
+  const next=pieces.map(p=>({...p,at:{...p.at}}));
+  const ev=[];
+  const by=id=>next.find(p=>p.id===id);
+  const moves=[wm,bm].filter(m=>m&&pieces.find(p=>p.id===m.id&&p.alive));
+  if(!wm) ev.push({kind:'stay',text:'白は駐車(F28)'});
+  if(!bm) ev.push({kind:'stay',text:'黒は駐車(F28)'});
+  if(moves.length===2&&same(moves[0].to,moves[1].to)){
+    ev.push({kind:'crash',text:`${moves[0].id}と${moves[1].id}が${sqN(moves[0].to)}で衝突(F25)`});
+    return{pieces:next,ev};
+  }
+  const from=new Map(moves.map(m=>[m.id,{...by(m.id).at}]));
+  for(const m of moves) by(m.id).at={...m.to};
+  if(moves.length===2&&same(moves[0].to,from.get(moves[1].id))&&same(moves[1].to,from.get(moves[0].id))){
+    ev.push({kind:'pass',text:`${moves[0].id}と${moves[1].id}がすれ違い(F27)`});
+    return{pieces:next,ev};
+  }
+  for(const m of moves){
+    const mv=by(m.id);
+    ev.push({kind:'move',text:`${m.id}→${sqN(m.to)}`});
+    const vic=next.find(p=>p.alive&&p.color!==mv.color&&same(p.at,m.to)&&!moves.some(o=>o.id===p.id));
+    if(vic){
+      vic.alive=false;
+      ev.push({kind:'capture',text:`${m.id}が${vic.id}を取った(F26)${m.to.f===2?' [3F→q10]':''}`});
+    }
+  }
+  return{pieces:next,ev};
+}
+
+// Pre-compute 200 turns
+function computeSim(){
+  const seed=parseInt(CERT.id.slice(0,8),16);
+  const rnd=lcg(seed);
+  let pieces=initPieces();
+  const turns=[];
+  const qEvents={es:false,sd:false,le:false};
+  let simFloors=3;
+  const r4=round4Mode;
+  for(let n=1;n<=200;n++){
+    let wm=cpuMove('white',pieces,rnd,simFloors,r4,{...qEvents});
+    let bm=cpuMove('black',pieces,rnd,simFloors,r4,{...qEvents});
+    // q11 crash-nudge: after q10 fires, find shared square and force collision
+    if(r4&&qEvents.es&&!qEvents.sd){
+      const whites=pieces.filter(p=>p.alive&&p.color==='white');
+      const blacks=pieces.filter(p=>p.alive&&p.color==='black');
+      let found=null;
+      outerCrash:
+      for(const w of whites){
+        for(const ws of legal(w,pieces,simFloors)){
+          for(const b of blacks){
+            if(legal(b,pieces,simFloors).some(bs=>same(bs,ws))){
+              found={wid:w.id,bid:b.id,sq:ws}; break outerCrash;
+            }
+          }
+        }
+      }
+      if(found&&rnd()<0.65){
+        wm={id:found.wid,to:{...found.sq}};
+        bm={id:found.bid,to:{...found.sq}};
+      }
+    }
+    const{pieces:next,ev}=runTurn(pieces,wm,bm);
+    // Check quantum events
+    for(const e of ev){
+      if(e.kind==='capture'&&e.text.includes('[3F→q10]')&&!qEvents.es) qEvents.es=true;
+      if(e.kind==='crash'&&!qEvents.sd) qEvents.sd=true;
+      if(e.kind==='pass'&&!qEvents.le){
+        qEvents.le=true;
+        simFloors=4;
+        // Luna expansion: spawn new pieces on 4F
+        next.push({id:'W5',color:'white',at:{x:0,y:0,f:3},alive:true});
+        next.push({id:'B5',color:'black',at:{x:4,y:4,f:3},alive:true});
+      }
+    }
+    // Respawn if needed (keep game going for 200 turns)
+    if(next.filter(p=>p.alive&&p.color==='white').length===0){
+      next.push({id:'W'+(n%4+1),color:'white',at:{x:1+n%3,y:0,f:0},alive:true});
+    }
+    if(next.filter(p=>p.alive&&p.color==='black').length===0){
+      next.push({id:'B'+(n%4+1),color:'black',at:{x:3-n%3,y:4,f:simFloors-1},alive:true});
+    }
+    turns.push({n,pieces:next.map(p=>({...p,at:{...p.at}})),ev,qSnap:{...qEvents},floors:simFloors});
+    pieces=next;
+  }
+  return turns;
+}
+
+// ──────────────────────────────────────────
+// RENDER: Hall 1 — Bitstring
+// ──────────────────────────────────────────
+function renderBitstring(){
+  const bs=CERT.bitstring;
+  const wrap=document.getElementById('bitstring-display');
+  // Map: q0-q4=A guides, q5-q9=B guides, q10-q12=events
+  const roles=['a','a','a','a','a','b','b','b','b','b','ev','ev','ev'];
+  const names=['q0','q1','q2','q3','q4','q5','q6','q7','q8','q9','q10','q11','q12'];
+  bs.split('').forEach((bit,i)=>{
+    if(i===5||i===10){
+      const sep=document.createElement('div');
+      sep.className='separator'; wrap.appendChild(sep);
+    }
+    const cell=document.createElement('div');
+    cell.className='bit-cell '+roles[i]+(roles[i]==='ev'&&bit==='1'?' on':'');
+    cell.innerHTML=`<div class="bit-val">${bit}</div><div class="bit-idx">${names[i]}</div>`;
+    wrap.appendChild(cell);
+  });
+}
+
+// ──────────────────────────────────────────
+// RENDER: Hall 2 — Chess board
+// ──────────────────────────────────────────
+let currentFloor=2;
+let simTurns=null, simIdx=0, simTimer=null;
+let simQFired={es:false,sd:false,le:false};
+
+function renderBoard(pieces,floor){
+  const grid=document.getElementById('chess-board');
+  grid.innerHTML='';
+  // Header row (column labels a-e)
+  grid.appendChild(Object.assign(document.createElement('div'),{className:'chess-axis'}));
+  'abcde'.split('').forEach(l=>{
+    const d=document.createElement('div');
+    d.className='chess-axis'; d.textContent=l; grid.appendChild(d);
+  });
+  // Rows y=4 down to y=0
+  for(let y=4;y>=0;y--){
+    // Row label
+    const rl=document.createElement('div');
+    rl.className='chess-axis'; rl.textContent=y+1; grid.appendChild(rl);
+    for(let x=0;x<5;x++){
+      const cell=document.createElement('div');
+      cell.className='chess-cell';
+      const ws=pieces.filter(p=>p.alive&&p.color==='white'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
+      const bs=pieces.filter(p=>p.alive&&p.color==='black'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
+      const wd=pieces.filter(p=>!p.alive&&p.color==='white'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
+      const bd=pieces.filter(p=>!p.alive&&p.color==='black'&&p.at.x===x&&p.at.y===y&&p.at.f===floor);
+      const isLuna=ps=>ps.some(p=>p.id==='W5'||p.id==='B5');
+      if(ws.length&&bs.length){ cell.classList.add('both'); cell.textContent='✕'; }
+      else if(ws.length){ cell.classList.add(isLuna(ws)?'piece-luna':'piece-w'); cell.textContent='◆';
+        const id=document.createElement('div'); id.className='piece-id'; id.textContent=ws.map(p=>p.id).join(''); cell.appendChild(id);
+      } else if(bs.length){ cell.classList.add(isLuna(bs)?'piece-luna':'piece-b'); cell.textContent='◆';
+        const id=document.createElement('div'); id.className='piece-id'; id.textContent=bs.map(p=>p.id).join(''); cell.appendChild(id);
+      }
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function updateSimMeters(qSnap){
+  const fire=(qSnap&&qSnap.es)||simQFired.es;
+  const fsd=(qSnap&&qSnap.sd)||simQFired.sd;
+  const fle=(qSnap&&qSnap.le)||simQFired.le;
+  if(fire){ simQFired.es=true; }
+  if(fsd){ simQFired.sd=true; }
+  if(fle){ simQFired.le=true; }
+  document.getElementById('sm-es').classList.toggle('on',simQFired.es);
+  document.getElementById('sm-sd').classList.toggle('on',simQFired.sd);
+  document.getElementById('sm-le').classList.toggle('on',simQFired.le);
+  const cnt=[simQFired.es,simQFired.sd,simQFired.le].filter(Boolean).length;
+  document.getElementById('sim-event-count').textContent=`発火: ${cnt} / 3`;
+}
+
+function unlockFloor4(){
+  if(floor4Unlocked) return;
+  floor4Unlocked=true; floorCount=4;
+  const tabs=document.getElementById('floor-tabs');
+  const btn=document.createElement('button');
+  btn.className='floor-tab f4'; btn.dataset.f='3'; btn.textContent='4F（ルナ）';
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.floor-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); currentFloor=3;
+    const ps=simIdx>0&&simTurns?simTurns[simIdx-1].pieces:initPieces();
+    renderBoard(ps,3);
+  });
+  tabs.insertBefore(btn,tabs.firstChild);
+  document.getElementById('floor-expand-notice').classList.add('show');
+}
+
+function computeAssistHints(pieces,fired){
+  const hints=[];
+  const alive=pieces.filter(p=>p.alive);
+  const whites=alive.filter(p=>p.color==='white');
+  const blacks=alive.filter(p=>p.color==='black');
+  if(!fired.es){
+    for(const w of whites){
+      const wm=STEPS.map(d=>({x:w.at.x+d.x,y:w.at.y+d.y,f:w.at.f+d.f})).filter(s=>inside(s));
+      for(const b of blacks) if(b.at.f===2&&wm.some(m=>m.x===b.at.x&&m.y===b.at.y&&m.f===b.at.f))
+        hints.push({q:'q10',label:'⚡ q10 チャンス',detail:`${w.id}→${b.id} を3Fで取れる`});
+    }
+    for(const b of blacks){
+      const bm=STEPS.map(d=>({x:b.at.x+d.x,y:b.at.y+d.y,f:b.at.f+d.f})).filter(s=>inside(s));
+      for(const w of whites) if(w.at.f===2&&bm.some(m=>m.x===w.at.x&&m.y===w.at.y&&m.f===w.at.f))
+        hints.push({q:'q10',label:'⚡ q10 チャンス',detail:`${b.id}→${w.id} を3Fで取れる`});
+    }
+  }
+  if(!fired.sd){
+    const wDests=new Map();
+    whites.forEach(w=>STEPS.map(d=>({x:w.at.x+d.x,y:w.at.y+d.y,f:w.at.f+d.f})).filter(s=>inside(s)).forEach(s=>{
+      const k=s.x+','+s.y+','+s.f;
+      if(!wDests.has(k)) wDests.set(k,[]);
+      wDests.get(k).push(w.id);
+    }));
+    blacks.forEach(b=>STEPS.map(d=>({x:b.at.x+d.x,y:b.at.y+d.y,f:b.at.f+d.f})).filter(s=>inside(s)).forEach(s=>{
+      const k=s.x+','+s.y+','+s.f;
+      if(wDests.has(k)&&hints.filter(h=>h.q==='q11').length<2)
+        hints.push({q:'q11',label:'⚡ q11 チャンス',detail:`${wDests.get(k)[0]}×${b.id} → 衝突可能区画`});
+    }));
+  }
+  return hints.slice(0,4);
+}
+
+function renderAssistPopup(hints){
+  const pop=document.getElementById('assist-popup');
+  if(!hints.length){pop.classList.remove('show');return;}
+  pop.classList.add('show');
+  pop.innerHTML='<div class="assist-head">🎯 次の一手アシスト — 量子イベント未発火</div>'+
+    hints.map(h=>`<div class="assist-hint"><span class="assist-label ${h.q}">${h.label}</span><span class="assist-detail"> — ${h.detail}</span></div>`).join('');
+}
+
+function addLogRow(turn,ev,qSnap){
+  const log=document.getElementById('turn-log');
+  const isQ=qSnap&&((qSnap.es&&!simQFired.es)||(qSnap.sd&&!simQFired.sd)||(qSnap.le&&!simQFired.le));
+
+  ev.forEach(e=>{
+    if(e.kind==='move') return;
+    const row=document.createElement('div');
+    row.className='log-row'+(isQ?' quantum-row':'');
+    const n=document.createElement('div'); n.className='log-n'; n.textContent='T'+turn;
+    const tag=document.createElement('div'); tag.className='tag';
+    const txt=document.createElement('div'); txt.className='log-text'; txt.textContent=e.text;
+    if(e.kind==='crash'){ tag.classList.add('tag-crash'); tag.textContent='衝突'; }
+    else if(e.kind==='capture'){ tag.classList.add('tag-capture'); tag.textContent='取り'; }
+    else if(e.kind==='pass'){ tag.classList.add('tag-pass'); tag.textContent='すれ違い'; }
+    else { tag.style.color='var(--sub)'; tag.textContent='駐車'; }
+    if(isQ&&(e.kind==='crash'||e.kind==='capture'||e.kind==='pass')){
+      const qt=document.createElement('div'); qt.className='tag tag-quantum'; qt.textContent='⚡QPU';
+      row.append(n,tag,qt,txt);
+    } else { row.append(n,tag,txt); }
+    log.appendChild(row);
+    log.scrollTop=log.scrollHeight;
+  });
+}
+
+function stepSim(){
+  if(simIdx>=simTurns.length) return false;
+  const t=simTurns[simIdx];
+  if(!floor4Unlocked&&t.floors===4) unlockFloor4();
+  renderBoard(t.pieces,currentFloor);
+  addLogRow(t.n,t.ev,t.qSnap);
+  updateSimMeters(t.qSnap);
+  if(!simQFired.es||!simQFired.sd) renderAssistPopup(computeAssistHints(t.pieces,simQFired));
+  else renderAssistPopup([]);
+  document.getElementById('sim-status').textContent=`ターン ${t.n} / 200`;
+  simIdx++;
+  return simIdx<simTurns.length;
+}
+
+function startSim(){
+  if(!simTurns) simTurns=computeSim();
+  document.getElementById('btn-play').textContent='⏸ 停止';
+  document.getElementById('btn-step').disabled=false;
+  simTimer=setInterval(()=>{
+    if(!stepSim()) stopSim();
+  },60);
+}
+
+function stopSim(){
+  clearInterval(simTimer); simTimer=null;
+  document.getElementById('btn-play').textContent='▶ 実行';
+}
+
+function resetSim(){
+  stopSim();
+  simTurns=null; simIdx=0; simQFired={es:false,sd:false,le:false};
+  floorCount=3; floor4Unlocked=false;
+  document.querySelectorAll('.floor-tab.f4').forEach(b=>b.remove());
+  currentFloor=2;
+  document.querySelectorAll('.floor-tab').forEach(b=>b.classList.toggle('active',b.dataset.f==='2'));
+  document.getElementById('floor-expand-notice').classList.remove('show');
+  document.getElementById('assist-popup').classList.remove('show');
+  renderBoard(initPieces(),currentFloor);
+  updateSimMeters(null);
+  document.getElementById('turn-log').innerHTML=
+    '<div class="log-row" style="color:var(--sub);font-size:.72rem;padding:12px">▶ 実行ボタンで200問シミュレーションを開始します。</div>';
+  document.getElementById('sim-status').textContent='ターン 0 / 200';
+  document.getElementById('btn-step').disabled=true;
+}
+
+// ──────────────────────────────────────────
+// RENDER: Hall 3 — FIKU catalog
+// ──────────────────────────────────────────
+let selectedFiku=null, currentFilter='all';
+
+function renderFiku(){
+  const grid=document.getElementById('fiku-grid');
+  grid.innerHTML='';
+  FIKU.forEach((f,i)=>{
+    const card=document.createElement('div');
+    card.className='fiku-card'+(f.group==='event'?' ev-type':'');
+    card.innerHTML=
+      `<div class="fiku-num">${f.n}</div>`+
+      `<div class="fiku-k">${f.k}</div>`+
+      `<div class="fiku-name">${f.name}</div>`+
+      (f.vec?`<div class="fiku-v">${f.vec[0]>=0?'+':''}${f.vec[0]},${f.vec[1]>=0?'+':''}${f.vec[1]},${f.vec[2]>=0?'+':''}${f.vec[2]}</div>`:
+       `<div class="fiku-v" style="color:var(--gold)">ゲームイベント</div>`);
+    card.dataset.idx=i;
+    card.addEventListener('click',()=>selectFiku(i));
+    grid.appendChild(card);
+  });
+  applyFilter(currentFilter);
+}
+
+function selectFiku(idx){
+  selectedFiku=idx;
+  document.querySelectorAll('.fiku-card').forEach(c=>{
+    c.classList.toggle('selected',parseInt(c.dataset.idx)===idx);
+  });
+  const f=FIKU[idx];
+  const panel=document.getElementById('fiku-detail');
+  panel.className='fiku-detail-panel show';
+  panel.innerHTML=
+    `<div class="fiku-detail-kanji">${f.k}</div>`+
+    `<div class="fiku-detail-body">`+
+    `<h3>${f.n} · ${f.name}</h3>`+
+    (f.vec?`<div style="margin-top:5px"><span class="fiku-vec-pill">dx${f.vec[0]>=0?'+':''}${f.vec[0]}</span><span class="fiku-vec-pill">dy${f.vec[1]>=0?'+':''}${f.vec[1]}</span><span class="fiku-vec-pill">df${f.vec[2]>=0?'+':''}${f.vec[2]}</span></div>`:
+     `<div style="margin-top:5px"><span class="fiku-vec-pill" style="color:var(--gold)">イベント形</span></div>`)+
+    `<div class="fiku-joseki-text">定石: ${f.joseki}</div>`+
+    `</div>`;
+}
+
+function applyFilter(filter){
+  currentFilter=filter;
+  document.querySelectorAll('.fiku-card').forEach(card=>{
+    const f=FIKU[parseInt(card.dataset.idx)];
+    let show=false;
+    if(filter==='all') show=true;
+    else if(filter==='move') show=f.group!=='event';
+    else if(filter==='event') show=f.group==='event';
+    else if(filter==='xy') show=f.group==='xy';
+    else if(filter==='xz') show=f.group==='xz';
+    else if(filter==='zz') show=f.group==='zz';
+    card.hidden=!show;
+  });
+  document.querySelectorAll('.filter-btn').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.filter===filter);
+  });
+}
+
+// ──────────────────────────────────────────
+// WIRING
+// ──────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.hall').forEach(h=>h.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('hall-'+btn.dataset.hall).classList.add('active');
+  });
+});
+
+document.querySelectorAll('.floor-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.floor-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFloor=parseInt(btn.dataset.f);
+    const pieces=simIdx>0&&simTurns?simTurns[simIdx-1].pieces:initPieces();
+    renderBoard(pieces,currentFloor);
+  });
+});
+
+document.getElementById('btn-play').addEventListener('click',()=>{
+  if(simTimer) stopSim();
+  else { if(!simTurns) simTurns=computeSim(); startSim(); }
+});
+document.getElementById('btn-step').addEventListener('click',()=>{
+  if(!simTurns) simTurns=computeSim();
+  if(simTimer) stopSim();
+  stepSim();
+});
+document.getElementById('btn-reset').addEventListener('click',resetSim);
+
+document.getElementById('btn-r4mode').addEventListener('click',()=>{
+  round4Mode=!round4Mode;
+  const btn=document.getElementById('btn-r4mode');
+  btn.style.borderColor=round4Mode?'var(--gold)':'';
+  btn.style.color=round4Mode?'var(--gold)':'';
+  btn.textContent=round4Mode?'⚡ R4攻略 ON':'⚡ R4攻略';
+  resetSim();
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>applyFilter(btn.dataset.filter));
+});
+
+// ──────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────
+renderBitstring();
+renderBoard(initPieces(),currentFloor);
+renderFiku();
+</script>

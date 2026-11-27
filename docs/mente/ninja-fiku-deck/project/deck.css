@@ -1,0 +1,221 @@
+/* MENTE Deck — 忍者FIKU 四天王探索 */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&display=swap');
+
+:root {
+  --bg:       #040d1c;
+  --bg2:      #0a1628;
+  --bg3:      #0f1e38;
+  --fg:       #e4e8f0;
+  --fg2:      #8fa3c4;
+  --gold:     #e8b84b;
+  --teal:     #4fc3c8;
+  --purple:   #c084fc;
+  --red:      #f87171;
+  --green:    #4ade80;
+  --king-glow:   #ffd700;
+  --queen-glow:  #c084fc;
+  --knight-glow: #4fc3c8;
+  --fiku-glow:   #f97316;
+  --font-head: 'Space Grotesk', sans-serif;
+  --font-jp:   'Noto Serif JP', serif;
+}
+
+section {
+  padding: 128px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-head);
+  overflow: hidden;
+}
+
+/* Typography scale */
+h1 { font-size: 96px; font-weight: 700; line-height: 1.0; letter-spacing: -2px; color: var(--fg); text-wrap: balance; }
+h2 { font-size: 64px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: var(--fg); text-wrap: balance; }
+h3 { font-size: 36px; font-weight: 500; line-height: 1.2; color: var(--fg2); text-wrap: balance; }
+p  { font-size: 28px; font-weight: 300; line-height: 1.6; color: var(--fg); }
+p.small { font-size: 22px; color: var(--fg2); }
+
+.jp { font-family: var(--font-jp); }
+
+/* Ghost FIKU background scatter */
+.ghost-fiku {
+  position: absolute;
+  font-size: 48px;
+  opacity: 0.06;
+  color: var(--gold);
+  user-select: none;
+  animation: ghost-drift 8s ease-in-out infinite;
+}
+@keyframes ghost-drift {
+  0%, 100% { transform: translateY(0) rotate(-45deg); }
+  50%       { transform: translateY(-20px) rotate(-45deg); }
+}
+
+/* Corner hanging FIKU */
+.corner-fiku {
+  position: absolute;
+  font-size: 72px;
+  color: var(--gold);
+  opacity: 0.7;
+  animation: hang 3s ease-in-out infinite;
+  transform-origin: top center;
+}
+.corner-fiku.tl { top: 48px; left: 72px; animation-delay: 0s; }
+.corner-fiku.tr { top: 48px; right: 72px; animation-delay: 0.75s; }
+.corner-fiku.bl { bottom: 48px; left: 72px; animation-delay: 1.5s; transform-origin: bottom center; }
+.corner-fiku.br { bottom: 48px; right: 72px; animation-delay: 2.25s; transform-origin: bottom center; }
+@keyframes hang {
+  0%, 100% { transform: rotate(-6deg) scaleY(-1); }
+  50%       { transform: rotate(6deg) scaleY(-1); }
+}
+
+/* 四天王 found badge */
+.tenno-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 28px;
+  font-weight: 600;
+  font-family: var(--font-head);
+}
+.tenno-badge.king   { background: rgba(255,215,0,0.15); border: 2px solid var(--king-glow); color: var(--king-glow); }
+.tenno-badge.queen  { background: rgba(192,132,252,0.15); border: 2px solid var(--queen-glow); color: var(--queen-glow); }
+.tenno-badge.knight { background: rgba(79,195,200,0.15); border: 2px solid var(--knight-glow); color: var(--knight-glow); }
+.tenno-badge.fiku   { background: rgba(249,115,22,0.15); border: 2px solid var(--fiku-glow); color: var(--fiku-glow); }
+
+/* Ninja FIKU shuriken icon */
+.shuriken {
+  display: inline-block;
+  font-size: 48px;
+  animation: spin-shuriken 4s linear infinite;
+  transform-origin: center;
+}
+@keyframes spin-shuriken {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Circuit counter panel */
+.circuit-panel {
+  background: var(--bg3);
+  border-left: 4px solid var(--teal);
+  padding: 32px 40px;
+  border-radius: 0 8px 8px 0;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 24px;
+  line-height: 1.8;
+  color: var(--teal);
+}
+
+/* Luna vs Stoic prompt cards */
+.prompt-row {
+  display: flex;
+  gap: 40px;
+}
+.prompt-card {
+  flex: 1;
+  padding: 32px;
+  border-radius: 12px;
+  font-size: 24px;
+  line-height: 1.6;
+}
+.prompt-card.luna {
+  background: rgba(79,195,200,0.08);
+  border: 2px solid var(--teal);
+}
+.prompt-card.stoic {
+  background: rgba(192,132,252,0.08);
+  border: 2px solid var(--purple);
+}
+.prompt-card h3 { font-size: 28px; margin-bottom: 16px; }
+.prompt-card.luna h3  { color: var(--teal); }
+.prompt-card.stoic h3 { color: var(--purple); }
+.prompt-card code {
+  display: block;
+  background: rgba(0,0,0,0.3);
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 20px;
+  margin-top: 12px;
+  color: var(--gold);
+}
+
+/* Lap row for journey slide */
+.lap-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.lap-num {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.lap-row.l8  .lap-num { background: rgba(255,215,0,0.2); color: var(--king-glow); }
+.lap-row.l9  .lap-num { background: rgba(192,132,252,0.2); color: var(--queen-glow); }
+.lap-row.l10 .lap-num { background: rgba(79,195,200,0.2); color: var(--knight-glow); }
+.lap-row.l11 .lap-num { background: rgba(249,115,22,0.2); color: var(--fiku-glow); }
+.lap-row.l12 .lap-num { background: rgba(232,184,75,0.2); color: var(--gold); border: 2px solid var(--gold); }
+
+/* φ×√2 highlight */
+.phi-mark {
+  color: var(--gold);
+  font-size: 36px;
+  font-weight: 700;
+}
+
+/* Accent slide bg */
+section.accent-king   { background: linear-gradient(135deg, #040d1c 60%, #1a1200 100%); }
+section.accent-queen  { background: linear-gradient(135deg, #040d1c 60%, #15062a 100%); }
+section.accent-knight { background: linear-gradient(135deg, #040d1c 60%, #031a1b 100%); }
+section.accent-fiku   { background: linear-gradient(135deg, #040d1c 60%, #1a0800 100%); }
+section.accent-hanged { background: linear-gradient(135deg, #040d1c 60%, #0d0a1a 100%); }
+
+/* Footer band */
+.footer {
+  position: absolute;
+  bottom: 64px;
+  left: 128px;
+  right: 128px;
+  font-size: 20px;
+  color: var(--fg2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Glow text effects */
+.glow-gold   { color: var(--gold);   text-shadow: 0 0 24px rgba(232,184,75,0.6); }
+.glow-teal   { color: var(--teal);   text-shadow: 0 0 24px rgba(79,195,200,0.6); }
+.glow-purple { color: var(--purple); text-shadow: 0 0 24px rgba(192,132,252,0.6); }
+.glow-fiku   { color: var(--fiku-glow); text-shadow: 0 0 24px rgba(249,115,22,0.6); }
+
+/* Count indicator */
+.count-indicator {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 4px;
+}
+.count-indicator .found   { color: var(--gold); }
+.count-indicator .pending { color: var(--fg2); opacity: 0.3; }
+
+/* Slide-in animation for content */
+.slide-up {
+  animation: slideUp 0.6s ease both;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

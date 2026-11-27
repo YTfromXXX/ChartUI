@@ -115,3 +115,22 @@ Pick a recorded quantum singularity from KNOT INVENTORY, then overlay a manual p
 | 2D particle detector | The 48 hex cells become detectors. The entry→current-price segment (entry at 25% of the plot width) lights only the crossed edges (LR, B, LL, UL, T, UR). The last crossed cell's 6-bit edge code is printed as the digital reading. |
 | 3D orbital shell | Tilt = direction (±36°), radius = size (1.1–3.0), blink rate = |P&L| (0.6–6.6 Hz, gold profit / red loss). |
 | Annihilation precursor | Liquidation proximity above 60% scatters the shell particles with chaotic noise and collapses them toward the core near 100%. If no liquidation price is entered, ±10% from entry (≈10x) is assumed and labelled "auto". |
+
+## Meta nested polyhedra and hierarchical honeycomb
+
+- 2D: a parent hex bowl (SPX) is split into 6 child bowls (SX5E, NKY, DXY, EURUSD, USDJPY, XAUUSD). Depth follows a weight/volatility mass proxy (no real volume).
+- 3D: outer icosahedron plus inner polyhedra whose vertex count follows weight (`polyhedronForWeight`).
+- Rolling correlation < 0.15 breaks the lock (recovers > 0.35); the inner shell then slips by its own 15° steps with micro-tremor and interference fringes. The XAUUSD child correlation is proxied by the mean correlation.
+
+## Sigil HUD (`lib/sigilGenerator.ts`)
+
+- Core attractor (I / IV / X / XVI), suit (Metal=Wands, Animal=Cups, Crypto=Swords, Meta=Pentacles), MACD dots, Ichimoku border, RSI vortex turns, ATR stroke.
+- Singularities (hack lock, target reached, liquidation collapse, Meta shell slip) turn the sigil gold and save a snapshot to KNOT INVENTORY (`sigilSnapshots`, de-duplicated within 5 s). Crypto snapshots can be recalled into the position form.
+- Crypto/Meta indicators are close-only approximations; stress mappings are heuristic.
+
+## 384 Spiral Candy grid API (`spiral_candy_grid.py`)
+
+- `GET /api/v1/oracle/spiral-grid?scale_dial=<0..1>` returns 384 candies (48 Fibonacci cells × 4 waveforms × 2 polarities). Out-of-range or non-finite dials are clamped to `[0, 1]`.
+- Radius follows `r = a · exp(b · ω)`; the dial shifts `ln a` linearly, so the whole grid zooms by 3 decades across the dial (`log10_radius_min/max` move by `3 × Δdial`).
+- Cells 0/1/46/47 are the element singularities (Wands/Cups/Swords/Pentacles); the other 44 map 22 Major Arcana × Light/Shadow.
+- `/oracle-api` renders a single snapshot; `/oracle-api/experiments` sweeps the dial (parameters in `app/oracle-api/params.ts`) and checks the log-linear zoom. All RR / time-to-target values are geometric, synthetic quantities.

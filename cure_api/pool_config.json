@@ -1,0 +1,34 @@
+[
+  {
+    "name": "cure_synth_eagle_r3",
+    "queue_len": 4,
+    "avg_gate_error": 0.004,
+    "latency_ms": 420,
+    "available_shots": 2000,
+    "operational": true
+  },
+  {
+    "name": "cure_synth_heron_r2",
+    "queue_len": 11,
+    "avg_gate_error": 0.002,
+    "latency_ms": 680,
+    "available_shots": 1800,
+    "operational": true
+  },
+  {
+    "name": "cure_synth_falcon_r1",
+    "queue_len": 2,
+    "avg_gate_error": 0.012,
+    "latency_ms": 210,
+    "available_shots": 2000,
+    "operational": true
+  },
+  {
+    "name": "cure_synth_ideal_v1",
+    "queue_len": 0,
+    "avg_gate_error": 0.0,
+    "latency_ms": 80,
+    "available_shots": 9999,
+    "operational": true
+  }
+]

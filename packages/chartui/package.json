@@ -1,0 +1,13 @@
+{
+  "name": "chartui",
+  "version": "0.1.0",
+  "description": "ChartUI / METADOGG ORACLE core for the browser and Node: knot crossings, knot ladder, .meshmeta pointers and signatures, colour rules, card slots, FX orientation.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": { "build": "node build.mjs" }
+}

@@ -1,0 +1,84 @@
+<section id="z-animation" style="background:linear-gradient(145deg,#040d1c 65%,rgba(167,142,208,.03) 100%);">
+
+  <div class="eyebrow" style="color:var(--groove);">B3 · 3D転写アニメーション設計 / Z軸深度モデル</div>
+  <h2 style="margin-bottom:8px;">脳内転写の精密3Dモデル</h2>
+  <div style="height:3px;width:420px;border-radius:2px;background:linear-gradient(90deg,var(--groove),var(--stick),var(--green));margin-bottom:24px;"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <!-- Z-stack -->
+    <div>
+      <p style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--muted);margin-bottom:16px;">転写フロー (EEG → QPU)</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="z-block" style="background:rgba(105,240,174,.07);border:1.5px solid rgba(105,240,174,.4);">
+          <span class="z-label" style="color:rgba(105,240,174,.6);">Z=0</span>
+          <span class="z-name xv-c" style="font-size:28px;">XV 現在面</span>
+          <span class="z-desc">&lt;4ms · EEG</span>
+        </div>
+        <div class="z-block" style="background:rgba(232,144,122,.06);border:1px solid rgba(232,144,122,.3);">
+          <span class="z-label">Z=-1</span>
+          <span class="z-name stick-c" style="font-size:28px;">Sangi符号化</span>
+          <span class="z-desc">&lt;3ms · γ→算木</span>
+        </div>
+        <div class="z-block" style="background:rgba(167,142,208,.06);border:1px solid rgba(167,142,208,.3);">
+          <span class="z-label">Z=-2</span>
+          <span class="z-name groove-c" style="font-size:28px;">α溝制約</span>
+          <span class="z-desc">&lt;2ms · チャネル</span>
+        </div>
+        <div class="z-block" style="background:rgba(91,189,206,.06);border:1px solid rgba(91,189,206,.3);">
+          <span class="z-label">Z=-3</span>
+          <span class="z-name line-cc" style="font-size:28px;">θ文脈照合</span>
+          <span class="z-desc">&lt;8ms · 順序</span>
+        </div>
+        <div class="z-block" style="background:rgba(200,150,106,.06);border:1px solid rgba(200,150,106,.35);">
+          <span class="z-label">Z=∞</span>
+          <span class="z-name sand-c" style="font-size:28px;">δ基底照合</span>
+          <span class="z-desc">&lt;8ms · 原始</span>
+        </div>
+        <div style="padding:10px 20px;background:rgba(105,240,174,.07);border:1px solid rgba(105,240,174,.3);border-radius:8px;text-align:center;">
+          <p style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--green);margin:0;">Total &lt;41ms · 共鳴発火 &lt;16ms</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DNA analogy -->
+    <div>
+      <p style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--sand);margin-bottom:16px;">転写アナロジー (DNA→RNA)</p>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="irow">
+          <div class="ico" style="background:rgba(200,150,106,.1);font-size:28px;">🧬</div>
+          <div>
+            <p style="font-size:24px;color:var(--muted);">DNA</p>
+            <p style="font-size:28px;color:var(--fg);">過去の body_snapshot キャッシュ</p>
+          </div>
+        </div>
+        <div class="irow">
+          <div class="ico" style="background:rgba(91,189,206,.1);font-size:28px;">📜</div>
+          <div>
+            <p style="font-size:24px;color:var(--muted);">mRNA</p>
+            <p style="font-size:28px;color:var(--fg);">semiotic_layer 中間表現</p>
+          </div>
+        </div>
+        <div class="irow">
+          <div class="ico" style="background:rgba(167,142,208,.1);font-size:28px;">⚙️</div>
+          <div>
+            <p style="font-size:24px;color:var(--muted);">リボソーム</p>
+            <p style="font-size:28px;color:var(--fg);">QPU 320qubit 処理エンジン</p>
+          </div>
+        </div>
+        <div class="irow">
+          <div class="ico" style="background:rgba(105,240,174,.1);font-size:28px;">✨</div>
+          <div>
+            <p style="font-size:24px;color:var(--muted);">タンパク質</p>
+            <p style="font-size:28px;color:var(--fg);">XV空間の共鳴体験</p>
+          </div>
+        </div>
+        <div style="padding:14px 18px;background:rgba(167,142,208,.07);border:1px solid rgba(167,142,208,.25);border-radius:8px;">
+          <p style="font-size:26px;color:var(--groove);margin:0;">転写機構：Z軸を逆行する記号的解釈<br><span class="muted" style="font-size:24px;">過去→現在への時間の逆行不可能性を超える</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="watermark">MENTE RESEARCH VOL.7 · B3 Z-ANIM</div>
+  <aside>3D転写アニメーション設計。Z=0（現在）から始まり、Z=∞（δ基底）まで逆行するプロセスが「転写」。DNA転写アナロジー：過去のbody_snapshotがDNA、semiotic_layerがmRNA中間表現、QPUがリボソーム、XV共鳴体験がタンパク質。全体遅延&lt;41ms（共鳴発火&lt;16ms）で、リアルタイム転写を実現。</aside>
+</section>

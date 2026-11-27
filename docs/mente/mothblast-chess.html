@@ -1,0 +1,733 @@
+<title>MothBlast × Physical Prompt Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap">
+<style>
+:root {
+  --bg: #040d1c; --bg2: #071428; --bg3: #0a1a30;
+  --fg: #e8eaf6; --muted: #8899b8; --subtle: #2a3a5a;
+  --teal: #4fc3c8; --orange: #e8832a; --gold: #e8b84b;
+  --luna: #ce93d8; --aerial: #f48fb1;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  padding: max(0px, env(safe-area-inset-top,0px)) max(0px,env(safe-area-inset-right,0px)) max(0px,env(safe-area-inset-bottom,0px)) max(0px,env(safe-area-inset-left,0px));
+  overflow-x: hidden;
+}
+
+/* ── TOP HUD ── */
+.top-hud {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: var(--bg2);
+  border-bottom: 1.5px solid rgba(232,184,75,.25);
+  flex-shrink: 0;
+}
+.hud-chess { font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; color:var(--teal); letter-spacing:2px; }
+.hud-center { font-family:'Space Grotesk',sans-serif; font-size:11px; color:var(--muted); text-align:center; line-height:1.4; }
+.hud-center b { color:var(--gold); }
+.hud-moth { font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; color:var(--luna); letter-spacing:2px; }
+
+/* ── MAIN LAYOUT ── */
+.main {
+  display: flex; flex: 1; gap: 0; min-height: 0;
+}
+@media (max-width: 700px) {
+  .main { flex-direction: column; }
+  .panel-chess { width: 100% !important; }
+  .panel-moth  { width: 100% !important; height: 420px; }
+}
+
+/* ── CHESS PANEL ── */
+.panel-chess {
+  width: 55%; display: flex; flex-direction: column;
+  padding: 14px 16px; border-right: 1px solid rgba(42,58,90,.5);
+  gap: 10px;
+}
+.chess-score-bar {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Space Grotesk', sans-serif; font-size:12px;
+}
+.score-team {
+  display:flex; align-items:center; gap:6px; padding:5px 12px;
+  border-radius:20px; border:1px solid;
+}
+.score-home { border-color:rgba(79,195,200,.4); background:rgba(79,195,200,.06); }
+.score-away { border-color:rgba(244,143,177,.4); background:rgba(244,143,177,.06); }
+.score-num { font-size:16px; font-weight:800; }
+.score-home .score-num { color:var(--teal); }
+.score-away .score-num { color:var(--aerial); }
+.chess-round { margin-left:auto; font-size:11px; color:var(--muted); }
+
+.board-wrap {
+  position:relative; display:flex; align-items:center; justify-content:center;
+  padding:3px;
+  background: linear-gradient(135deg, rgba(79,195,200,.2), rgba(232,184,75,.15), rgba(244,143,177,.2));
+  border-radius:6px;
+}
+#chessBoard {
+  display:grid; grid-template-columns:repeat(8,1fr);
+  width:100%; max-width:360px; aspect-ratio:1;
+  border-radius:4px; overflow:hidden; cursor:pointer;
+}
+.sq {
+  display:flex; align-items:center; justify-content:center;
+  position:relative; cursor:pointer;
+  transition:background .15s;
+}
+.sq.dark  { background:#0a1a30; }
+.sq.light { background:#0f2040; }
+.sq.selected { outline:2.5px solid var(--gold); outline-offset:-2px; background:rgba(232,184,75,.15) !important; }
+.sq.valid-move::after {
+  content:''; position:absolute; width:40%; height:40%;
+  border-radius:50%; background:rgba(232,184,75,.35);
+  pointer-events:none;
+}
+.sq.flash { animation:sq-flash .25s ease-out; }
+@keyframes sq-flash { 0%{background:rgba(255,255,255,.5)!important;} 100%{} }
+
+.piece {
+  width:78%; height:78%; border-radius:5px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:clamp(7px,1.4vw,13px); font-family:'Space Grotesk',sans-serif;
+  font-weight:700; gap:1px; border:1.5px solid;
+  transition:transform .1s, box-shadow .15s;
+  user-select:none; pointer-events:none;
+  position:relative;
+}
+.piece-home {
+  background:rgba(79,195,200,.12); border-color:rgba(79,195,200,.5); color:var(--teal);
+  box-shadow:0 0 8px rgba(79,195,200,.15);
+}
+.piece-away {
+  background:rgba(244,143,177,.12); border-color:rgba(244,143,177,.5); color:var(--aerial);
+  box-shadow:0 0 8px rgba(244,143,177,.15);
+}
+.sq.selected .piece { box-shadow:0 0 16px var(--gold); }
+.piece-num { font-size:.7em; opacity:.6; line-height:1; }
+.piece-sym { font-size:1.1em; line-height:1; }
+.piece-gate { font-size:.65em; font-family:'Space Mono',monospace; opacity:.8; }
+
+.prompt-box {
+  background:var(--bg2); border:1px solid rgba(79,195,200,.2);
+  border-radius:6px; padding:10px 14px;
+  font-family:'Space Mono',monospace; font-size:11px; color:var(--teal);
+  min-height:42px; line-height:1.5; word-break:break-all;
+}
+.prompt-label { font-family:'Space Grotesk',sans-serif; font-size:11px; color:var(--muted); margin-bottom:4px; }
+
+.turn-indicator {
+  font-family:'Space Grotesk',sans-serif; font-size:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.turn-dot { width:8px; height:8px; border-radius:50%; }
+
+/* ── MOTHBLAST PANEL ── */
+.panel-moth {
+  width: 45%; position:relative; overflow:hidden;
+  background: radial-gradient(ellipse at 50% 20%, #071428 0%, var(--bg) 70%);
+  display:flex; flex-direction:column;
+}
+
+.moth-hud {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  flex-shrink:0; z-index:10; position:relative;
+  background:rgba(4,13,28,.7); border-bottom:1px solid rgba(206,147,216,.15);
+}
+.moth-title {
+  font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:800;
+  color:var(--luna); letter-spacing:2px; text-shadow:0 0 16px rgba(206,147,216,.5);
+}
+.moth-stats { display:flex; gap:12px; margin-left:auto; }
+.stat { text-align:center; }
+.stat-label { font-size:9px; color:var(--muted); letter-spacing:1px; font-family:'Space Grotesk',sans-serif; }
+.stat-val { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:var(--fg); }
+.stat-val.teal { color:var(--teal); }
+.stat-val.luna { color:var(--luna); }
+
+.target-btn {
+  padding:5px 12px; border-radius:14px;
+  border:1.5px solid; background:transparent; cursor:pointer;
+  font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700;
+  transition:all .2s;
+}
+.target-0 { border-color:var(--teal); color:var(--teal); }
+.target-0.active { background:rgba(79,195,200,.15); }
+.target-1 { border-color:var(--orange); color:var(--orange); }
+.target-1.active { background:rgba(232,131,42,.15); }
+
+.timer-bar-wrap {
+  height:3px; background:var(--subtle); flex-shrink:0; position:relative; z-index:10;
+}
+#timerBar {
+  height:100%; background:linear-gradient(90deg,var(--luna),var(--teal));
+  transition:width .1s linear; border-radius:2px;
+}
+
+#arenaCanvas {
+  flex:1; display:block; cursor:crosshair; touch-action:manipulation;
+}
+
+.round-flash {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  pointer-events:none; z-index:20;
+  font-family:'Space Grotesk',sans-serif; font-size:32px; font-weight:800;
+  color:var(--luna); text-shadow:0 0 40px rgba(206,147,216,.8);
+  opacity:0;
+}
+.round-flash.show { animation:flash-anim .8s ease-out forwards; }
+@keyframes flash-anim {
+  0%{opacity:1;transform:scale(.8);} 40%{opacity:1;transform:scale(1.05);} 100%{opacity:0;transform:scale(1.1);}
+}
+</style>
+
+<!-- TOP HUD -->
+<div class="top-hud">
+  <div class="hud-chess">PHYSICAL PROMPT CHESS</div>
+  <div class="hud-center">Session 04 · <b>ibm_marrakesh</b> · Sangi γ</div>
+  <div class="hud-moth">MOTHBLAST</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- CHESS PANEL -->
+  <div class="panel-chess">
+    <div class="chess-score-bar">
+      <div class="score-team score-home">
+        <span style="font-size:10px;color:var(--teal);">HOME</span>
+        <span class="score-num" id="homeScore">0</span>
+      </div>
+      <div class="score-team score-away">
+        <span style="font-size:10px;color:var(--aerial);">AWAY</span>
+        <span class="score-num" id="awayScore">0</span>
+      </div>
+      <div class="chess-round">ROUND <span id="chessRound">1</span></div>
+      <div class="turn-indicator" style="margin-left:12px;">
+        <div class="turn-dot" id="turnDot" style="background:var(--teal);"></div>
+        <span id="turnLabel" style="font-size:11px;color:var(--muted);">HOME</span>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <div id="chessBoard"></div>
+    </div>
+
+    <div>
+      <div class="prompt-label">Cure-API Prompt</div>
+      <div class="prompt-box" id="promptBox">— select a piece to generate prompt —</div>
+    </div>
+  </div>
+
+  <!-- MOTHBLAST PANEL -->
+  <div class="panel-moth" id="mothPanel">
+    <div class="moth-hud">
+      <div class="moth-title">MOTHBLAST</div>
+      <div class="moth-stats">
+        <div class="stat">
+          <div class="stat-label">ROUND</div>
+          <div class="stat-val luna" id="mbRound">1</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">SHOTS</div>
+          <div class="stat-val" id="mbShots">20</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">SCORE</div>
+          <div class="stat-val teal" id="mbScore">0</div>
+        </div>
+      </div>
+      <button class="target-btn target-0 active" id="targetBtn" onclick="toggleTarget()">TARGET: |0⟩</button>
+    </div>
+    <div class="timer-bar-wrap"><div id="timerBar" style="width:100%"></div></div>
+    <canvas id="arenaCanvas"></canvas>
+    <div class="round-flash" id="roundFlash">ROUND CLEAR</div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CHESS
+// ═══════════════════════════════════════════════════════════
+const GATE_INFO = [
+  { gate:'CNOT', num:'#0', sym:'⊕', label:'CNOT' },
+  { gate:'H',    num:'#1', sym:'H',  label:'Hadamard' },
+  { gate:'X',    num:'#2', sym:'X',  label:'Bit Flip' },
+  { gate:'RY',   num:'#3', sym:'RY', label:'Rotation' },
+  { gate:'SWAP', num:'#4', sym:'↔',  label:'SWAP' },
+  { gate:'M',    num:'#5', sym:'M',  label:'Measure' },
+];
+
+// piece type index matches GATE_INFO
+const HOME = 'home', AWAY = 'away';
+
+// initial board state: null = empty, {team, type} = piece
+// type: 0=King(CNOT) 1=Queen(H) 2=Rook(X) 3=Bishop(RY) 4=Knight(SWAP) 5=Pawn(M)
+function initChessBoard() {
+  const b = Array.from({length:8}, () => Array(8).fill(null));
+  const backRow = [2,4,3,0,1,3,4,2];
+  for (let c=0;c<8;c++) {
+    b[0][c] = {team:AWAY, type:backRow[c]};
+    b[1][c] = {team:AWAY, type:5};
+    b[6][c] = {team:HOME, type:5};
+    b[7][c] = {team:HOME, type:backRow[c]};
+  }
+  return b;
+}
+
+let board = initChessBoard();
+let selected = null; // {row,col}
+let currentTurn = HOME;
+let homeScore = 0, awayScore = 0, chessRound = 1;
+
+function renderChessBoard() {
+  const el = document.getElementById('chessBoard');
+  el.innerHTML = '';
+  for (let r=0;r<8;r++) {
+    for (let c=0;c<8;c++) {
+      const sq = document.createElement('div');
+      sq.className = 'sq ' + ((r+c)%2===0?'dark':'light');
+      sq.dataset.r = r; sq.dataset.c = c;
+
+      if (selected) {
+        if (selected.row===r && selected.col===c) sq.classList.add('selected');
+        else if (board[r][c] === null) sq.classList.add('valid-move');
+      }
+
+      const p = board[r][c];
+      if (p) {
+        const info = GATE_INFO[p.type];
+        const pd = document.createElement('div');
+        pd.className = 'piece piece-' + p.team;
+        pd.innerHTML = `<span class="piece-num">${info.num}</span><span class="piece-sym">${info.sym}</span><span class="piece-gate">${info.gate}</span>`;
+        sq.appendChild(pd);
+      }
+
+      sq.addEventListener('click', onSquareClick);
+      el.appendChild(sq);
+    }
+  }
+}
+
+function onSquareClick(e) {
+  const r = +e.currentTarget.dataset.r;
+  const c = +e.currentTarget.dataset.c;
+  const p = board[r][c];
+
+  if (!selected) {
+    // Select own piece
+    if (p && p.team === currentTurn) {
+      selected = {row:r,col:c};
+      renderChessBoard();
+      updatePromptPreview(r,c,p);
+    }
+  } else {
+    if (selected.row===r && selected.col===c) {
+      // Deselect
+      selected = null;
+      renderChessBoard();
+      return;
+    }
+    const sp = board[selected.row][selected.col];
+    if (p && p.team === currentTurn) {
+      // Switch selection
+      selected = {row:r,col:c};
+      renderChessBoard();
+      updatePromptPreview(r,c,p);
+      return;
+    }
+    // Move
+    const captured = board[r][c];
+    board[r][c] = sp;
+    board[selected.row][selected.col] = null;
+
+    if (captured) {
+      if (captured.team===AWAY) homeScore++;
+      else awayScore++;
+      document.getElementById('homeScore').textContent = homeScore;
+      document.getElementById('awayScore').textContent = awayScore;
+      // Flash
+      const sq = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (sq) { sq.classList.add('flash'); setTimeout(()=>sq.classList.remove('flash'),300); }
+    }
+
+    // Generate prompt
+    const angle = +(Math.random()*360).toFixed(2);
+    const qubit = r*8+c;
+    const info = GATE_INFO[sp.type];
+    const prompt = JSON.stringify({gate:info.gate, qubit:qubit, angle:angle, backend:'ibm_marrakesh'});
+    document.getElementById('promptBox').textContent = prompt;
+
+    // Switch turn
+    selected = null;
+    currentTurn = currentTurn===HOME ? AWAY : HOME;
+    document.getElementById('turnDot').style.background = currentTurn===HOME ? 'var(--teal)' : 'var(--aerial)';
+    document.getElementById('turnLabel').textContent = currentTurn.toUpperCase();
+
+    // AI: auto-move one AWAY piece after a delay
+    if (currentTurn === AWAY) setTimeout(aiMove, 500);
+
+    renderChessBoard();
+  }
+}
+
+function updatePromptPreview(r,c,p) {
+  const info = GATE_INFO[p.type];
+  const angle = +(Math.random()*360).toFixed(2);
+  document.getElementById('promptBox').textContent =
+    `{"gate":"${info.gate}","qubit":${r*8+c},"angle":${angle},"backend":"ibm_marrakesh"} ← ${info.label}`;
+}
+
+function aiMove() {
+  const awayPieces = [];
+  for (let r=0;r<8;r++) for(let c=0;c<8;c++) if (board[r][c]&&board[r][c].team===AWAY) awayPieces.push({r,c});
+  if (!awayPieces.length) return;
+  const src = awayPieces[Math.floor(Math.random()*awayPieces.length)];
+  // find valid destinations (empty or home piece)
+  const dests = [];
+  for (let r=0;r<8;r++) for(let c=0;c<8;c++) {
+    if (!(r===src.r&&c===src.c) && (!board[r][c]||board[r][c].team===HOME)) dests.push({r,c});
+  }
+  if (!dests.length) { currentTurn=HOME; renderChessBoard(); return; }
+  const dst = dests[Math.floor(Math.random()*dests.length)];
+  const captured = board[dst.r][dst.c];
+  board[dst.r][dst.c] = board[src.r][src.c];
+  board[src.r][src.c] = null;
+  if (captured && captured.team===HOME) {
+    awayScore++;
+    document.getElementById('awayScore').textContent = awayScore;
+  }
+  currentTurn = HOME;
+  document.getElementById('turnDot').style.background='var(--teal)';
+  document.getElementById('turnLabel').textContent='HOME';
+  renderChessBoard();
+}
+
+renderChessBoard();
+
+// ═══════════════════════════════════════════════════════════
+// MOTHBLAST
+// ═══════════════════════════════════════════════════════════
+const canvas = document.getElementById('arenaCanvas');
+const ctx = canvas.getContext('2d');
+
+let mbRound = 1, mbShots = 20, mbScore = 0;
+let targetState = 0; // 0=|0⟩teal 1=|1⟩orange
+let mbRunning = true;
+let roundTimer = 30; // seconds
+let lastTimestamp = null;
+let orbs = [];
+let beams = [];
+let particles = [];
+let stars = [];
+let fairyAnim = 0; // hover phase
+let fairyShoot = 0; // lean phase (0=normal)
+
+function initStars(w,h) {
+  stars = Array.from({length:40}, ()=>({
+    x: Math.random()*w, y: Math.random()*h,
+    r: .4+Math.random()*1.2, o: .08+Math.random()*.25
+  }));
+}
+
+function spawnOrbs(count) {
+  orbs = [];
+  const w = canvas.width, h = canvas.height;
+  for (let i=0;i<count;i++) {
+    orbs.push({
+      x: 60+Math.random()*(w-120),
+      y: 100+Math.random()*(h-160),
+      phase: Math.random()*Math.PI*2,
+      phaseY: Math.random()*Math.PI*2,
+      freqX: .3+Math.random()*.4,
+      freqY: .25+Math.random()*.35,
+      ampX: 25+Math.random()*35,
+      ampY: 20+Math.random()*30,
+      cx: 80+Math.random()*(w-160),
+      cy: 110+Math.random()*(h-180),
+      colorPhase: Math.random()*Math.PI*2,
+      colorSpeed: .02+Math.random()*.03,
+      collapsed: false,
+      collapseColor: null,
+      collapseProg: 0,
+      flash: 0,
+      r: 12,
+    });
+  }
+}
+
+function toggleTarget() {
+  targetState = 1-targetState;
+  const btn = document.getElementById('targetBtn');
+  btn.textContent = targetState===0 ? 'TARGET: |0⟩' : 'TARGET: |1⟩';
+  btn.className = 'target-btn ' + (targetState===0?'target-0':'target-1') + ' active';
+}
+
+function resizeCanvas() {
+  const panel = document.getElementById('mothPanel');
+  const hud = document.querySelector('.moth-hud');
+  const timerWrap = document.querySelector('.timer-bar-wrap');
+  const w = panel.clientWidth;
+  const h = panel.clientHeight - hud.clientHeight - timerWrap.clientHeight;
+  if (w !== canvas.width || h !== canvas.height) {
+    canvas.width = w; canvas.height = Math.max(h, 200);
+    initStars(canvas.width, canvas.height);
+    if (!orbs.length) spawnOrbs(8+mbRound);
+    else {
+      orbs.forEach(o => { o.cx = 80+Math.random()*(w-160); o.cy=110+Math.random()*(Math.max(h,200)-180); });
+    }
+  }
+}
+
+canvas.addEventListener('click', (e) => {
+  if (mbShots <= 0) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+  mbShots--;
+  document.getElementById('mbShots').textContent = mbShots;
+  fairyShoot = 1.0;
+
+  // Fairy position
+  const fx = canvas.width/2, fy = 60;
+
+  // Create beam
+  const beam = { x1:fx, y1:fy, x2:mx, y2:my, prog:0, hit:false };
+  beams.push(beam);
+
+  // Check orb collision
+  let hitOrb = null;
+  for (const o of orbs) {
+    if (o.collapsed) continue;
+    const dist = Math.hypot(o.x - mx, o.y - my);
+    if (dist < 36) { hitOrb = o; break; }
+  }
+
+  if (hitOrb) {
+    beam.hit = true;
+    beam.hitOrb = hitOrb;
+    const result = Math.random() < .5 ? 0 : 1;
+    setTimeout(()=>{
+      hitOrb.collapsed = true;
+      hitOrb.collapseColor = result===0 ? '#4fc3c8' : '#e8832a';
+      hitOrb.collapseProg = 0;
+      hitOrb.flash = 1.0;
+      if (result === targetState) {
+        mbScore++;
+        document.getElementById('mbScore').textContent = mbScore;
+      }
+      // Particles
+      for (let i=0;i<8;i++) {
+        const angle = (i/8)*Math.PI*2;
+        particles.push({
+          x: hitOrb.x, y: hitOrb.y,
+          vx: Math.cos(angle)*2.5, vy: Math.sin(angle)*2.5,
+          color: hitOrb.collapseColor,
+          life: 1.0,
+        });
+      }
+    }, 120);
+  }
+
+  if (mbShots <= 0) setTimeout(nextRound, 600);
+});
+
+function nextRound() {
+  mbRound++;
+  mbShots = 20;
+  roundTimer = 30;
+  document.getElementById('mbRound').textContent = mbRound;
+  document.getElementById('mbShots').textContent = mbShots;
+
+  const flash = document.getElementById('roundFlash');
+  flash.textContent = 'ROUND ' + mbRound;
+  flash.classList.remove('show');
+  void flash.offsetWidth;
+  flash.classList.add('show');
+
+  const count = Math.min(8 + mbRound, 15);
+  spawnOrbs(count);
+  document.getElementById('chessRound').textContent = mbRound;
+}
+
+function drawFairy(t) {
+  const cx = canvas.width/2;
+  const hover = Math.sin(t * .0012) * 6;
+  const lean = fairyShoot > 0 ? fairyShoot * 10 : 0;
+  const fy = 42 + hover;
+
+  ctx.save();
+  ctx.translate(cx, fy);
+  if (lean) ctx.rotate(lean * .025);
+
+  // Wings
+  const wingFlap = Math.sin(t * .006) * .4;
+  ctx.save();
+  ctx.globalAlpha = .55;
+  // Left wing
+  ctx.beginPath();
+  ctx.ellipse(-18, 2, 18, 9, -0.5+wingFlap, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(206,147,216,.5)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(206,147,216,.8)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Right wing
+  ctx.beginPath();
+  ctx.ellipse(18, 2, 18, 9, 0.5-wingFlap, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // Body
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 7, 10, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#ce93d8';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(206,147,216,.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Hair (3 gold circles)
+  [-5,0,5].forEach(dx => {
+    ctx.beginPath();
+    ctx.arc(dx, -11, 3.5, 0, Math.PI*2);
+    ctx.fillStyle = '#e8b84b';
+    ctx.fill();
+  });
+  // Head
+  ctx.beginPath();
+  ctx.arc(0, -7, 6, 0, Math.PI*2);
+  ctx.fillStyle = '#ce93d8';
+  ctx.fill();
+  // Eyes
+  [-2.5,2.5].forEach(dx => {
+    ctx.beginPath(); ctx.arc(dx,-7,1.2,0,Math.PI*2);
+    ctx.fillStyle='#040d1c'; ctx.fill();
+  });
+  // Glow
+  ctx.globalAlpha = .15;
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, 0, Math.PI*2);
+  ctx.fillStyle = '#ce93d8';
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function drawOrbs(t) {
+  for (const o of orbs) {
+    if (!o.collapsed) {
+      o.x = o.cx + Math.sin(t * .001 * o.freqX + o.phase) * o.ampX;
+      o.y = o.cy + Math.sin(t * .001 * o.freqY + o.phaseY) * o.ampY;
+      o.colorPhase += o.colorSpeed;
+      const blend = Math.sin(o.colorPhase)*.5+.5;
+      // Superposition color
+      const r = Math.round(79*(1-blend)+232*blend);
+      const g = Math.round(195*(1-blend)+131*blend);
+      const b2 = Math.round(200*(1-blend)+42*blend);
+      const col = `rgb(${r},${g},${b2})`;
+      const alpha = .5+blend*.4;
+      // Glow
+      ctx.globalAlpha = alpha*.3;
+      ctx.beginPath(); ctx.arc(o.x,o.y,22,0,Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+      // Main
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(o.x,o.y,12,0,Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // Collapse animation
+      if (o.collapseProg < 1) o.collapseProg = Math.min(1, o.collapseProg + .04);
+      const p = o.collapseProg;
+      const scale = p < .5 ? 1 + p*.8 : 1 + (1-p)*.4;
+      const alpha = o.flash > 0 ? 1 : .85;
+      if (o.flash > 0) o.flash = Math.max(0, o.flash - .05);
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 12*scale, 0, Math.PI*2);
+      ctx.fillStyle = o.collapseColor;
+      ctx.fill();
+      // Ring
+      ctx.globalAlpha = (1-p)*.7;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 12+p*20, 0, Math.PI*2);
+      ctx.strokeStyle = o.collapseColor; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawBeams(t) {
+  for (let i = beams.length-1; i>=0; i--) {
+    const b = beams[i];
+    b.prog = Math.min(1, b.prog + .08);
+    const ex = b.x1 + (b.x2-b.x1)*b.prog;
+    const ey = b.y1 + (b.y2-b.y1)*b.prog;
+    ctx.globalAlpha = (1-b.prog)*0.9+0.1;
+    ctx.beginPath();
+    ctx.moveTo(b.x1, b.y1);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = b.hit ? '#ce93d8' : 'rgba(206,147,216,.5)';
+    ctx.lineWidth = b.hit ? 2 : 1;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (b.prog >= 1) beams.splice(i,1);
+  }
+}
+
+function drawParticles() {
+  for (let i=particles.length-1;i>=0;i--) {
+    const p = particles[i];
+    p.x+=p.vx; p.y+=p.vy;
+    p.vx*=.9; p.vy*=.9;
+    p.life-=.04;
+    if (p.life<=0){particles.splice(i,1);continue;}
+    ctx.globalAlpha=p.life*.9;
+    ctx.beginPath();ctx.arc(p.x,p.y,3*p.life,0,Math.PI*2);
+    ctx.fillStyle=p.color;ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawStars() {
+  for (const s of stars) {
+    ctx.globalAlpha=s.o;
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle='white';ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+let lastTimerTick = null;
+function updateTimer(ts) {
+  if (!lastTimerTick) { lastTimerTick=ts; return; }
+  const dt = (ts-lastTimerTick)/1000;
+  lastTimerTick=ts;
+  roundTimer = Math.max(0, roundTimer-dt);
+  document.getElementById('timerBar').style.width = (roundTimer/30*100)+'%';
+  if (roundTimer<=0) nextRound();
+}
+
+function mbLoop(ts) {
+  resizeCanvas();
+  if (fairyShoot>0) fairyShoot=Math.max(0,fairyShoot-.04);
+  updateTimer(ts);
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawStars();
+  drawBeams(ts);
+  drawOrbs(ts);
+  drawParticles();
+  drawFairy(ts);
+  requestAnimationFrame(mbLoop);
+}
+
+// Initial spawn
+setTimeout(()=>{ resizeCanvas(); spawnOrbs(8); requestAnimationFrame(mbLoop); }, 50);
+window.addEventListener('resize', ()=>{ resizeCanvas(); });
+</script>

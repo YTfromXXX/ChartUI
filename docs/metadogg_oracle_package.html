@@ -1,0 +1,360 @@
+<title>METADOGG-ORACLE-API Package</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#08090f;--surf:#0f1118;--surf2:#161a24;--surf3:#1e2330;
+  --border:#22283a;--fg:#e8ecf8;--sub:#8890b0;
+  --cyan:#22b8c8;--orange:#f29b30;--purple:#9b55c0;
+  --green:#3ecf8e;--red:#f06a6a;--gold:#c8a84a;
+  --dim-cyan:color-mix(in srgb,#22b8c8 15%,#0f1118);
+  --dim-gold:color-mix(in srgb,#c8a84a 15%,#0f1118);
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f0f4f8;--surf:#fff;--surf2:#e8ecf5;--surf3:#dde3f0;--border:#d0d5e8;--fg:#1a1e2e;--sub:#60698a;--dim-cyan:color-mix(in srgb,#22b8c8 10%,#fff);--dim-gold:color-mix(in srgb,#c8a84a 10%,#fff);color-scheme:light;}}
+:root[data-theme="light"]{--bg:#f0f4f8;--surf:#fff;--surf2:#e8ecf5;--surf3:#dde3f0;--border:#d0d5e8;--fg:#1a1e2e;--sub:#60698a;--dim-cyan:color-mix(in srgb,#22b8c8 10%,#fff);--dim-gold:color-mix(in srgb,#c8a84a 10%,#fff);color-scheme:light;}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.65;
+  padding:0 max(20px,env(safe-area-inset-right,0px)) 80px max(20px,env(safe-area-inset-left,0px));}
+
+/* cover */
+.cover{min-height:260px;display:flex;flex-direction:column;justify-content:flex-end;padding:48px 0 36px;border-bottom:1px solid var(--border);margin-bottom:48px;position:relative;overflow:hidden;}
+.cover-bg{position:absolute;inset:0;pointer-events:none;}
+.cover-eyebrow{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);font-weight:600;margin-bottom:12px;}
+.cover-title{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.6rem,5vw,2.4rem);font-weight:800;margin:0 0 10px;line-height:1.1;text-wrap:balance;}
+.cover-title span{color:var(--gold);}
+.cover-sub{color:var(--sub);font-size:.9rem;max-width:52ch;}
+.cover-date{position:absolute;top:48px;right:0;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--sub);}
+
+/* section */
+h2{font-family:'Space Grotesk',sans-serif;font-size:1.15rem;font-weight:700;margin:52px 0 16px;padding-top:52px;border-top:1px solid var(--border);text-wrap:balance;}
+h2:first-of-type{border-top:none;padding-top:0;margin-top:0;}
+h3{font-family:'Space Grotesk',sans-serif;font-size:.92rem;font-weight:600;margin:24px 0 10px;color:var(--fg);}
+p{margin:0 0 14px;max-width:68ch;}
+
+/* arch diagram */
+.arch{display:flex;flex-direction:column;gap:4px;margin-bottom:28px;}
+.arch-row{display:flex;gap:8px;align-items:stretch;}
+.arch-layer{flex:1;border-radius:9px;padding:12px 16px;min-height:52px;display:flex;align-items:center;gap:12px;}
+.arch-layer.l1{background:color-mix(in srgb,var(--cyan) 12%,var(--surf2));border:1px solid color-mix(in srgb,var(--cyan) 25%,transparent);}
+.arch-layer.l2{background:color-mix(in srgb,var(--gold) 12%,var(--surf2));border:1px solid color-mix(in srgb,var(--gold) 25%,transparent);}
+.arch-layer.l3{background:color-mix(in srgb,var(--purple) 12%,var(--surf2));border:1px solid color-mix(in srgb,var(--purple) 25%,transparent);}
+.arch-layer.l4{background:color-mix(in srgb,var(--green) 12%,var(--surf2));border:1px solid color-mix(in srgb,var(--green) 25%,transparent);}
+.arch-layer.l5{background:color-mix(in srgb,var(--orange) 12%,var(--surf2));border:1px solid color-mix(in srgb,var(--orange) 25%,transparent);}
+.arch-num{font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:700;min-width:24px;text-align:center;}
+.l1 .arch-num{color:var(--cyan);}
+.l2 .arch-num{color:var(--gold);}
+.l3 .arch-num{color:var(--purple);}
+.l4 .arch-num{color:var(--green);}
+.l5 .arch-num{color:var(--orange);}
+.arch-name{font-weight:600;font-size:.85rem;}
+.arch-desc{font-size:.75rem;color:var(--sub);margin-top:1px;}
+.arch-arrow{display:flex;align-items:center;justify-content:center;color:var(--border);font-size:1.1rem;padding:0 4px;}
+
+/* bit map table */
+.bit-map{display:flex;flex-direction:column;gap:8px;margin-bottom:24px;}
+.bm-row{display:flex;align-items:center;gap:10px;}
+.bm-bits{display:flex;gap:3px;}
+.bit-cell{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:700;}
+.bc-a{background:color-mix(in srgb,var(--cyan) 20%,var(--surf2));color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 35%,transparent);}
+.bc-b{background:color-mix(in srgb,var(--orange) 20%,var(--surf2));color:var(--orange);border:1px solid color-mix(in srgb,var(--orange) 35%,transparent);}
+.bc-ev{background:color-mix(in srgb,var(--gold) 20%,var(--surf2));color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 35%,transparent);}
+.bc-ev.on{background:color-mix(in srgb,var(--green) 25%,var(--surf2));color:var(--green);border-color:var(--green);}
+.bm-label{font-size:.8rem;min-width:120px;}
+.bm-usage{font-size:.75rem;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+
+/* endpoint grid */
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:24px;}
+.ep-card{background:var(--surf2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;}
+.ep-method{font-family:'JetBrains Mono',monospace;font-size:.65rem;background:color-mix(in srgb,var(--cyan) 15%,transparent);color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 30%,transparent);border-radius:3px;padding:1px 6px;display:inline-block;margin-bottom:6px;}
+.ep-path{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--fg);display:block;margin-bottom:5px;font-weight:500;}
+.ep-desc{font-size:.78rem;color:var(--sub);}
+.ep-tag{font-size:.6rem;border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;margin-left:5px;}
+.et-oracle{background:color-mix(in srgb,var(--gold) 20%,transparent);color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);}
+.et-cure{background:color-mix(in srgb,var(--cyan) 20%,transparent);color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 30%,transparent);}
+
+/* multi-pair table */
+table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:.82rem;}
+th{text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:600;font-family:'Space Grotesk',sans-serif;}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+td:first-child{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--cyan);}
+tr:last-child td{border-bottom:none;}
+.td-ev{font-size:.72rem;font-family:'JetBrains Mono',monospace;}
+.td-ev span{margin-right:6px;}
+.ev-on{color:var(--green);}
+.ev-off{color:var(--border);}
+
+/* advice cards */
+.advice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px;}
+.adv-card{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+.adv-num{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--sub);margin-bottom:6px;}
+.adv-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:.88rem;margin-bottom:6px;}
+.adv-body{font-size:.8rem;color:var(--sub);line-height:1.6;}
+.adv-card.warn{border-color:color-mix(in srgb,var(--gold) 40%,transparent);}
+.adv-card.warn .adv-title{color:var(--gold);}
+.adv-card.ok .adv-title{color:var(--green);}
+.adv-card.info .adv-title{color:var(--cyan);}
+.adv-card.purple-c .adv-title{color:var(--purple);}
+
+/* task list */
+.task-section{display:flex;flex-direction:column;gap:6px;margin-bottom:24px;}
+.task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;}
+.task-item .ck{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;flex-shrink:0;margin-top:1px;}
+.task-pri{font-size:.62rem;border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0;}
+.p1{background:color-mix(in srgb,var(--red) 20%,transparent);color:var(--red);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);}
+.p2{background:color-mix(in srgb,var(--gold) 20%,transparent);color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);}
+.p3{background:color-mix(in srgb,var(--sub) 20%,transparent);color:var(--sub);border:1px solid color-mix(in srgb,var(--sub) 30%,transparent);}
+.task-text{font-size:.83rem;flex:1;}
+.task-text strong{font-family:'Space Grotesk',sans-serif;}
+
+/* callout */
+.callout{border-left:3px solid var(--cyan);background:color-mix(in srgb,var(--cyan) 7%,var(--surf));border-radius:0 8px 8px 0;padding:13px 16px;margin-bottom:18px;font-size:.87rem;}
+.callout.gold{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--surf));}
+.callout.purple{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 7%,var(--surf));}
+.callout.red{border-color:var(--red);background:color-mix(in srgb,var(--red) 7%,var(--surf));}
+.callout strong{font-family:'Space Grotesk',sans-serif;}
+
+/* cover svg bg */
+svg.arch-bg{position:absolute;inset:0;width:100%;height:100%;opacity:.07;}
+</style>
+
+<!-- COVER -->
+<div class="cover">
+  <svg class="arch-bg" viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <g id="apo"><circle r="12" fill="none" stroke="#22b8c8" stroke-width="1.2"/><circle r="5" fill="#22b8c8" opacity=".5"/>
+        <g id="sp"><line y1="-12" y2="-40" stroke="#22b8c8" stroke-width=".8"/><circle cy="-40" r="3.5" fill="#c8a84a"/></g>
+        <use href="#sp" transform="rotate(51.43)"/><use href="#sp" transform="rotate(102.86)"/>
+        <use href="#sp" transform="rotate(154.29)"/><use href="#sp" transform="rotate(205.71)"/>
+        <use href="#sp" transform="rotate(257.14)"/><use href="#sp" transform="rotate(308.57)"/>
+      </g>
+    </defs>
+    <use href="#apo" transform="translate(80,130) scale(2.2)"/>
+    <use href="#apo" transform="translate(400,130) scale(3)"/>
+    <use href="#apo" transform="translate(720,130) scale(2)"/>
+    <use href="#apo" transform="translate(240,60) scale(1.4)"/>
+    <use href="#apo" transform="translate(560,200) scale(1.6)"/>
+    <line x1="0" y1="260" x2="800" y2="260" stroke="#c8a84a" stroke-width=".5" opacity=".5"/>
+  </svg>
+  <div class="cover-date">2026-11-19 · Draft v1.0</div>
+  <div class="cover-eyebrow">会議配布パッケージ — MENTE Strategy</div>
+  <h1 class="cover-title">METADOGG-ORACLE-API<br><span>設計・統合・配布戦略</span></h1>
+  <p class="cover-sub">Cure-API（合成QPU基盤）を内部インフラとして、METADOGG-ORACLE-APIをマルチ通貨ペア予測プロダクトとして配布するアーキテクチャと今後のタスク提案。</p>
+</div>
+
+<!-- 1. POSITIONING -->
+<h2>1. プロダクト配置 — Cure-API が METADOGG を支える構造</h2>
+<p>Cure-APIは量子ランダム性の<strong>卸売インフラ</strong>。METADOGG-ORACLE-APIはその上に構築された<strong>小売プロダクト</strong>です。エンドユーザーはMETADOGGとしか会話せず、QPUの複雑さを意識しません。</p>
+
+<div class="arch">
+  <div class="arch-row">
+    <div class="arch-layer l1">
+      <div class="arch-num">L1</div>
+      <div><div class="arch-name">ibm_marrakesh / 合成QPU</div><div class="arch-desc">13 qubit H-gate · 量子ランダム性の源泉 · Round 4 証明書</div></div>
+    </div>
+  </div>
+  <div class="arch-arrow">↓ OpenQASM3 POST</div>
+  <div class="arch-row">
+    <div class="arch-layer l2">
+      <div class="arch-num">L2</div>
+      <div><div class="arch-name">Cure-API — 卸売インフラ</div><div class="arch-desc">qpu/run · qpu/select · qpu/create · nonce生成 · ノイズモデル</div></div>
+    </div>
+  </div>
+  <div class="arch-arrow">↓ counts + contract_nonce</div>
+  <div class="arch-row">
+    <div class="arch-layer l3">
+      <div class="arch-num">L3</div>
+      <div><div class="arch-name">METADOGG-ORACLE-API — 小売プロダクト</div><div class="arch-desc">/oracle/predict · /oracle/certify · /oracle/stream · 通貨ペア解釈レイヤー</div></div>
+    </div>
+  </div>
+  <div class="arch-arrow">↓ シグナル JSON + 証明書</div>
+  <div class="arch-row">
+    <div class="arch-layer l4">
+      <div class="arch-num">L4</div>
+      <div><div class="arch-name">FamiDance × PoledancerChart — デモ / UX 層</div><div class="arch-desc">ゲーム投票・BE/PEキャラ・チャートアニメ・コントローラー入力</div></div>
+    </div>
+  </div>
+  <div class="arch-arrow">↓ ユーザー行動</div>
+  <div class="arch-row">
+    <div class="arch-layer l5">
+      <div class="arch-num">L5</div>
+      <div><div class="arch-name">スマートコントラクト / デバイス署名層</div><div class="arch-desc">nonce オンチェーン · X-Player-Key · ゲーマーデバイス保護</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. BIT PARTITION -->
+<h2>2. 13ビット分割 — 複数通貨ペアへのマッピング</h2>
+<p>1回のQPUラウンドで生成される13ビットを通貨ペアごとにパーティションし、QPUコスト（shots数・課金）を最小化します。</p>
+
+<div class="bit-map">
+  <div class="bm-row">
+    <div class="bm-bits">
+      <div class="bit-cell bc-a">q0</div><div class="bit-cell bc-a">q1</div><div class="bit-cell bc-a">q2</div><div class="bit-cell bc-a">q3</div><div class="bit-cell bc-a">q4</div>
+    </div>
+    <div class="bm-label" style="color:var(--cyan)">USD/JPY シグナル</div>
+    <div class="bm-usage">スハル A ガイド (5bit) → ロング/ショート方向 × 5段階強度</div>
+  </div>
+  <div class="bm-row">
+    <div class="bm-bits">
+      <div class="bit-cell bc-b">q5</div><div class="bit-cell bc-b">q6</div><div class="bit-cell bc-b">q7</div><div class="bit-cell bc-b">q8</div><div class="bit-cell bc-b">q9</div>
+    </div>
+    <div class="bm-label" style="color:var(--orange)">EUR/USD シグナル</div>
+    <div class="bm-usage">リナリス B ガイド (5bit) → 方向 × 5段階強度</div>
+  </div>
+  <div class="bm-row">
+    <div class="bm-bits">
+      <div class="bit-cell bc-ev on">q10</div><div class="bit-cell bc-ev on">q11</div><div class="bit-cell bc-ev on">q12</div>
+    </div>
+    <div class="bm-label" style="color:var(--gold)">ポジション管理イベント</div>
+    <div class="bm-usage">q10=CAPTURE→追加エントリー　q11=CRASH→エグジット　q12=PASS→様子見</div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>拡張案 — 48口座への割り当て</strong><br>
+  48口座 = 13ビット × ラウンド番号 でセッションIDを生成。各口座に<code>round_num mod 48</code>の「ラウンド担当番号」を割り振ることで、QPU結果を48個のポジションに分散決定できます。同一ラウンドを使い回すのではなく、口座ごとに独立したnoneを持ちます。
+</div>
+
+<!-- 3. ORACLE API ENDPOINTS -->
+<h2>3. METADOGG-ORACLE-API エンドポイント設計</h2>
+<div class="ep-grid">
+  <div class="ep-card">
+    <span class="ep-method">GET</span><span class="ep-tag et-oracle">ORACLE</span>
+    <span class="ep-path">/oracle/predict/{symbol}</span>
+    <div class="ep-desc">指定通貨ペアのQPUシグナルを返す。内部でCure-API qpu/selectを呼び、ビット解釈→方向+強度に変換</div>
+  </div>
+  <div class="ep-card">
+    <span class="ep-method">POST</span><span class="ep-tag et-oracle">ORACLE</span>
+    <span class="ep-path">/oracle/certify</span>
+    <div class="ep-desc">トレード実行後にnonce+成果を提出。QPU証明書との一致を検証しオンチェーン記録へ転送</div>
+  </div>
+  <div class="ep-card">
+    <span class="ep-method">WS</span><span class="ep-tag et-oracle">ORACLE</span>
+    <span class="ep-path">/oracle/stream</span>
+    <div class="ep-desc">WebSocket ライブストリーム。ラウンドごとにシグナルJSONをプッシュ。FamiDance/ChartのAuto modeが購読</div>
+  </div>
+  <div class="ep-card">
+    <span class="ep-method">GET</span><span class="ep-tag et-oracle">ORACLE</span>
+    <span class="ep-path">/oracle/backtest/{symbol}</span>
+    <div class="ep-desc">過去ラウンドのbitstring × 相場データの相関ヒストグラム。ランダム性の確認用（予測精度ではない）</div>
+  </div>
+  <div class="ep-card">
+    <span class="ep-method">POST</span><span class="ep-tag et-cure">CURE</span>
+    <span class="ep-path">/qpu/select</span>
+    <div class="ep-desc">METADOGG内部からCure-APIを呼ぶ。最良バックエンドを自動選択、nonce返却</div>
+  </div>
+  <div class="ep-card">
+    <span class="ep-method">POST</span><span class="ep-tag et-cure">CURE</span>
+    <span class="ep-path">/qpu/create</span>
+    <div class="ep-desc">カスタマーがnoise_modelを指定して専用合成QPUを作成。ゲームDC向けカスタムオラクル</div>
+  </div>
+</div>
+
+<!-- 4. MULTI-PAIR TABLE -->
+<h2>4. マルチ銘柄 × ポジション シナリオ表</h2>
+<table>
+  <tr><th>銘柄</th><th>ビット割当</th><th>シグナル生成式</th><th>イベント適用</th><th>48口座への展開</th></tr>
+  <tr>
+    <td>USD/JPY</td>
+    <td>q0–q4 (5bit)</td>
+    <td>active_A_count ≥3 → ロング / &lt;3 → ショート<br>強度 = active_A_count / 5</td>
+    <td class="td-ev"><span class="ev-on">q10 → 追加</span> <span class="ev-on">q11 → 撤退</span> <span class="ev-off">q12 → Hold</span></td>
+    <td>口座01–16（rounds 1–16担当）</td>
+  </tr>
+  <tr>
+    <td>EUR/USD</td>
+    <td>q5–q9 (5bit)</td>
+    <td>active_B_count ≥3 → ロング / &lt;3 → ショート<br>強度 = active_B_count / 5</td>
+    <td class="td-ev"><span class="ev-on">q10 → 追加</span> <span class="ev-off">q11 → Hold</span> <span class="ev-on">q12 → 撤退</span></td>
+    <td>口座17–32（rounds 17–32担当）</td>
+  </tr>
+  <tr>
+    <td>BTC/USD (拡張)</td>
+    <td>q0–q12 全体</td>
+    <td>teleport_angle_A(°) → 0–180=ロング, 180–360=ショート<br>強度 = |sin(angle)|</td>
+    <td class="td-ev"><span class="ev-on">q10/q11/q12 全ON → フルポジ</span></td>
+    <td>口座33–48（rounds 33–48担当）</td>
+  </tr>
+</table>
+
+<!-- 5. DEVELOPER ADVICE -->
+<h2>5. 開発者視点のアドバイス — 6項目</h2>
+<div class="advice-grid">
+  <div class="adv-card ok">
+    <div class="adv-num">01</div>
+    <div class="adv-title">強みは「認証可能なランダム性」</div>
+    <div class="adv-body">QPU結果の価値は<em>予測精度ではなく証明可能性</em>にあります。sha256(round+bits+qpu_s)のnonceにより、「この判断がこのラウンドに基づく」という事後検証が可能。これはどんなAI予測モデルも持てない強みです。マーケティング軸はここ。</div>
+  </div>
+  <div class="adv-card info">
+    <div class="adv-num">02</div>
+    <div class="adv-title">Cure-APIをステートレスに保つ</div>
+    <div class="adv-body">各 /oracle/predict 呼び出しは独立したQPUラウンドで完結させること。セッション状態をサーバーに持たせない。round_numのキャッシュ（同一ラウンドの再利用可）はOKだが、ポジション状態の保持はクライアント側責務にする。</div>
+  </div>
+  <div class="adv-card info">
+    <div class="adv-num">03</div>
+    <div class="adv-title">1ラウンド13bit = 3ペア同時処理</div>
+    <div class="adv-body">shots 500回のQPUラウンドを1回実行するだけで、USD/JPY・EUR/USD・BTC/USDの3ペア分シグナルが同時に生成できます。QPUコスト÷3の効率化。毎ペア個別にAPIを叩く設計は避けること。</div>
+  </div>
+  <div class="adv-card warn">
+    <div class="adv-num">04</div>
+    <div class="adv-title">「予測」ではなく「量子認証シグナル」として訴求</div>
+    <div class="adv-body">H ゲート = 完全な50/50。QPU単体に相場予測力はありません。「このタイミングで量子回路がq10を出した」という<em>事実の記録</em>がプロダクト価値。「予測システム」と謳うと金融規制リスク。「認証済みランダムシグナル」として設計・マーケティングすること。</div>
+  </div>
+  <div class="adv-card purple-c">
+    <div class="adv-num">05</div>
+    <div class="adv-title">FamiDance/ChartはAPIのデモであって製品ではない</div>
+    <div class="adv-body">現在のFamiDance×PoledancerChartはCure-APIの視覚的デモとして最高です。ただし本番METADOGG-ORACLE-APIはJSONレスポンスで完結すべき。ビジュアライゼーションは別サービス（SDK付属のダッシュボード）として分離することで、API自体の軽量性・汎用性を保てます。</div>
+  </div>
+  <div class="adv-card ok">
+    <div class="adv-num">06</div>
+    <div class="adv-title">アポトソーム幾何 = ブランドシステム化</div>
+    <div class="adv-body">7回対称ペタル構造を証明書の「印章」として使用することを推奨します。QPU証明書PDF・契約書ヘッダー・APIドキュメントカバーに同一のアポトソームSVGを配置。幾何学的一貫性がブランド信頼性を高め、偽造困難な視覚的アイデンティティになります。</div>
+  </div>
+</div>
+
+<div class="callout red">
+  <strong>重要な免責設計（法的保護）</strong><br>
+  METADOGG-ORACLE-APIが提供するのは「量子回路測定結果に基づく<strong>認証済みランダムシグナル</strong>」であり、投資助言・相場予測・金融サービスではありません。すべてのエンドポイントレスポンスに<code>"disclaimer": "quantum_random_signal_not_financial_advice"</code>フィールドを必須で含めること。スマートコントラクトの用途（デバイス認証・ゲーム乱数）では問題なし。
+</div>
+
+<!-- 6. NEXT TASKS -->
+<h2>6. 今後のタスク提案 — 優先順位付き</h2>
+<div class="task-section">
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p1">P1</span>
+    <div class="task-text"><strong>METADOGG-ORACLE-API スケルトン実装</strong> — /oracle/predict/{symbol} エンドポイント。内部でCure-APIを呼び、ビット→方向+強度に変換してJSON返却。cure_api/server.pyの上に薄いルーターとして追加</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p1">P1</span>
+    <div class="task-text"><strong>アポトソーム印章SVGライブラリ</strong> — 7回対称SVGをパラメータ化（半径・色・活性化ビット数）し、QPU証明書の印章・ドキュメントヘッダー・API favicon として使い回せるコンポーネント化</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p1">P1</span>
+    <div class="task-text"><strong>FamiDance を /oracle/stream に接続</strong> — WebSocketまたはServer-Sent-Eventsで METADOGG-ORACLE-APIからリアルタイムシグナルを受信し、FamiDanceのダンス＋PoledancerのBE/PEアニメを自動更新</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p2">P2</span>
+    <div class="task-text"><strong>48口座シミュレーター完全版</strong> — round_num mod 48 の口座割り当てロジック実装。各口座の累積P&L・nonce履歴・ラウンド担当表をダッシュボード化。USD/JPY × EUR/USD × BTC/USDの3ペア同時表示</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p2">P2</span>
+    <div class="task-text"><strong>Benchmarkポップアップ → 正式ランディングページ化</strong> — 4バックエンドのパラメータ比較を App Store 風製品ページとして独立させ、Cure-API の販売ページとして公開できる形に昇華</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p3">P3</span>
+    <div class="task-text"><strong>/oracle/certify スマートコントラクトブリッジ</strong> — Solidity/WASMコントラクトのインターフェース定義。nonce検証ロジックをオンチェーン移植。ゲーマーデバイス署名（X-Player-Key）との結合テスト</div>
+  </div>
+  <div class="task-item">
+    <div class="ck"></div><span class="task-pri p3">P3</span>
+    <div class="task-text"><strong>バスボム溶解アニメーション → QPU counts 拡散マッピング</strong> — アポトソーム幾何のバスボム版：counts ヒストグラムが溶けて拡散するアニメ。証明書配布時の「開封演出」として使用</div>
+  </div>
+</div>
+
+<!-- 7. MENTE MEMO -->
+<h2>7. MENTE 洞察メモ — このシステムが欲しがっているもの</h2>
+<div class="callout purple">
+  <strong>METADOGGが本質的に求めているもの</strong><br><br>
+  「<em>観測が介入になる</em>」という量子的性質をそのまま商品にすること。ゲーマーのボタン押下・トレーダーの金額投入・投票者のクリック、すべてが「量子回路を観測する行為」として証明書に記録される。ユーザーは「自分が動かしている」と感じ、システムは「認証可能な行為の記録」を蓄積する。この二重性がMETADOGG-ORACLE-APIの競合優位性です。<br><br>
+  次フェーズに必要なのは、この「観測＝介入＝記録」の三位一体を、エンドポイント設計・ビジュアル・法的免責の三層すべてで一貫させることです。
+</div>

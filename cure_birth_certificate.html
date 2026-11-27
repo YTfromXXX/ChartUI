@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>量子ベイベー誕生証明書 — eec6d63c3dba2b2e</title>
+<style>
+  :root {
+    --bg:#0d1040; --gold:#f5c542; --cyan:#22b8c8; --orange:#f29b30;
+    --luna:#e8e8ff; --text:#c8d0f8; --dim:#5a6090; --violet:#c084fc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:monospace;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;
+       padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px))
+               max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  .card{max-width:480px;width:100%;border:2px solid var(--gold);
+        border-radius:50% 50% 48% 48% / 10% 10% 8% 8%;
+        padding:40px 32px 36px;text-align:center;
+        background:radial-gradient(ellipse at 38% 32%, #1e2a7a 0%, var(--bg) 70%);
+        box-shadow:0 0 48px #f5c54240}
+  .gold-cap{width:56px;height:56px;border-radius:50%;
+            background:radial-gradient(circle at 35% 30%,#ffe066,#c89a10);
+            margin:0 auto 20px;box-shadow:0 2px 12px #f5c54260}
+  h1{color:var(--gold);font-size:1em;letter-spacing:.12em;margin-bottom:4px}
+  .subtitle{color:var(--dim);font-size:.75em;margin-bottom:24px}
+  .sphere{margin:0 auto 24px;display:block;filter:drop-shadow(0 0 16px #22b8c840)}
+  .cert-id{font-size:1.3em;color:var(--gold);letter-spacing:.18em;margin-bottom:6px}
+  .born-at{color:var(--dim);font-size:.8em;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;font-size:.8em;text-align:left;margin-bottom:20px}
+  td{padding:4px 8px;border-bottom:1px solid #1e2060}
+  td:first-child{color:var(--dim);width:46%}
+  .bits{word-break:break-all;font-size:.75em;color:var(--cyan);letter-spacing:.05em;
+        border:1px solid #1e3060;padding:8px;border-radius:4px;margin-bottom:20px}
+  .token-label{color:var(--dim);font-size:.75em;margin-bottom:4px}
+  .token{font-size:1.1em;color:var(--gold);letter-spacing:.2em;padding:10px;
+         border:1px solid var(--gold);border-radius:6px;background:#0a0d30}
+  .footer{color:var(--dim);font-size:.7em;margin-top:24px;line-height:1.6}
+  .sig{font-style:italic;color:var(--luna);font-size:.8em;margin-top:12px}
+
+  /* ── Merkle receipt ───────────────────────────────────────────── */
+  .receipt-box{margin-top:28px;border:1px solid #22b8c840;border-radius:10px;
+               padding:18px 16px;background:#0a0d30;text-align:left}
+  .receipt-title{color:var(--gold);font-size:.75em;letter-spacing:.12em;margin-bottom:12px}
+  .receipt-sig-code{font-size:1em;color:var(--gold);font-weight:700;letter-spacing:.1em}
+  .receipt-label{font-size:.7em;color:var(--dim);margin-bottom:3px}
+  .receipt-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .receipt-stat{flex:1;min-width:120px}
+  .hash-box{font-size:.68em;word-break:break-all;border:1px solid #22b8c830;
+            padding:6px 8px;border-radius:5px;background:#060918;color:var(--cyan)}
+  .leaf-box{font-size:.68em;word-break:break-all;border:1px solid #c084fc30;
+            padding:6px 8px;border-radius:5px;background:#060918;color:var(--luna)}
+  .proof-step{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .proof-idx{color:var(--dim);font-size:.7em;width:18px;flex-shrink:0}
+  .proof-hash{color:var(--cyan);font-size:.68em;word-break:break-all;flex:1}
+  .algo-table td{padding:3px 6px;border-bottom:1px solid #1e2060;font-size:.75em}
+  .algo-table td:first-child{color:var(--dim)}
+  details summary{font-size:.7em;color:var(--dim);cursor:pointer;margin-top:8px}
+  details pre{font-size:.62em;color:var(--cyan);overflow-x:auto;padding:8px;
+              background:#060918;border-radius:5px;margin-top:6px;
+              white-space:pre-wrap;word-break:break-all}
+
+  /* ── verify button ────────────────────────────────────────────── */
+  .verify-btn{margin-top:10px;padding:8px 16px;border-radius:7px;
+              border:1px solid #22b8c850;background:rgba(34,184,200,.07);
+              color:var(--cyan);font-size:.75em;cursor:pointer;font-family:monospace;
+              width:100%;letter-spacing:.05em;transition:background .15s}
+  .verify-btn:hover{background:rgba(34,184,200,.14)}
+  .verify-result{margin-top:7px;font-size:.72em;padding:7px 10px;
+                 border-radius:5px;display:none}
+  .verify-result.ok  {background:rgba(34,184,200,.1);color:var(--cyan);border:1px solid #22b8c850;}
+  .verify-result.fail{background:rgba(244,63,94,.08);color:#f43f5e;border:1px solid #f43f5e40;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="gold-cap"></div>
+  <h1>量子ベイベー誕生証明書</h1>
+  <div class="subtitle">MothBlast — 永遠空間 QPU 認証</div>
+
+  <svg class="sphere" xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+  <defs>
+    <radialGradient id="sphere" cx="40%" cy="35%">
+      <stop offset="0%"   stop-color="#2a3a8a"/>
+      <stop offset="100%" stop-color="#0d1040"/>
+    </radialGradient>
+  </defs>
+  <circle cx="160" cy="160" r="158" fill="url(#sphere)" stroke="#f5c542" stroke-width="2"/>
+  <circle cx="160.0" cy="41.6" r="14.4" fill="#22b8c8" opacity="0.95"/>
+  <text x="160.0" y="22.2" text-anchor="middle" font-size="9" font-family="monospace" fill="#22b8c8" opacity="0.9">★</text>
+  <circle cx="272.6" cy="123.4" r="8.0" fill="#22b8c8" opacity="0.35"/>
+  <text x="293.9" y="119.5" text-anchor="middle" font-size="9" font-family="monospace" fill="#22b8c8" opacity="0.4">·</text>
+  <circle cx="229.6" cy="255.8" r="8.0" fill="#22b8c8" opacity="0.35"/>
+  <text x="242.8" y="276.9" text-anchor="middle" font-size="9" font-family="monospace" fill="#22b8c8" opacity="0.4">·</text>
+  <circle cx="90.4" cy="255.8" r="14.4" fill="#22b8c8" opacity="0.95"/>
+  <text x="77.2" y="276.9" text-anchor="middle" font-size="9" font-family="monospace" fill="#22b8c8" opacity="0.9">★</text>
+  <circle cx="47.4" cy="123.4" r="8.0" fill="#22b8c8" opacity="0.35"/>
+  <text x="26.1" y="119.5" text-anchor="middle" font-size="9" font-family="monospace" fill="#22b8c8" opacity="0.4">·</text>
+  <circle cx="229.6" cy="64.2" r="14.4" fill="#f29b30" opacity="0.95"/>
+  <text x="242.8" y="49.1" text-anchor="middle" font-size="9" font-family="monospace" fill="#f29b30" opacity="0.9">★</text>
+  <circle cx="272.6" cy="196.6" r="14.4" fill="#f29b30" opacity="0.95"/>
+  <text x="293.9" y="206.5" text-anchor="middle" font-size="9" font-family="monospace" fill="#f29b30" opacity="0.9">★</text>
+  <circle cx="160.0" cy="278.4" r="14.4" fill="#f29b30" opacity="0.95"/>
+  <text x="160.0" y="303.8" text-anchor="middle" font-size="9" font-family="monospace" fill="#f29b30" opacity="0.9">★</text>
+  <circle cx="47.4" cy="196.6" r="14.4" fill="#f29b30" opacity="0.95"/>
+  <text x="26.1" y="206.5" text-anchor="middle" font-size="9" font-family="monospace" fill="#f29b30" opacity="0.9">★</text>
+  <circle cx="90.4" cy="64.2" r="14.4" fill="#f29b30" opacity="0.95"/>
+  <text x="77.2" y="49.1" text-anchor="middle" font-size="9" font-family="monospace" fill="#f29b30" opacity="0.9">★</text>
+  <line x1="160" y1="160" x2="90.2" y2="137.3" stroke="#22b8c8" stroke-width="1.5" opacity="0.75"/>
+  <text x="90.2" y="137.3" text-anchor="middle" font-size="10" fill="#22b8c8">A</text>
+  <line x1="160" y1="160" x2="167.5" y2="233.0" stroke="#f29b30" stroke-width="1.5" opacity="0.75"/>
+  <text x="167.5" y="233.0" text-anchor="middle" font-size="10" fill="#f29b30">B</text>
+  <circle cx="160" cy="160" r="22.4" fill="#f5c542" opacity="0.9"/>
+  <text x="160" y="164" text-anchor="middle" font-size="10" font-family="monospace" fill="#0d1040">◎</text>
+  </svg>
+
+  <div class="cert-id">eec6d63c3dba2b2e</div>
+  <div class="born-at">2026-11-18T19:47:43+00:00</div>
+
+  <table>
+    <tr><td>バックエンド</td><td>ibm_marrakesh</td></tr>
+    <tr><td>ラウンド</td><td>1</td></tr>
+    <tr><td>スハル テレポート</td><td>288.00°</td></tr>
+    <tr><td>リナリス テレポート</td><td>174.12°</td></tr>
+    <tr><td>量子イベント</td><td>entanglement_shot, superposition_dash, luna_event</td></tr>
+    <tr><td>QPU 秒数</td><td>1.87 s</td></tr>
+  </table>
+
+  <div class="bits">0110111111111</div>
+
+  <div class="token-label">ゲームログイン トークン</div>
+  <div class="token">eec6d63c3dba2b2e</div>
+
+  <div class="sig">— Luna + エーリアル より —</div>
+  <div class="footer">
+    IBM Quantum Platform · Cure-API<br>
+    このトークンは量子測定の一意な指紋です。<br>
+    cure-oracle · 誕生証明書は投資助言ではありません。
+  </div>
+
+  <!-- ══ Merkle証明付き SIG 領収証 ══════════════════════════════════ -->
+  <div class="receipt-box">
+    <div class="receipt-title">◈ Merkle証明付き SIG 領収証</div>
+
+    <div style="margin-bottom:14px">
+      <div class="receipt-label">SIG コード</div>
+      <div class="receipt-sig-code">CUBE-π.785-ε.019</div>
+    </div>
+
+    <div class="receipt-row">
+      <div class="receipt-stat">
+        <div class="receipt-label">ε ノイズ率</div>
+        <div style="font-size:.85em;color:var(--cyan)">0.019</div>
+      </div>
+      <div class="receipt-stat">
+        <div class="receipt-label">MENTE値</div>
+        <div style="font-size:.85em;color:var(--orange)">12.317367</div>
+      </div>
+      <div class="receipt-stat">
+        <div class="receipt-label">SIG index</div>
+        <div style="font-size:.85em;color:var(--luna)">3 / 7</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div class="receipt-label">Merkle Root (Keccak-256)</div>
+      <div class="hash-box">0xb19f65e197d3d692741dd1642fe7fdc625fd2f69b8f8d680cea158e0f7aea912</div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div class="receipt-label" style="margin-bottom:6px">証明パス (Proof Path)</div>
+      <div class="proof-step">
+        <span class="proof-idx">h0</span>
+        <span class="proof-hash">0x7b68fc1780167e665d4efdebfc4668918890b1a87061386b858dd6a1fdd2879f</span>
+      </div>
+      <div class="proof-step">
+        <span class="proof-idx">h1</span>
+        <span class="proof-hash">0x7d12a51a607ea429ae2405ce4e72b98b6c7721afa3356d525ca01e93ab1df9ea</span>
+      </div>
+      <div class="proof-step">
+        <span class="proof-idx">h2</span>
+        <span class="proof-hash">0xa8ed0ece1898e9e6b0c19d0b294062bef4074cd11b56853494b27e470943eba6</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div class="receipt-label">SIG リーフ</div>
+      <div class="leaf-box">0xbe84b30ada1153f55363e386afb9bf9db3e0faa4351b17181527d596b99b2f37</div>
+    </div>
+
+    <table class="algo-table" style="width:100%;border-collapse:collapse;margin-bottom:10px">
+      <tr><td>ハッシュ</td><td>Keccak-256 (Ethereum)</td></tr>
+      <tr><td>ノード結合</td><td>sorted-pair (OpenZeppelin互換)</td></tr>
+      <tr><td>クレーム総数</td><td>8</td></tr>
+      <tr><td>バージョン</td><td>sig-receipt/1</td></tr>
+    </table>
+
+    <!-- Client-side proof verification -->
+    <button class="verify-btn" onclick="verifyProof()">▶ 証明を検証する (ブラウザ内)</button>
+    <div class="verify-result" id="vr"></div>
+
+    <details>
+      <summary>証明JSON (コピー用)</summary>
+      <pre id="proof-json">{
+  "index": 3,
+  "path": [
+    "0x7b68fc1780167e665d4efdebfc4668918890b1a87061386b858dd6a1fdd2879f",
+    "0x7d12a51a607ea429ae2405ce4e72b98b6c7721afa3356d525ca01e93ab1df9ea",
+    "0xa8ed0ece1898e9e6b0c19d0b294062bef4074cd11b56853494b27e470943eba6"
+  ],
+  "leaf": "0xbe84b30ada1153f55363e386afb9bf9db3e0faa4351b17181527d596b99b2f37"
+}</pre>
+    </details>
+  </div>
+</div>
+
+<script>
+// ── inline Keccak-256 for browser-side proof verification ───────────────────
+// Minimal implementation; enough to walk the 3-step proof path.
+const RC=[0x00000001n,0x00008082n,0x0000808An,0x80008000n,0x0000808Bn,0x80000001n,
+          0x80008081n,0x80000009n,0x0000008An,0x00000088n,0x80008009n,0x8000000An,
+          0x8000808Bn,0x0000008Bn,0x80008089n,0x80008003n,0x80008002n,0x80000080n,
+          0x0000800An,0x8000000An,0x80008081n,0x80008080n,0x00000001n,0x80008008n];
+const ROT=[[0,36,3,41,18],[1,44,10,45,2],[62,6,43,15,61],[28,55,25,21,56],[27,20,39,8,14]];
+const M=(1n<<64n)-1n;
+function rol(x,n){return n?((x<<n)|(x>>(64n-n)))&M:x}
+function keccakF(a){
+  for(let r=0;r<24;r++){
+    const C=[0,1,2,3,4].map(x=>a[x][0]^a[x][1]^a[x][2]^a[x][3]^a[x][4]);
+    const D=[0,1,2,3,4].map(x=>C[(x+4)%5]^rol(C[(x+1)%5],1n));
+    for(let x=0;x<5;x++)for(let y=0;y<5;y++)a[x][y]^=D[x];
+    const B=Array.from({length:5},()=>new Array(5).fill(0n));
+    for(let x=0;x<5;x++)for(let y=0;y<5;y++)B[y][(2*x+3*y)%5]=rol(a[x][y],BigInt(ROT[x][y]));
+    for(let x=0;x<5;x++)for(let y=0;y<5;y++)a[x][y]=B[x][y]^(~B[(x+1)%5][y]&B[(x+2)%5][y]);
+    a[0][0]^=RC[r];
+  }
+}
+function keccak256(data){
+  const rate=136,buf=[...data,0x01,...new Array((-data.length-1+rate)%rate+1).fill(0)];
+  buf[buf.length-1]|=0x80;
+  const a=Array.from({length:5},()=>new Array(5).fill(0n));
+  for(let off=0;off<buf.length;off+=rate){
+    for(let i=0;i<rate/8;i++){
+      let v=0n;for(let j=7;j>=0;j--)v=(v<<8n)|BigInt(buf[off+8*i+j]);
+      a[i%5][Math.floor(i/5)]^=v;
+    }
+    keccakF(a);
+  }
+  const out=[];
+  for(let i=0;i<4;i++){let v=a[i%5][Math.floor(i/5)];for(let j=0;j<8;j++){out.push(Number(v&255n));v>>=8n;}}
+  return out;
+}
+
+function hexToBytes(h){const s=h.replace(/^0x/,'');return Array.from({length:s.length/2},(_,i)=>parseInt(s.slice(i*2,i*2+2),16))}
+function bytesToHex(b){return'0x'+b.map(x=>x.toString(16).padStart(2,'0')).join('')}
+function hashPair(a,b){
+  const ah=hexToBytes(a),bh=hexToBytes(b);
+  const [lo,hi]=ah<=bh?[ah,bh]:[bh,ah];
+  return bytesToHex(keccak256([...lo,...hi]));
+}
+
+// Claim data for the SIG leaf (index=3)
+// Record = uint16(3, big-endian) || "CUBE-π.785-ε.019" UTF-8, zero-padded to 48B
+function makeSigRecord(){
+  const te=new TextEncoder(),sigBytes=[...te.encode('CUBE-π.785-ε.019')];
+  const rec=[0,3,...sigBytes,...new Array(48-sigBytes.length).fill(0)]; // 2+48=50 bytes
+  return rec;
+}
+function computeLeaf(index,record){
+  const idxBytes=Array.from({length:32},(_,i)=>i===31?index:0);
+  const inner=keccak256([...idxBytes,...record]);
+  return bytesToHex(keccak256(inner));
+}
+
+function verifyProof(){
+  const root='0xb19f65e197d3d692741dd1642fe7fdc625fd2f69b8f8d680cea158e0f7aea912';
+  const path=[
+    '0x7b68fc1780167e665d4efdebfc4668918890b1a87061386b858dd6a1fdd2879f',
+    '0x7d12a51a607ea429ae2405ce4e72b98b6c7721afa3356d525ca01e93ab1df9ea',
+    '0xa8ed0ece1898e9e6b0c19d0b294062bef4074cd11b56853494b27e470943eba6',
+  ];
+  const rec=makeSigRecord();
+  const leaf=computeLeaf(3,rec);
+  let h=leaf;
+  for(const p of path)h=hashPair(h,p);
+  const ok=h.toLowerCase()===root.toLowerCase();
+  const vr=document.getElementById('vr');
+  vr.style.display='block';
+  if(ok){
+    vr.className='verify-result ok';
+    vr.textContent='✓ 証明検証成功 — SIG "CUBE-π.785-ε.019" はこの証明書に含まれています';
+  }else{
+    vr.className='verify-result fail';
+    vr.textContent='✗ 検証失敗 (computed: '+h+')';
+  }
+}
+</script>
+</body>
+</html>

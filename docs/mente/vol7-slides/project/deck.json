@@ -1,0 +1,17 @@
+{
+  "v": 5,
+  "createdOnFiles": {"v": 1, "at": "2026-11-22T00:00:00Z"},
+  "lists": "css",
+  "format": {"v": 1, "shared": ["project/deck.css"]},
+  "title": "MENTE RESEARCH Vol.7 — 記号の砂",
+  "order": ["cover","a-intro7","semiotic-frame","sand-machine","line-machine","groove-soroban","b-intro7","sangi-sticks","snapshot-ext","z-animation","resonance-sign","roadmap7"],
+  "sections": {
+    "s1": {"description": "Introduction: 古代算術装置4種と記号学フレームワーク概論", "start": "cover"},
+    "s2": {"description": "Part A: AERIAL — Sand Machine δ基底層 → Line Machine θ文脈層 → Grooved Soroban α共鳴", "start": "a-intro7"},
+    "s3": {"description": "Part B: Luna — Sangi β/γ実行層 → body_snapshot拡張 → 3D転写アニメーション設計", "start": "b-intro7"},
+    "s4": {"description": "共鳴イベント記号学的解析 → Vol.7 完全ロードマップ", "start": "resonance-sign"}
+  },
+  "faces": {
+    "space-grotesk": {"family": "Space Grotesk", "href": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"}
+  }
+}

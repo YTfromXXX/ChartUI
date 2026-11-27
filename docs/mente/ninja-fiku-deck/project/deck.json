@@ -1,0 +1,17 @@
+{
+  "v": 5,
+  "createdOnFiles": {"v": 1, "at": "2026-11-24T00:00:00Z"},
+  "lists": "css",
+  "format": {"v": 1, "shared": ["project/deck.css"]},
+  "title": "忍者FIKU 四天王探索 · LAP 8–12",
+  "order": ["cover","journey","lap8","lap9","lap10","lap11","lap12"],
+  "sections": {
+    "intro": {"description": "Opening and journey overview", "start": "cover"},
+    "circuit": {"description": "Lap 8–12: 四天王探索回路", "start": "lap8"}
+  },
+  "faces": {
+    "space-grotesk": {"family": "Space Grotesk", "href": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"},
+    "noto-serif-jp": {"family": "Noto Serif JP", "href": "https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&display=swap"}
+  },
+  "designSystems": []
+}

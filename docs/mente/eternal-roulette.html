@@ -1,0 +1,597 @@
+<title>永遠ルーレット × IBM Quantum Benchmark</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg:#040d1c;--bg2:#071428;--bg3:#0a1a30;
+  --fg:#e8eaf6;--muted:#8899b8;--subtle:#2a3a5a;
+  --gold:#e8b84b;--teal:#4fc3c8;
+  --r:#ff4d4d;--o:#ff8c00;--y:#f5c842;--g:#69f0ae;
+  --b:#4fc3c8;--i:#a78ed0;--v:#f48fb1;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--fg);
+  font-family:'Inter',sans-serif;min-height:100vh;
+  padding:max(20px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(20px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;align-items:center;gap:20px;overflow-x:hidden;
+}
+
+/* HEADER */
+.hdr{text-align:center}
+.hdr h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(22px,5vw,32px);font-weight:800;
+  background:linear-gradient(90deg,var(--r),var(--o),var(--y),var(--g),var(--b),var(--i),var(--v));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:1px}
+.hdr p{color:var(--muted);font-size:13px;margin-top:4px;font-family:'Space Mono',monospace}
+
+/* REEL STAGE */
+.reel-stage{
+  background:var(--bg2);border:1.5px solid var(--subtle);border-radius:14px;
+  padding:16px;width:100%;max-width:560px;position:relative;overflow:hidden;
+}
+.reel-row{display:flex;gap:8px;justify-content:center;align-items:flex-start}
+.reel-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  flex:1;min-width:0;max-width:68px;
+}
+.reel-label{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:1px}
+.reel{
+  width:52px;height:156px;overflow:hidden;position:relative;
+  border-radius:8px;border:1px solid var(--subtle);
+  background:#020810;
+}
+/* fade top/bottom */
+.reel::before,.reel::after{
+  content:'';position:absolute;left:0;right:0;height:36px;z-index:3;pointer-events:none;
+}
+.reel::before{top:0;background:linear-gradient(to bottom,#020810,transparent)}
+.reel::after{bottom:0;background:linear-gradient(to top,#020810,transparent)}
+/* center highlight */
+.reel-center{
+  position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  height:52px;border:1.5px solid rgba(255,255,255,.12);border-radius:4px;
+  pointer-events:none;z-index:4;
+  box-shadow:0 0 12px rgba(255,255,255,.04);
+}
+.reel-track{
+  position:absolute;left:0;right:0;top:0;
+  display:flex;flex-direction:column;
+  transition:none;
+}
+.ball{
+  width:52px;height:52px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.ball-inner{
+  width:34px;height:34px;border-radius:50%;
+  box-shadow:0 0 10px currentColor;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:rgba(0,0,0,.7);
+}
+
+/* landed indicator */
+.landed{
+  width:52px;height:24px;border-radius:4px;margin-top:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:.5px;transition:background .2s,color .2s;
+}
+
+/* CONTROLS */
+.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%;max-width:560px}
+.btn{
+  flex:1;min-width:120px;padding:11px 16px;border-radius:8px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  border:1.5px solid;transition:all .15s;letter-spacing:.5px;
+}
+.btn-shoot{background:rgba(232,184,75,.1);border-color:var(--gold);color:var(--gold)}
+.btn-shoot:hover{background:rgba(232,184,75,.2);box-shadow:0 0 16px rgba(232,184,75,.2)}
+.btn-7ren{background:rgba(79,195,200,.08);border-color:var(--teal);color:var(--teal)}
+.btn-7ren:hover{background:rgba(79,195,200,.18)}
+.btn-7fuku{background:rgba(167,142,208,.08);border-color:var(--i);color:var(--i)}
+.btn-7fuku:hover{background:rgba(167,142,208,.18)}
+.btn:disabled{opacity:.35;cursor:default}
+
+/* SHOT MATRIX */
+.matrix-wrap{width:100%;max-width:560px;display:none}
+.matrix-wrap.show{display:block}
+.section-label{
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;
+}
+.matrix-tbl{
+  width:100%;border-collapse:collapse;
+  font-family:'Space Mono',monospace;font-size:12px;
+}
+.matrix-tbl th{
+  padding:6px 4px;text-align:center;color:var(--muted);
+  border-bottom:1px solid var(--subtle);font-size:11px;
+}
+.matrix-tbl td{
+  padding:5px 4px;text-align:center;
+  border-bottom:1px solid rgba(42,58,90,.4);
+}
+.matrix-tbl tr:last-child td{border-bottom:none}
+.mc{
+  display:inline-block;width:22px;height:22px;border-radius:50%;
+  box-shadow:0 0 6px currentColor;
+}
+
+/* 単勝・複勝 TABLE */
+.odds-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:560px}
+.odds-box{background:var(--bg2);border:1px solid var(--subtle);border-radius:10px;padding:14px}
+.odds-title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px}
+.odds-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(42,58,90,.3)}
+.odds-row:last-child{border-bottom:none}
+.odds-ball{width:18px;height:18px;border-radius:50%;flex-shrink:0}
+.odds-name{font-size:12px;color:var(--muted);flex:1}
+.odds-pct{font-family:'Space Mono',monospace;font-size:13px;font-weight:700}
+.odds-bar{height:4px;border-radius:2px;margin-top:3px;transition:width .4s}
+
+/* 7複写 grid */
+.fuku-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+  width:100%;max-width:560px;display:none;
+}
+.fuku-grid.show{display:grid}
+.fuku-col{display:flex;flex-direction:column;gap:3px;align-items:center}
+.fuku-shot-label{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace}
+.fuku-ball{width:24px;height:24px;border-radius:50%;margin:1px 0}
+
+/* RAINBOW POPUP */
+.popup-overlay{
+  position:fixed;inset:0;background:rgba(4,13,28,.85);
+  display:flex;align-items:center;justify-content:center;z-index:100;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+}
+.popup-overlay.show{opacity:1;pointer-events:all}
+.popup-box{
+  background:var(--bg2);border:2px solid var(--gold);border-radius:16px;
+  padding:32px 40px;text-align:center;max-width:360px;
+  animation:pop-in .3s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes pop-in{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.popup-title{
+  font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:800;
+  background:linear-gradient(90deg,var(--r),var(--o),var(--y),var(--g),var(--b),var(--i),var(--v));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:8px;
+}
+.popup-sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+.candy-row{display:flex;gap:8px;justify-content:center;margin-bottom:20px}
+.candy{width:28px;height:28px;border-radius:50%;box-shadow:0 0 10px currentColor}
+.popup-close{
+  padding:10px 28px;border:1.5px solid var(--gold);border-radius:8px;
+  background:rgba(232,184,75,.1);color:var(--gold);
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;cursor:pointer;
+}
+.popup-close:hover{background:rgba(232,184,75,.2)}
+
+/* IBM BENCHMARK */
+.bench-row{
+  width:100%;max-width:560px;
+  background:var(--bg2);border:1px solid var(--subtle);border-radius:10px;
+  padding:14px 18px;
+}
+.bench-title{font-family:'Space Grotesk',sans-serif;font-size:13px;color:var(--muted);margin-bottom:10px;letter-spacing:1px}
+.bench-items{display:flex;gap:6px;flex-wrap:wrap}
+.bench-chip{
+  padding:4px 10px;border-radius:20px;border:1px solid;
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+}
+</style>
+
+<div class="hdr">
+  <h1>永遠ルーレット</h1>
+  <p>IBM Quantum Benchmark Monitor · 7色 × 7連写 · 7複写</p>
+</div>
+
+<!-- REELS -->
+<div class="reel-stage">
+  <div class="reel-row" id="reelRow"></div>
+</div>
+
+<!-- LANDED -->
+<div style="display:flex;gap:8px;justify-content:center;width:100%;max-width:560px" id="landedRow"></div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <button class="btn btn-shoot" onclick="shoot()">📸 SHOOT</button>
+  <button class="btn btn-7ren" id="btn7ren" onclick="shoot7ren()">7連写</button>
+  <button class="btn btn-7fuku" onclick="show7fuku()">7複写</button>
+</div>
+
+<!-- 7複写 -->
+<div style="width:100%;max-width:560px">
+  <div class="section-label" id="fukuLabel" style="display:none">7複写 スナップショット</div>
+  <div class="fuku-grid" id="fukuGrid"></div>
+</div>
+
+<!-- SHOT MATRIX -->
+<div class="matrix-wrap" id="matrixWrap">
+  <div class="section-label">7連写 · ショット結果マトリクス</div>
+  <table class="matrix-tbl" id="matrixTbl">
+    <thead><tr id="matrixHead"></tr></thead>
+    <tbody id="matrixBody"></tbody>
+  </table>
+</div>
+
+<!-- 単勝・複勝 -->
+<div class="odds-grid" id="oddsGrid" style="display:none">
+  <div class="odds-box">
+    <div class="odds-title" style="color:var(--gold)">単勝 (1位)</div>
+    <div id="tansho"></div>
+  </div>
+  <div class="odds-box">
+    <div class="odds-title" style="color:var(--teal)">複勝 (Top3)</div>
+    <div id="fukusho"></div>
+  </div>
+</div>
+
+<!-- IBM BENCHMARK -->
+<div class="bench-row" id="benchRow" style="display:none">
+  <div class="bench-title">IBM Quantum Benchmark · 色→バックエンド特性マッピング</div>
+  <div class="bench-items" id="benchItems"></div>
+</div>
+
+<!-- RAINBOW POPUP -->
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup-box">
+    <div class="popup-title" id="popupTitle">RAINBOW!</div>
+    <div class="popup-sub" id="popupSub">7色すべて揃いました</div>
+    <div class="candy-row" id="candyRow"></div>
+    <button class="popup-close" onclick="closePopup()">× 閉じる</button>
+  </div>
+</div>
+
+<script>
+const COLORS = [
+  {id:'R',name:'赤',hex:'#ff4d4d',bench:'Error Rate',backend:'ibm_marrakesh'},
+  {id:'O',name:'橙',hex:'#ff8c00',bench:'Gate Fidelity',backend:'ibm_brisbane'},
+  {id:'Y',name:'黄',hex:'#f5c842',bench:'T1 Coherence',backend:'ibm_kyoto'},
+  {id:'G',name:'緑',hex:'#69f0ae',bench:'T2 Coherence',backend:'ibm_sherbrooke'},
+  {id:'B',name:'青',hex:'#4fc3c8',bench:'Qubit Count',backend:'ibm_torino'},
+  {id:'I',name:'紫',hex:'#a78ed0',bench:'Circuit Depth',backend:'ibm_osaka'},
+  {id:'V',name:'桃',hex:'#f48fb1',bench:'Throughput',backend:'ibm_strasbourg'},
+];
+const NUM_WHEELS = 7;
+const BALL_H = 52; // px per ball
+const VISIBLE = 3; // visible balls
+const TOTAL_BALLS = COLORS.length * 4; // 28 balls per reel (looping)
+
+// per-wheel spin speeds (prime multiples for eternal non-sync)
+const SPEEDS = [1.1, 0.83, 1.37, 0.97, 1.21, 0.74, 1.09];
+
+let reelOffsets = Array(NUM_WHEELS).fill(0);
+let snapshots = []; // array of arrays [wheel0color, wheel1color, ...] per shot
+let raf = null;
+let lastTime = null;
+let spinning = true;
+let renRunning = false;
+
+// ── BUILD DOM ──────────────────────────────────────────────────────
+function build() {
+  const row = document.getElementById('reelRow');
+  const landedRow = document.getElementById('landedRow');
+  for (let w = 0; w < NUM_WHEELS; w++) {
+    // reel wrapper
+    const wrap = document.createElement('div');
+    wrap.className = 'reel-wrap';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'reel-label';
+    lbl.textContent = `W${w+1}`;
+    wrap.appendChild(lbl);
+
+    const reel = document.createElement('div');
+    reel.className = 'reel';
+    reel.id = `reel${w}`;
+
+    const center = document.createElement('div');
+    center.className = 'reel-center';
+    reel.appendChild(center);
+
+    const track = document.createElement('div');
+    track.className = 'reel-track';
+    track.id = `track${w}`;
+    // fill with looping balls
+    for (let i = 0; i < TOTAL_BALLS; i++) {
+      const c = COLORS[i % COLORS.length];
+      const ball = document.createElement('div');
+      ball.className = 'ball';
+      const inner = document.createElement('div');
+      inner.className = 'ball-inner';
+      inner.style.background = c.hex;
+      inner.style.color = 'rgba(0,0,0,.7)';
+      inner.style.boxShadow = `0 0 10px ${c.hex}`;
+      inner.textContent = c.id;
+      ball.appendChild(inner);
+      track.appendChild(ball);
+    }
+    reel.appendChild(track);
+    wrap.appendChild(reel);
+    row.appendChild(wrap);
+
+    // landed chip
+    const chip = document.createElement('div');
+    chip.className = 'landed';
+    chip.id = `landed${w}`;
+    chip.style.background = COLORS[0].hex + '22';
+    chip.style.color = COLORS[0].hex;
+    chip.textContent = COLORS[0].id;
+    chip.style.minWidth = '52px';
+    chip.style.fontSize = '11px';
+    chip.style.fontFamily = "'Space Mono',monospace";
+    chip.style.fontWeight = '700';
+    chip.style.letterSpacing = '.5px';
+    chip.style.padding = '4px 2px';
+    chip.style.borderRadius = '4px';
+    chip.style.textAlign = 'center';
+    chip.style.border = `1px solid ${COLORS[0].hex}55`;
+    chip.style.transition = 'background .2s, color .2s, border-color .2s';
+    landedRow.appendChild(chip);
+  }
+
+  // matrix header
+  const head = document.getElementById('matrixHead');
+  head.innerHTML = '<th>Shot</th>' + Array(NUM_WHEELS).fill(0).map((_,i) => `<th>W${i+1}</th>`).join('') + '<th>パターン</th>';
+}
+
+// ── ANIMATE ──────────────────────────────────────────────────────
+function loop(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = ts - lastTime;
+  lastTime = ts;
+
+  if (spinning) {
+    for (let w = 0; w < NUM_WHEELS; w++) {
+      reelOffsets[w] = (reelOffsets[w] + SPEEDS[w] * dt * 0.08) % (BALL_H * COLORS.length);
+      applyOffset(w);
+    }
+  }
+  updateLandedChips();
+  raf = requestAnimationFrame(loop);
+}
+
+function applyOffset(w) {
+  const track = document.getElementById(`track${w}`);
+  if (!track) return;
+  const offset = -reelOffsets[w] - BALL_H; // -1 offset so center ball is mid
+  track.style.transform = `translateY(${offset}px)`;
+}
+
+function getLanded(w) {
+  const idx = Math.floor(reelOffsets[w] / BALL_H) % COLORS.length;
+  return COLORS[idx];
+}
+
+function updateLandedChips() {
+  for (let w = 0; w < NUM_WHEELS; w++) {
+    const c = getLanded(w);
+    const chip = document.getElementById(`landed${w}`);
+    if (chip && chip._lastId !== c.id) {
+      chip._lastId = c.id;
+      chip.textContent = c.id;
+      chip.style.background = c.hex + '22';
+      chip.style.color = c.hex;
+      chip.style.borderColor = c.hex + '55';
+    }
+  }
+}
+
+// ── SHOOT ────────────────────────────────────────────────────────
+function shoot() {
+  const snap = Array(NUM_WHEELS).fill(0).map((_,w) => getLanded(w));
+  snapshots.push(snap);
+  renderMatrix();
+  renderOdds();
+  renderBench(snap);
+  checkPopup(snap);
+  // flash reels
+  for (let w = 0; w < NUM_WHEELS; w++) {
+    const reel = document.getElementById(`reel${w}`);
+    if (!reel) continue;
+    reel.style.boxShadow = `0 0 20px ${snap[w].hex}`;
+    setTimeout(() => { reel.style.boxShadow = ''; }, 400);
+  }
+}
+
+async function shoot7ren() {
+  if (renRunning) return;
+  renRunning = true;
+  const btn = document.getElementById('btn7ren');
+  btn.disabled = true;
+  snapshots = [];
+  for (let i = 0; i < 7; i++) {
+    shoot();
+    await delay(320);
+  }
+  renderOdds();
+  btn.disabled = false;
+  renRunning = false;
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── 7複写 ─────────────────────────────────────────────────────────
+function show7fuku() {
+  const grid = document.getElementById('fukuGrid');
+  const lbl = document.getElementById('fukuLabel');
+  grid.innerHTML = '';
+  lbl.style.display = '';
+  grid.classList.add('show');
+
+  // take 7 quick snapshots with tiny offsets
+  const frames = [];
+  for (let f = 0; f < 7; f++) {
+    const snap = Array(NUM_WHEELS).fill(0).map((_,w) => {
+      const rawIdx = Math.floor((reelOffsets[w] + f * 3.1) / BALL_H) % COLORS.length;
+      return COLORS[Math.abs(rawIdx) % COLORS.length];
+    });
+    frames.push(snap);
+  }
+
+  for (let f = 0; f < 7; f++) {
+    const col = document.createElement('div');
+    col.className = 'fuku-col';
+    const fLabel = document.createElement('div');
+    fLabel.className = 'fuku-shot-label';
+    fLabel.textContent = `F${f+1}`;
+    col.appendChild(fLabel);
+    for (let w = 0; w < NUM_WHEELS; w++) {
+      const c = frames[f][w];
+      const b = document.createElement('div');
+      b.className = 'fuku-ball';
+      b.style.background = c.hex;
+      b.style.boxShadow = `0 0 6px ${c.hex}`;
+      b.title = c.name;
+      col.appendChild(b);
+    }
+    grid.appendChild(col);
+  }
+}
+
+// ── MATRIX ──────────────────────────────────────────────────────
+function renderMatrix() {
+  const wrap = document.getElementById('matrixWrap');
+  const body = document.getElementById('matrixBody');
+  wrap.classList.add('show');
+  body.innerHTML = '';
+
+  snapshots.forEach((snap, si) => {
+    const tr = document.createElement('tr');
+    const tdShot = document.createElement('td');
+    tdShot.textContent = `S${si+1}`;
+    tdShot.style.color = 'var(--muted)';
+    tdShot.style.fontFamily = "'Space Mono',monospace";
+    tr.appendChild(tdShot);
+
+    const pattern = [];
+    snap.forEach(c => {
+      const td = document.createElement('td');
+      const dot = document.createElement('span');
+      dot.className = 'mc';
+      dot.style.background = c.hex;
+      dot.style.boxShadow = `0 0 6px ${c.hex}`;
+      dot.style.color = 'transparent';
+      dot.style.border = `1.5px solid ${c.hex}99`;
+      td.appendChild(dot);
+      tr.appendChild(td);
+      pattern.push(c.id);
+    });
+
+    // pattern cell
+    const tdPat = document.createElement('td');
+    tdPat.style.fontFamily = "'Space Mono',monospace";
+    tdPat.style.fontSize = '10px';
+    tdPat.style.color = 'var(--muted)';
+    const unique = [...new Set(pattern)];
+    if (unique.length === 7) tdPat.style.color = 'var(--gold)';
+    tdPat.textContent = pattern.join('');
+    tr.appendChild(tdPat);
+
+    body.appendChild(tr);
+  });
+}
+
+// ── 単勝・複勝 ──────────────────────────────────────────────────
+function renderOdds() {
+  if (snapshots.length === 0) return;
+  document.getElementById('oddsGrid').style.display = '';
+
+  // count all colors across all snapshots × wheels
+  const counts = {};
+  COLORS.forEach(c => counts[c.id] = 0);
+  snapshots.forEach(snap => snap.forEach(c => counts[c.id]++));
+  const total = snapshots.length * NUM_WHEELS;
+
+  const sorted = COLORS.map(c => ({...c, count: counts[c.id], pct: counts[c.id]/total*100}))
+    .sort((a,b) => b.count - a.count);
+
+  // 単勝 (top 1)
+  const tEl = document.getElementById('tansho');
+  tEl.innerHTML = '';
+  const top1 = sorted.slice(0, 1);
+  top1.forEach(c => tEl.appendChild(oddsRow(c, true)));
+
+  // 複勝 (top 3)
+  const fEl = document.getElementById('fukusho');
+  fEl.innerHTML = '';
+  sorted.slice(0,3).forEach((c,i) => fEl.appendChild(oddsRow(c, false, i+1)));
+}
+
+function oddsRow(c, isTop, rank) {
+  const div = document.createElement('div');
+  div.className = 'odds-row';
+  div.innerHTML = `
+    <div class="odds-ball" style="background:${c.hex};box-shadow:0 0 8px ${c.hex}"></div>
+    <div class="odds-name">${rank ? `${rank}位 ` : ''}${c.name} (${c.id})</div>
+    <div class="odds-pct" style="color:${c.hex}">${c.pct.toFixed(1)}%</div>
+  `;
+  const bar = document.createElement('div');
+  bar.className = 'odds-bar';
+  bar.style.background = c.hex;
+  bar.style.width = c.pct + '%';
+  div.appendChild(bar);
+  return div;
+}
+
+// ── IBM BENCHMARK ────────────────────────────────────────────────
+function renderBench(snap) {
+  document.getElementById('benchRow').style.display = '';
+  const items = document.getElementById('benchItems');
+  items.innerHTML = '';
+  snap.forEach((c,w) => {
+    const chip = document.createElement('div');
+    chip.className = 'bench-chip';
+    chip.style.borderColor = c.hex + '88';
+    chip.style.color = c.hex;
+    chip.style.background = c.hex + '14';
+    chip.textContent = `W${w+1}·${c.bench}`;
+    chip.title = c.backend;
+    items.appendChild(chip);
+  });
+}
+
+// ── POPUP ────────────────────────────────────────────────────────
+function checkPopup(snap) {
+  const ids = snap.map(c => c.id);
+  const unique = new Set(ids);
+  let title = '', sub = '';
+
+  if (unique.size === 7) {
+    title = '🌈 RAINBOW!';
+    sub = '7色すべて揃いました — 量子完全体';
+  } else if (unique.size === 1) {
+    title = '⚡ JACKPOT!';
+    sub = `${snap[0].name}が7連一致 — 最高確率状態`;
+  } else if (unique.size <= 2) {
+    title = '✨ DOUBLE!';
+    sub = `${[...unique].join('+')} 二色共鳴`;
+  } else { return; }
+
+  document.getElementById('popupTitle').textContent = title;
+  document.getElementById('popupSub').textContent = sub;
+  const candyRow = document.getElementById('candyRow');
+  candyRow.innerHTML = '';
+  snap.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'candy';
+    d.style.background = c.hex;
+    d.style.boxShadow = `0 0 8px ${c.hex}`;
+    candyRow.appendChild(d);
+  });
+  document.getElementById('popupOverlay').classList.add('show');
+}
+
+function closePopup() {
+  document.getElementById('popupOverlay').classList.remove('show');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+build();
+requestAnimationFrame(loop);
+</script>
