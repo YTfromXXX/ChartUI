@@ -54,6 +54,7 @@ from cure_oracle.knot_score import build_knot_score_frame as _build_knot_score_f
 from cure_oracle.cure_bmi import build_cure_bmi_frame as _build_cure_bmi_frame
 from cure_oracle.hdna import build_hdna_card as _build_hdna_card, encode as _hdna_encode, encode_b64 as _hdna_encode_b64
 from cure_oracle.famidancer import build_famidancer_frame as _build_famidancer_frame
+from cure_oracle.hdna_sim import simulate as _hdna_simulate
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1277,6 +1278,7 @@ def candy_sonnet_version(
             "cure_bmi":           "/api/v1/qpu/candy/cure-bmi/session",
             "hdna":               "/api/v1/qpu/candy/hdna/pack",
             "famidancer":         "/api/v1/qpu/candy/famidancer/session",
+            "hdna_sim":           "/api/v1/qpu/candy/hdna/sim",
         },
     }
 
@@ -2224,3 +2226,87 @@ async def candy_famidancer_session(
         raise HTTPException(500, detail=sanitize_error(exc))
 
     return fd_frame.to_dict()
+
+
+# ── Phase U: .hdna Music Simulation endpoint ──────────────────────────────────
+
+@router.get(
+    "/candy/hdna/sim",
+    summary=".hdna Music Simulation: HdnaCard → Tone.js + MIDI (cure-{era}-r13)",
+    tags=["candy"],
+)
+async def candy_hdna_sim(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    knot:           str   = Query("もやい結び"),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading",
+                                  description="trading|soccer|surfing|climbing|live"),
+    region_code:    str   = Query("JP-00", max_length=12),
+    token:          str   = Query(...,   description="API token"),
+) -> dict:
+    """Pack a CureBmiFrame into .hdna and simulate playback as Tone.js + MIDI.
+
+    GET /candy/hdna/sim?shapes=LINE&scene=soccer&token=…
+
+    Returns:
+      spec_rev:         .hdna spec revision ("1.0")
+      era:              musical era (baroque … inner_world)
+      bpm:              beats per minute from MDNA chunk
+      instrument:       era-mapped synthesizer type
+      reverb:           scene-mapped reverb preset
+      note_count:       number of note events in MDNA
+      tone_js_sequence: Tone.js Part-compatible JSON sequence
+      midi_b64:         base64-encoded Standard MIDI Type-0 file
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    _VALID_SCENES = {"trading", "soccer", "surfing", "climbing", "live"}
+    if scene not in _VALID_SCENES:
+        raise HTTPException(422, f"unknown scene {scene!r}; valid: {sorted(_VALID_SCENES)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        bmi_frame = _build_cure_bmi_frame(
+            result,
+            knot_name=knot,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+        )
+        frame_dict = bmi_frame.to_dict()
+        card = _build_hdna_card(frame_dict, region_code=region_code)
+        sim  = _hdna_simulate(card)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return sim.to_dict()
