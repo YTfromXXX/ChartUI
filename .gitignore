@@ -225,3 +225,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Cure-OS runtime directories (generated at runtime, never committed)
+cure_audit/
+cure_certs/

@@ -1,0 +1,2312 @@
+"""FastAPI router: /api/v1/qpu/*
+
+POST /api/v1/qpu/benchmark
+    Run a SIG benchmark circuit (local Aer, fake-chip, or real IBM QPU).
+    IBM mode requires IBM_QUANTUM_TOKEN + IBM_QUANTUM_INSTANCE env vars
+    and the confirm field set to the CONFIRM constant.
+
+Security controls
+-----------------
+- Role-based access: OPERATOR for local/fake, QPU_ADMIN for ibm mode
+- cert_path: filename-only, resolved inside CERT_BASE_DIR (path traversal fix)
+- Exception messages sanitized before returning (no token/CRN leakage)
+- MenteTriangle.label restricted to A-D
+- shots capped per mode (local/fake ≤ 100k, ibm ≤ 20k)
+- All operations logged to tamper-evident Keccak-256 audit chain
+"""
+
+from __future__ import annotations
+
+import datetime
+import hashlib
+import os
+import platform
+import sys
+import uuid
+from typing import Optional
+
+import asyncio
+import json as _json
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from cure_oracle.birth import make_sig_receipt
+from cure_oracle.accelerator import (
+    AcceleratorResult,
+    VirtualAccelerator,
+)
+from cure_oracle.gemini_candy import GeminiCandyFlash
+from cure_oracle.sonnet_score import SonnetScore
+from cure_oracle.sonnet_remix import compute_remix, VALID_REMIX_STYLES
+from cure_oracle.mesh_score import (
+    strokes_to_score, era_from_mente, GridConfig as MeshGridConfig,
+    CURRENT_REV, ERA_MENTE_LOWER,
+)
+from cure_oracle.quantum_sim import run_quantum_sim, CURRENT_REV as QS_REV
+from cure_oracle.midi_viz import build_midi_viz_frame
+from cure_oracle.resonance_score import build_resonance_frame as build_resonance_frame_
+from cure_oracle.midi_export import frame_to_midi as _frame_to_midi
+from cure_oracle.score_replay import build_score_replay_frame as _build_score_replay_frame
+from cure_oracle.punchcard import build_punchcard_frame as _build_punchcard_frame
+from cure_oracle.knot_score import build_knot_score_frame as _build_knot_score_frame
+from cure_oracle.cure_bmi import build_cure_bmi_frame as _build_cure_bmi_frame
+from cure_oracle.hdna import build_hdna_card as _build_hdna_card, encode as _hdna_encode, encode_b64 as _hdna_encode_b64
+from cure_oracle.famidancer import build_famidancer_frame as _build_famidancer_frame
+from cure_oracle.hdna_sim import simulate as _hdna_simulate
+from cure_oracle.benchmark import (
+    CAMPAIGN_SHAPES,
+    CONFIRM,
+    SHAPE_CIRCUIT_MAP,
+    BenchmarkResult,
+    get_eps_code,
+    issue_sig_if_passed,
+    run_benchmark,
+)
+from cure_oracle.mente import (
+    MENTE_CONST,
+    HEAVENLY_KINGS,
+    check_mente,
+    issue_birth_on_mente,
+)
+from cure_oracle.security import (
+    AuditLogger,
+    Role,
+    require_role,
+    safe_cert_path,
+    sanitize_error,
+    secure_write_json,
+)
+
+router = APIRouter(prefix="/api/v1/qpu", tags=["qpu"])
+
+
+# ── request / response models ───────────────────────────────────────────────
+
+class BenchmarkRequest(BaseModel):
+    shape: str = Field(
+        "LINE",
+        description="SIG shape: CUBE / RING / TREE / LINE / STAR",
+    )
+    n_qubits: int = Field(4, ge=2, le=8, description="Circuit width (2–8)")
+    theta_disp: str = Field(
+        "√.414",
+        description="θ_disp code: φ.618 / π.785 / √.414",
+    )
+    shots: int = Field(4096, ge=1, le=1_000_000, description="Number of shots")
+    mode: str = Field(
+        "local",
+        description="Execution mode: local (Aer) | fake (FakeTorino) | ibm (real QPU)",
+    )
+    confirm: Optional[str] = Field(
+        None,
+        description=f'Must equal "{CONFIRM}" to authorise a real-QPU run',
+    )
+
+
+class BenchmarkResponse(BaseModel):
+    shape: str
+    circuit_family: str
+    n_qubits: int
+    theta_disp: str
+    shots: int
+    backend: str
+    circuit_hash: str
+    delta: float
+    eps_threshold: float
+    passed: bool
+    sig_code: str
+    job_id: Optional[str]
+    qpu_seconds: Optional[float]
+    sig: Optional[str] = Field(None, description="Issued SIG string when passed, else null")
+
+
+class CampaignShape(BaseModel):
+    shape: str
+    circuit_family: str
+    theta_disp: str
+    eps_code: str
+
+
+# ── MENTE models ──────────────────────────────────────────────────────────────
+
+class MenteTriangle(BaseModel):
+    q: float = Field(..., ge=0.0, le=1.0,
+                     description="Triangle quality q = 2r/R")
+    label: str = Field(..., pattern=r"^[A-Da-d]$",
+                       description="Label A / B / C / D")
+
+
+class MenteSlotResponse(BaseModel):
+    label:   str
+    slot:    str
+    king:    str
+    sig:     str
+    mente:   float
+    epsilon: float
+    shape:   str
+
+
+class MenteCheckRequest(BaseModel):
+    triangles: list[MenteTriangle] = Field(
+        ..., min_length=1, max_length=4,
+        description="1–4 triangles; pass all 4 slots (A–D) for 四天王全顕現",
+    )
+
+
+class MenteCheckResponse(BaseModel):
+    slots:          list[MenteSlotResponse]
+    mente_total:    float
+    mente_achieved: bool
+    mente_const:    float
+    missing_kings:  list[str]
+
+
+class MenteBirthRequest(BaseModel):
+    triangles:    list[MenteTriangle] = Field(..., min_length=1, max_length=4)
+    round_result: dict = Field(
+        ...,
+        description="dict returned by round_circuit() or POST /api/v1/qpu/round",
+    )
+    cert_path: str = Field(
+        "cure_birth_certificate.json",
+        pattern=r"^[\w\-. ]+\.json$",
+        description="Filename only (no directory component)",
+    )
+
+
+class MenteBirthResponse(BaseModel):
+    mente_achieved: bool
+    mente_total:    float
+    mente_const:    float
+    cert:           Optional[dict] = None
+    receipts:       Optional[list[dict]] = None
+    cert_path:      Optional[str] = None
+    html_path:      Optional[str] = None
+
+
+# ── audit chain endpoint ────────────────────────────────────────────────────
+
+class AuditEventResponse(BaseModel):
+    event_id:  str
+    timestamp: str
+    role:      str
+    action:    str
+    resource:  str
+    outcome:   str
+    detail:    dict
+    prev_hash: str
+    sig:       str
+
+
+@router.get("/audit/chain", response_model=list[AuditEventResponse])
+def get_audit_chain(
+    _role: Role = Depends(require_role(Role.OPERATOR)),
+) -> list[AuditEventResponse]:
+    """Return the most recent 50 audit events (tamper-evident Keccak-256 chain)."""
+    from dataclasses import asdict
+    return [AuditEventResponse(**asdict(e)) for e in AuditLogger.get().get_chain(50)]
+
+
+# ── endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/benchmark/shapes", response_model=list[CampaignShape])
+def list_benchmark_shapes() -> list[CampaignShape]:
+    """Return the five canonical SIG benchmark shapes."""
+    return [
+        CampaignShape(
+            shape=c["shape"],
+            circuit_family=SHAPE_CIRCUIT_MAP[c["shape"]],
+            theta_disp=c["theta_disp"],
+            eps_code=get_eps_code(c["theta_disp"]),
+        )
+        for c in CAMPAIGN_SHAPES
+    ]
+
+
+@router.post("/benchmark", response_model=BenchmarkResponse)
+def run_benchmark_endpoint(
+    req: BenchmarkRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> BenchmarkResponse:
+    """
+    Run a SIG benchmark circuit and return the TVD result.
+
+    - **local**: Qiskit Aer statevector simulator (OPERATOR+)
+    - **fake**: FakeTorino noise model (OPERATOR+)
+    - **ibm**: real QPU — QPU_ADMIN role required; reads IBM_QUANTUM_TOKEN
+      and IBM_QUANTUM_INSTANCE from environment variables
+    """
+    audit = AuditLogger.get()
+    resource = f"{req.shape}/{req.mode}"
+
+    if req.shape not in SHAPE_CIRCUIT_MAP:
+        audit.log(role.value, "benchmark.run", resource, "failure",
+                  {"reason": "unknown_shape"})
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown shape {req.shape!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}",
+        )
+    if req.theta_disp not in ("φ.618", "π.785", "√.414"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown theta_disp {req.theta_disp!r}; valid: φ.618 / π.785 / √.414",
+        )
+    if req.mode not in ("local", "fake", "ibm"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown mode {req.mode!r}; valid: local / fake / ibm",
+        )
+
+    # shots mode-aware limits
+    if req.mode in ("local", "fake") and req.shots > 100_000:
+        raise HTTPException(422, "shots > 100,000 not allowed for local/fake mode")
+    if req.mode == "ibm" and req.shots > 20_000:
+        raise HTTPException(422, "shots > 20,000 not allowed for ibm mode")
+
+    # QPU_ADMIN required for ibm mode
+    if req.mode == "ibm" and role != Role.QPU_ADMIN:
+        audit.log(role.value, "benchmark.run", resource, "denied",
+                  {"reason": "insufficient_role"})
+        raise HTTPException(status_code=403, detail="QPU_ADMIN role required for ibm mode")
+
+    kwargs: dict = dict(
+        shape=req.shape,
+        n_qubits=req.n_qubits,
+        theta_disp=req.theta_disp,
+        shots=req.shots,
+        mode=req.mode,
+    )
+    if req.mode == "ibm":
+        token = os.environ.get("IBM_QUANTUM_TOKEN")
+        instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+        if not token:
+            raise HTTPException(
+                status_code=503,
+                detail="IBM_QUANTUM_TOKEN environment variable is not set",
+            )
+        if not instance:
+            raise HTTPException(
+                status_code=503,
+                detail="IBM_QUANTUM_INSTANCE environment variable is not set",
+            )
+        kwargs["token"] = token
+        kwargs["instance"] = instance
+        kwargs["confirm"] = req.confirm
+
+    try:
+        result: BenchmarkResult = run_benchmark(**kwargs)
+    except PermissionError as exc:
+        audit.log(role.value, "benchmark.run", resource, "denied",
+                  {"error_type": "PermissionError"})
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        audit.log(role.value, "benchmark.run", resource, "failure",
+                  {"error_type": "ValueError"})
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "benchmark.run", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    sig = issue_sig_if_passed(result)
+    audit.log(role.value, "benchmark.run", resource, "success",
+              {"passed": result.passed, "delta": round(result.delta, 6)})
+    return BenchmarkResponse(
+        shape=result.shape,
+        circuit_family=result.circuit_family,
+        n_qubits=result.n_qubits,
+        theta_disp=result.theta_disp,
+        shots=result.shots,
+        backend=result.backend,
+        circuit_hash=result.circuit_hash,
+        delta=round(result.delta, 6),
+        eps_threshold=result.eps_threshold,
+        passed=result.passed,
+        sig_code=result.sig_code,
+        job_id=result.job_id,
+        qpu_seconds=result.qpu_seconds,
+        sig=sig,
+    )
+
+
+@router.post("/mente/check", response_model=MenteCheckResponse)
+def mente_check_endpoint(
+    req: MenteCheckRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> MenteCheckResponse:
+    """
+    Calculate the MENTE score for a batch of mesh triangles.
+
+    Pass 1–4 triangles (labels A–D, q = radius ratio 2r/R).
+    When **mente_achieved** is True all four 四天王 have appeared —
+    call `/mente/birth` to auto-issue the birth certificate.
+    """
+    audit = AuditLogger.get()
+    tris = [{"q": t.q, "label": t.label} for t in req.triangles]
+    try:
+        result = check_mente(tris)
+    except Exception as exc:
+        audit.log(role.value, "mente.check", "mente", "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+
+    audit.log(role.value, "mente.check", "mente", "success",
+              {"mente_achieved": result.mente_achieved,
+               "mente_total": round(result.mente_total, 4)})
+    return MenteCheckResponse(
+        slots=[
+            MenteSlotResponse(
+                label=s.label, slot=s.slot, king=s.king,
+                sig=s.sig, mente=s.mente,
+                epsilon=s.epsilon, shape=s.shape,
+            )
+            for s in result.slots
+        ],
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        mente_const=result.mente_const,
+        missing_kings=result.missing_kings,
+    )
+
+
+@router.post("/mente/birth", response_model=MenteBirthResponse)
+def mente_birth_endpoint(
+    req: MenteBirthRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> MenteBirthResponse:
+    """
+    Issue a birth certificate when MENTE is achieved (四天王全顕現).
+
+    Requires a `round_result` from a QPU or local/fake round run.
+    When **mente_achieved** is False nothing is written and the response
+    carries only the MENTE calculation (no cert / receipts).
+    """
+    audit = AuditLogger.get()
+    tris = [{"q": t.q, "label": t.label} for t in req.triangles]
+
+    # Resolve safe path before any heavy computation
+    try:
+        cert_path = safe_cert_path(req.cert_path)
+    except ValueError as exc:
+        audit.log(role.value, "cert.birth", "cert", "failure",
+                  {"reason": "invalid_cert_path"})
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        birth = issue_birth_on_mente(tris, req.round_result, str(cert_path))
+    except Exception as exc:
+        audit.log(role.value, "cert.birth", "cert", "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    if birth is None:
+        # MENTE not achieved — return the check result only
+        try:
+            check = check_mente(tris)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+        audit.log(role.value, "cert.birth", "cert", "success",
+                  {"mente_achieved": False})
+        return MenteBirthResponse(
+            mente_achieved=False,
+            mente_total=check.mente_total,
+            mente_const=check.mente_const,
+        )
+
+    # Overwrite the cert file with secure permissions
+    secure_write_json(cert_path, birth.cert)
+
+    audit.log(role.value, "cert.birth", "cert", "success",
+              {"mente_achieved": True, "cert_path": str(cert_path)})
+    return MenteBirthResponse(
+        mente_achieved=True,
+        mente_total=birth.check.mente_total,
+        mente_const=birth.check.mente_const,
+        cert=birth.cert,
+        receipts=birth.receipts,
+        cert_path=str(cert_path),
+        html_path=birth.html_path,
+    )
+
+
+# ── Observe endpoint: A地点/B地点 OS識別 + MENTE座標空間 ──────────────────────
+
+class _OSInfo(BaseModel):
+    system:     str
+    release:    str
+    machine:    str
+    python:     str
+    role:       str   # "quantum_state" (A) or "observer" (B)
+
+
+class MenteCoordAxis(BaseModel):
+    slot:       str
+    king:       str
+    q_min:      float
+    q_max:      float
+    description: str
+
+
+class ObserveResponse(BaseModel):
+    point_a:            _OSInfo                 # server / quantum state
+    point_b:            _OSInfo                 # client / observer
+    mente_const:        float
+    coordinate_space:   list[MenteCoordAxis]    # 4 axes S1–S4
+    basis:              str                     # "四天王座標系 φ×√2"
+    observe_receipt:    Optional[dict] = None   # sig-receipt/1 Keccak-256 Merkle
+
+
+def _build_observe_receipt(point_a: _OSInfo, mente: float) -> dict:
+    """Build a sig-receipt/1 Keccak-256 Merkle receipt for one /observe call.
+
+    Cure-OS (A地点) signs its identity so PopKivyDevice-OS (B地点) can verify
+    it received a genuine quantum_state measurement.
+
+    SIG code: CUBE (四天王座標系の立方対称) − φ.618 (q ≥ 0.75, highest fidelity)
+              − ε.001 (< 0.01 delta, benchmark-grade noise floor)
+    """
+    obs_id  = str(uuid.uuid4())
+    born_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    backend = f"cure-os/{point_a.role}/{point_a.system}"
+    # Keccak-256 of the coordinate space description as the "circuit hash" analogue
+    coord_hash = hashlib.sha256(
+        f"四天王座標系|φ×√2|{mente:.6f}".encode()
+    ).hexdigest()
+
+    cert = {
+        "certificate_id": obs_id,
+        "born_at":         born_at,
+        "backend":         backend,
+        "qpu_seconds":     0,
+        "bitstring":       coord_hash[:16],
+    }
+    # sig_code: CUBE-φ.618-ε.001  (highest tier — MENTE_CONST ≥ HEAVENLY_KINGS)
+    return make_sig_receipt(cert, "CUBE-φ.618-ε.001", 0.001, mente)
+
+
+_MENTE_AXES: list[MenteCoordAxis] = [
+    MenteCoordAxis(slot="S4", king="広目天", q_min=0.75, q_max=1.0,
+                   description="最高位 — 広く遠くを見通す (q ≥ 0.75)"),
+    MenteCoordAxis(slot="S1", king="多聞天", q_min=0.50, q_max=0.75,
+                   description="全てを聴く — 情報の受信軸 (0.50 ≤ q < 0.75)"),
+    MenteCoordAxis(slot="S3", king="持国天", q_min=0.25, q_max=0.50,
+                   description="国を守る — 安定化軸 (0.25 ≤ q < 0.50)"),
+    MenteCoordAxis(slot="S2", king="増長天", q_min=0.0,  q_max=0.25,
+                   description="成長を促す — 初期観測軸 (q < 0.25)"),
+]
+
+
+@router.get("/observe", response_model=ObserveResponse)
+def observe_endpoint(
+    request: Request,
+    _role: Role = Depends(require_role(Role.VIEWER)),
+) -> ObserveResponse:
+    """
+    A地点 (量子状態 / server) と B地点 (観察者OS / client) を識別し
+    MENTE座標空間を返す。
+
+    - **A地点**: FastAPI バックエンド OS — 量子回路を実行する側
+    - **B地点**: クライアント (Flet/Kivyデバイス) — 観察者OS
+    - **四天王座標系**: q値によって 4軸(S1–S4)に射影、mente_total ≥ φ×√2 で全顕現
+    """
+    ua = request.headers.get("user-agent", "unknown")
+    client_host = getattr(request.client, "host", "unknown") if request.client else "unknown"
+
+    point_a = _OSInfo(
+        system=platform.system(),
+        release=platform.release(),
+        machine=platform.machine(),
+        python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        role="quantum_state",
+    )
+    point_b = _OSInfo(
+        system=ua,
+        release=client_host,
+        machine=platform.machine(),
+        python="observer",
+        role="observer",
+    )
+
+    receipt = _build_observe_receipt(point_a, MENTE_CONST)
+
+    AuditLogger.get().log(
+        "viewer", "observe", "system",
+        "success", {
+            "client_host": client_host,
+            "receipt_root": receipt["merkle"]["root"],
+        },
+    )
+    return ObserveResponse(
+        point_a=point_a,
+        point_b=point_b,
+        mente_const=round(MENTE_CONST, 6),
+        coordinate_space=_MENTE_AXES,
+        basis="四天王座標系 φ×√2",
+        observe_receipt=receipt,
+    )
+
+
+# ── Virtual Accelerator endpoint ──────────────────────────────────────────────
+
+class AccelerateRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=10,
+        description="1–10 QPU shapes (duplicates = QPU replication). "
+                    "Valid: CUBE / RING / TREE / LINE / STAR",
+    )
+    shots: Optional[int] = Field(
+        None, ge=1, le=100_000,
+        description="Shots per shape; None = each shape's canonical default",
+    )
+    mode: str = Field(
+        "local",
+        description="Execution mode: local | fake | ibm",
+    )
+    confirm: Optional[str] = Field(
+        None,
+        description=f'Must equal "{CONFIRM}" to authorise a real-QPU run',
+    )
+
+
+class AcceleratorRunResponse(BaseModel):
+    shape:        str
+    q:            float
+    slot:         str
+    delta:        float
+    passed:       bool
+    sig_code:     str
+    backend:      str
+    shots:        int
+    theta_disp:   str
+
+
+class SynthesizedResponse(BaseModel):
+    slots:          dict[str, AcceleratorRunResponse]
+    mente_total:    float
+    mente_achieved: bool
+    four_kings:     bool
+    missing_slots:  list[str]
+
+
+class AccelerateResponse(BaseModel):
+    run_id:          str
+    born_at:         str
+    runs:            list[AcceleratorRunResponse]
+    synthesized:     SynthesizedResponse
+    observe_receipt: dict
+
+
+@router.post("/accelerate", response_model=AccelerateResponse)
+def accelerate_endpoint(
+    req: AccelerateRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> AccelerateResponse:
+    """
+    仮想加速器 — 複数 QPU 形状を並列実行し MENTE 座標で合成する。
+
+    - 同じ形状を複数指定することで QPU プール複製が可能
+    - 各実行結果の q = 1 − δ を四天王スロット(S1–S4)に射影
+    - 同一スロットに複数結果がある場合、最高 q（最大コヒーレンス）を採用
+    - 合成 mente_total ≥ MENTE_CONST で四天王全顕現
+    - sig-receipt/1 を発行（全顕現時は CUBE-φ.618-ε.001）
+    """
+    audit = AuditLogger.get()
+    resource = f"accelerate/{','.join(req.shapes)}/{req.mode}"
+
+    for shape in req.shapes:
+        if shape not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown shape {shape!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}",
+            )
+    if req.mode not in ("local", "fake", "ibm"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown mode {req.mode!r}; valid: local / fake / ibm",
+        )
+    if req.mode == "ibm" and role != Role.QPU_ADMIN:
+        audit.log(role.value, "accelerate.run", resource, "denied",
+                  {"reason": "insufficient_role"})
+        raise HTTPException(status_code=403, detail="QPU_ADMIN role required for ibm mode")
+    if req.shots and req.mode == "ibm" and req.shots > 20_000:
+        raise HTTPException(422, "shots > 20,000 not allowed for ibm mode")
+
+    kwargs: dict = dict(shapes=req.shapes, mode=req.mode)
+    if req.shots is not None:
+        kwargs["shots"] = req.shots
+    if req.mode == "ibm":
+        token = os.environ.get("IBM_QUANTUM_TOKEN")
+        instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+        if not token:
+            raise HTTPException(503, "IBM_QUANTUM_TOKEN environment variable is not set")
+        if not instance:
+            raise HTTPException(503, "IBM_QUANTUM_INSTANCE environment variable is not set")
+        kwargs.update(token=token, instance=instance, confirm=req.confirm)
+
+    try:
+        acc = VirtualAccelerator()
+        result: AcceleratorResult = acc.run(**kwargs)
+    except ValueError as exc:
+        audit.log(role.value, "accelerate.run", resource, "failure",
+                  {"error_type": "ValueError"})
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "accelerate.run", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    audit.log(role.value, "accelerate.run", resource, "success",
+              {"mente_total": result.synthesized.mente_total,
+               "four_kings": result.synthesized.four_kings,
+               "run_count": len(result.runs)})
+
+    def _run_resp(r) -> AcceleratorRunResponse:
+        return AcceleratorRunResponse(
+            shape=r.shape, q=r.q, slot=r.slot, delta=r.delta,
+            passed=r.passed, sig_code=r.sig_code, backend=r.backend,
+            shots=r.shots, theta_disp=r.theta_disp,
+        )
+
+    return AccelerateResponse(
+        run_id=result.run_id,
+        born_at=result.born_at,
+        runs=[_run_resp(r) for r in result.runs],
+        synthesized=SynthesizedResponse(
+            slots={slot: _run_resp(run) for slot, run in result.synthesized.slots.items()},
+            mente_total=result.synthesized.mente_total,
+            mente_achieved=result.synthesized.mente_achieved,
+            four_kings=result.synthesized.four_kings,
+            missing_slots=result.synthesized.missing_slots,
+        ),
+        observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Gemini-Candy-Flash endpoint ───────────────────────────────────────────────
+
+class GeminiRecommendationResponse(BaseModel):
+    suggested_shapes: list[str]
+    suggested_shots:  int
+    suggested_theta:  str
+    retest_reason:    str
+    commentary:       str
+    model_used:       str
+
+
+class CandyFlashRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状 (CUBE / RING / TREE / LINE / STAR)",
+    )
+    shots: Optional[int] = Field(
+        None, ge=1, le=100_000,
+        description="Shots per shape; None = canonical default per shape",
+    )
+    mode: str = Field("local", description="local | fake")
+    round_num: int = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
+    offline: bool = Field(
+        False,
+        description="True = skip Gemini call, return heuristic recommendation",
+    )
+
+
+class CandyFlashResponse(BaseModel):
+    session_id:      str
+    born_at:         str
+    runs:            list[AcceleratorRunResponse]
+    synthesized:     SynthesizedResponse
+    spiral:          dict
+    spiral_preview:  str
+    gemini:          GeminiRecommendationResponse
+    observe_receipt: dict
+
+
+@router.post("/candy/flash", response_model=CandyFlashResponse)
+def candy_flash_endpoint(
+    req: CandyFlashRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> CandyFlashResponse:
+    """
+    Gemini-Candy-Flash-API — キャンディ群 × 蔓旋 → Gemini Flash パラメーター制御。
+
+    キャンディ群（CUBE / RING / TREE / LINE / STAR）の量子回路を実行し、
+    蔓旋ラウンド回路状態と合わせて Gemini Flash に送信する。
+    Gemini は MENTE スコア改善のための内部パラメーター推袖を返す。
+
+    **offline=true** で Gemini 呼び出しをスキップし、ヒューリスティック推袖を返す。
+    Gemini を呼び出す場合は GEMINI_API_KEY 環境変数が必要。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/flash/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}",
+            )
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "candy/flash supports only local or fake mode")
+
+    try:
+        flash = GeminiCandyFlash()
+        if req.offline or not os.environ.get("GEMINI_API_KEY"):
+            result = flash.run_offline(
+                shapes=req.shapes,
+                shots=req.shots,
+                mode=req.mode,
+                round_num=req.round_num,
+            )
+        else:
+            result = flash.run(
+                shapes=req.shapes,
+                shots=req.shots,
+                mode=req.mode,
+                round_num=req.round_num,
+            )
+    except EnvironmentError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.flash", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(status_code=500, detail="internal server error") from exc
+
+    acc = result.accelerator
+    audit.log(role.value, "candy.flash", resource, "success", {
+        "mente_total":  acc.synthesized.mente_total,
+        "four_kings":   acc.synthesized.four_kings,
+        "model_used":   result.recommendation.model_used,
+    })
+
+    def _rr(r) -> AcceleratorRunResponse:
+        return AcceleratorRunResponse(
+            shape=r.shape, q=r.q, slot=r.slot, delta=r.delta,
+            passed=r.passed, sig_code=r.sig_code, backend=r.backend,
+            shots=r.shots, theta_disp=r.theta_disp,
+        )
+
+    return CandyFlashResponse(
+        session_id=result.session_id,
+        born_at=result.born_at,
+        runs=[_rr(r) for r in acc.runs],
+        synthesized=SynthesizedResponse(
+            slots={s: _rr(run) for s, run in acc.synthesized.slots.items()},
+            mente_total=acc.synthesized.mente_total,
+            mente_achieved=acc.synthesized.mente_achieved,
+            four_kings=acc.synthesized.four_kings,
+            missing_slots=acc.synthesized.missing_slots,
+        ),
+        spiral=result.spiral,
+        spiral_preview=result.spiral_preview,
+        gemini=GeminiRecommendationResponse(
+            suggested_shapes=result.recommendation.suggested_shapes,
+            suggested_shots=result.recommendation.suggested_shots,
+            suggested_theta=result.recommendation.suggested_theta,
+            retest_reason=result.recommendation.retest_reason,
+            commentary=result.recommendation.commentary,
+            model_used=result.recommendation.model_used,
+        ),
+        observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Sonnet-Score endpoint ────────────────────────────────────────────────────────
+
+class ScoreEventResponse(BaseModel):
+    beat:          float
+    duration:      float
+    register:      str
+    motif:         str
+    intensity:     float
+    embellishment: Optional[str] = None
+
+
+class DriveCellResponse(BaseModel):
+    col:    int
+    row:    int
+    shape:  str
+    slot:   str
+    motif:  str
+    q:      float
+    effect: str
+
+
+class DriveBoardResponse(BaseModel):
+    name:  str
+    cols:  int
+    rows:  int
+    cells: list[DriveCellResponse]
+    grid:  list[list[Optional[str]]]
+
+
+class SonnetScoreRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状",
+    )
+    shots:     Optional[int] = Field(None, ge=1, le=100_000)
+    mode:      str = Field("local", description="local | fake")
+    round_num: int = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
+    bars:      int = Field(4, ge=1, le=32,   description="スコアのバー数")
+
+
+class SonnetScoreResponse(BaseModel):
+    score_id:       str
+    born_at:        str
+    bpm:            int
+    bars:           int
+    tilt_rate:      float
+    ascent_rate:    float
+    mente_total:    float
+    mente_achieved: bool
+    key:            str
+    mode_name:      str
+    era:            str
+    events:         list[ScoreEventResponse]
+    board_1:        DriveBoardResponse
+    board_2:        DriveBoardResponse
+    embellishments: list[str]
+    commentary:     str
+    observe_receipt: dict
+
+
+@router.post("/candy/sonnet", response_model=SonnetScoreResponse)
+def candy_sonnet_endpoint(
+    req: SonnetScoreRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> SonnetScoreResponse:
+    """
+    Sonnet-Score-API — ハーマイオニーの杖 × ドライブ板 × 蔓旋 → 音楽スコア生成。
+
+    キャンディ群の量子回路を実行し蔓旋状態と組み合わせて
+    ドライブ板グリッド(1: 4×4 / 2: 8×4)へのワンド攻撃を配置、
+    MENTE 上昇率・BPM・音楽時代（バロック→ロマン派）を含む
+    Sonnet-Score 構造体と sig-receipt/1 を返す。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/sonnet/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "sonnet supports only local or fake mode")
+
+    try:
+        ss = SonnetScore(bars=req.bars)
+        result = ss.compute_offline(
+            shapes=req.shapes,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.sonnet", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    audit.log(role.value, "candy.sonnet", resource, "success", {
+        "ascent_rate": result.ascent_rate,
+        "bpm":         result.bpm,
+        "era":         result.era,
+    })
+
+    def _board(b) -> DriveBoardResponse:
+        return DriveBoardResponse(
+            name=b.name, cols=b.cols, rows=b.rows,
+            cells=[DriveCellResponse(
+                col=c.col, row=c.row, shape=c.shape, slot=c.slot,
+                motif=c.motif, q=c.q, effect=c.effect,
+            ) for c in b.cells],
+            grid=b.to_grid(),
+        )
+
+    return SonnetScoreResponse(
+        score_id=result.score_id,
+        born_at=result.born_at,
+        bpm=result.bpm,
+        bars=result.bars,
+        tilt_rate=result.tilt_rate,
+        ascent_rate=result.ascent_rate,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        key=result.key,
+        mode_name=result.mode_name,
+        era=result.era,
+        events=[ScoreEventResponse(
+            beat=e.beat, duration=e.duration, register=e.register,
+            motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+        ) for e in result.events],
+        board_1=_board(result.board_1),
+        board_2=_board(result.board_2),
+        embellishments=result.embellishments,
+        commentary=result.commentary,
+        observe_receipt=result.observe_receipt,
+    )
+
+
+# ── Sonnet-Score Remix endpoint ───────────────────────────────────────────────
+
+class BmiStateModel(BaseModel):
+    focus:  float = Field(0.5, ge=0.0, le=1.0, description="Melody clarity driver")
+    calm:   float = Field(0.5, ge=0.0, le=1.0, description="Tempo modifier driver")
+    energy: float = Field(0.5, ge=0.0, le=1.0, description="Layer intensity driver")
+
+
+class RemixLayerResponse(BaseModel):
+    tempo_modifier:  float
+    layer_intensity: float
+    instrument_set:  list[str]
+    loop_signature:  str
+    bmi_influence:   str
+    export_hint:     str
+
+
+class SonnetRemixRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="キャンディ群: 1–5 形状",
+    )
+    shots:        Optional[int]           = Field(None, ge=1, le=100_000)
+    mode:         str                     = Field("local", description="local | fake")
+    round_num:    int                     = Field(1, ge=1, le=9999)
+    bars:         int                     = Field(4, ge=1, le=32)
+    bmi_state:    Optional[BmiStateModel] = Field(
+        None,
+        description="Cure-BMI state; null → defaults (focus=0.5, calm=0.5, energy=0.5)",
+    )
+    remix_style:  str = Field(
+        "orchestral",
+        description="orchestral | electronic | ambient",
+    )
+
+
+class SonnetRemixResponse(SonnetScoreResponse):
+    remix: RemixLayerResponse
+
+
+@router.post("/candy/sonnet/remix", response_model=SonnetRemixResponse)
+def candy_sonnet_remix_endpoint(
+    req: SonnetRemixRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> SonnetRemixResponse:
+    """
+    Sonnet-Score Remix — キャンディ群 × Cure-BMI → バックグラウンド音楽リミック層。
+
+    SonnetScoreResponse の全フィールドに加え、BMI 脳波状態（focus / calm / energy）を
+    音楽パラメーター（テンポ倍率・楽器セット・ループ拍子）へマッピングした
+    `remix` オブジェクトを返す。
+
+    **bmi_state=null** の場合は デフォルト値 (focus=0.5, calm=0.5, energy=0.5) を使用。
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/sonnet/remix/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "sonnet/remix supports only local or fake mode")
+    if req.remix_style not in VALID_REMIX_STYLES:
+        raise HTTPException(422, f"remix_style must be one of {VALID_REMIX_STYLES}")
+
+    try:
+        ss = SonnetScore(bars=req.bars)
+        result = ss.compute_offline(
+            shapes=req.shapes,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.sonnet.remix", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    bmi_dict = req.bmi_state.model_dump() if req.bmi_state else None
+    remix = compute_remix(
+        era=result.era,
+        bmi_state=bmi_dict,
+        remix_style=req.remix_style,
+    )
+
+    audit.log(role.value, "candy.sonnet.remix", resource, "success", {
+        "ascent_rate":   result.ascent_rate,
+        "bpm":           result.bpm,
+        "era":           result.era,
+        "tempo_modifier": remix.tempo_modifier,
+        "remix_style":   req.remix_style,
+    })
+
+    def _board(b) -> DriveBoardResponse:
+        return DriveBoardResponse(
+            name=b.name, cols=b.cols, rows=b.rows,
+            cells=[DriveCellResponse(
+                col=c.col, row=c.row, shape=c.shape, slot=c.slot,
+                motif=c.motif, q=c.q, effect=c.effect,
+            ) for c in b.cells],
+            grid=b.to_grid(),
+        )
+
+    return SonnetRemixResponse(
+        score_id=result.score_id,
+        born_at=result.born_at,
+        bpm=result.bpm,
+        bars=result.bars,
+        tilt_rate=result.tilt_rate,
+        ascent_rate=result.ascent_rate,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        key=result.key,
+        mode_name=result.mode_name,
+        era=result.era,
+        events=[ScoreEventResponse(
+            beat=e.beat, duration=e.duration, register=e.register,
+            motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+        ) for e in result.events],
+        board_1=_board(result.board_1),
+        board_2=_board(result.board_2),
+        embellishments=result.embellishments,
+        commentary=result.commentary,
+        observe_receipt=result.observe_receipt,
+        remix=RemixLayerResponse(**remix.to_dict()),
+    )
+
+
+# ── Sonnet-Score SSE stream endpoint ─────────────────────────────────────────
+
+@router.get("/candy/sonnet/stream")
+async def candy_sonnet_stream_endpoint(
+    shapes: str = Query(..., description="Comma-separated shapes e.g. LINE,CUBE"),
+    round:  int = Query(1,   ge=1, le=9999, description="Starting round number"),
+    token:  str = Query(..., description="Bearer token (OPERATOR role required)"),
+) -> StreamingResponse:
+    """
+    Server-Sent Events stream — Sonnet-Score リアルタイム更新 (ayglass device 向け)。
+
+    2 秒ごとに新しい `compute_offline()` を実行し、スコア更新イベントを push する。
+    score_update イベントと ascent_tick イベントを交互に送信する。
+
+    - `?shapes=LINE,CUBE` — キャンディ群（カンマ区切り）
+    - `?round=N`          — 開始ラウンド番号（インクリメントされる）
+    - `?token=...`        — OPERATOR 権限のベアラートークン（SSE はヘッダー設定が困難なため）
+
+    10 回のスコア更新後にストリームを終了する (20 秒)。
+    """
+    # Validate token inline (SSE cannot use header-based Depends easily)
+    from cure_oracle.security import _validate_token
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    async def event_generator():
+        ss = SonnetScore(bars=4)
+        for i in range(10):
+            current_round = round + i
+            try:
+                result = ss.compute_offline(
+                    shapes=shape_list,
+                    shots=512,
+                    mode="local",
+                    round_num=current_round,
+                )
+            except Exception:
+                break
+
+            # Full score_update event
+            score_data = {
+                "score_id":      result.score_id,
+                "born_at":       result.born_at,
+                "bpm":           result.bpm,
+                "bars":          result.bars,
+                "tilt_rate":     result.tilt_rate,
+                "ascent_rate":   result.ascent_rate,
+                "mente_total":   result.mente_total,
+                "mente_achieved": result.mente_achieved,
+                "key":           result.key,
+                "mode_name":     result.mode_name,
+                "era":           result.era,
+                "embellishments": result.embellishments,
+                "commentary":    result.commentary,
+            }
+            yield f"event: score_update\ndata: {_json.dumps({'type': 'score_update', 'data': score_data})}\n\n"
+
+            await asyncio.sleep(1.0)
+
+            # Lightweight ascent_tick between full updates
+            tick_data = {
+                "type":        "ascent_tick",
+                "ascent_rate": result.ascent_rate,
+                "bpm":         result.bpm,
+                "era":         result.era,
+            }
+            yield f"event: ascent_tick\ndata: {_json.dumps(tick_data)}\n\n"
+
+            await asyncio.sleep(1.0)
+
+        yield "event: stream_end\ndata: {\"type\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+# ── Phase J: mesh-score models ──────────────────────────────────────────────
+
+class RawPointModel(BaseModel):
+    x: float = Field(..., ge=0.0, le=1.0, description="Normalized x ∈ [0,1] (time)")
+    y: float = Field(..., ge=0.0, le=1.0, description="Normalized y ∈ [0,1] (pitch, top=high)")
+    t: float = Field(0.0, description="Timestamp in ms (optional)")
+
+
+class GridConfigModel(BaseModel):
+    cols: int = Field(16, ge=4, le=64)
+    rows: int = Field(12, ge=4, le=24)
+    bpm: int = Field(120, ge=40, le=240)
+    bars: int = Field(4, ge=1, le=16)
+    beats_per_bar: int = Field(4, ge=2, le=7)
+
+
+class MeshScoreRequest(BaseModel):
+    strokes: list[list[RawPointModel]] = Field(
+        ..., description="List of strokes; each stroke is a list of RawPoints"
+    )
+    era: str = Field("baroque", description="Musical era for instrument context")
+    grid: GridConfigModel = Field(default_factory=GridConfigModel)
+
+
+class MeshScoreResponse(BaseModel):
+    era: str
+    version: str
+    bpm: int
+    bars: int
+    events: list[dict]
+    stroke_count: int
+    export_hint: str
+
+
+# ── Phase J endpoints ─────────────────────────────────────────────────────────────
+
+@router.post(
+    "/candy/sonnet/mesh-score",
+    response_model=MeshScoreResponse,
+    summary="Phase J — free-curve mesh → musical notes",
+    tags=["sonnet"],
+)
+def candy_sonnet_mesh_score(
+    req: MeshScoreRequest,
+    _: Role = Depends(require_role(Role.OPERATOR)),
+):
+    """Convert freehand strokes drawn on a grid mesh into Sonnet-Score NoteEvents.
+
+    Each stroke's geometry (curvature, oscillation, length, Y-position) is
+    analysed and mapped to: register (大甲音/甲音/吕音/吕音-bass), motif type,
+    beat offset, duration, and intensity.  The resulting events are
+    MIDI-compatible at 480 PPQN via to_midi_events().
+    """
+    cfg = MeshGridConfig(
+        cols=req.grid.cols,
+        rows=req.grid.rows,
+        bpm=req.grid.bpm,
+        bars=req.grid.bars,
+        beats_per_bar=req.grid.beats_per_bar,
+    )
+    raw_strokes = [
+        [{"x": p.x, "y": p.y, "t": p.t} for p in stroke]
+        for stroke in req.strokes
+    ]
+    try:
+        result = strokes_to_score(raw_strokes, era=req.era, grid_cfg=cfg)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return result
+
+
+@router.get(
+    "/candy/sonnet/version",
+    summary="Phase J — era-aware version negotiation",
+    tags=["sonnet"],
+)
+def candy_sonnet_version(
+    mente_total: float = Query(0.0, ge=0.0, description="Current MENTE score"),
+):
+    """Return the active Sonnet-Score API version for a given MENTE score.
+
+    The ``{era}`` segment is computed from *mente_total* using the same
+    thresholds as SonnetScore.compute_offline().  The ``{rev}`` is the
+    Phase J revision constant (r2).
+    """
+    era = era_from_mente(mente_total)
+    return {
+        "version":        f"cure-{era}-r{CURRENT_REV}",
+        "era":            era,
+        "rev":            CURRENT_REV,
+        "mente_total":    mente_total,
+        "era_thresholds": ERA_MENTE_LOWER,
+        "endpoint_map": {
+            "compute":      "/api/v1/qpu/candy/sonnet",
+            "remix":        "/api/v1/qpu/candy/sonnet/remix",
+            "stream":       "/api/v1/qpu/candy/sonnet/stream",
+            "mesh_score":   "/api/v1/qpu/candy/sonnet/mesh-score",
+            "version":      "/api/v1/qpu/candy/sonnet/version",
+            "quantum_sim":        "/api/v1/qpu/candy/quantum-sim",
+            "quantum_sim_stream": "/api/v1/qpu/candy/quantum-sim/stream",
+            "resonance_stream":   "/api/v1/qpu/candy/resonance/stream",
+            "export_midi":        "/api/v1/qpu/candy/export/midi",
+            "score_replay":       "/api/v1/qpu/candy/score-replay/frames",
+            "punchcard":          "/api/v1/qpu/candy/punchcard/frame",
+            "knot_score":         "/api/v1/qpu/candy/knot-score/frame",
+            "cure_bmi":           "/api/v1/qpu/candy/cure-bmi/session",
+            "hdna":               "/api/v1/qpu/candy/hdna/pack",
+            "famidancer":         "/api/v1/qpu/candy/famidancer/session",
+            "hdna_sim":           "/api/v1/qpu/candy/hdna/sim",
+        },
+    }
+
+
+# ── Phase K: quantum-sim models ──────────────────────────────────────────────
+
+class QuantumSimRequest(BaseModel):
+    shapes: list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="入力キャンディ群 (1–5 shapes: CUBE/RING/TREE/LINE/STAR)",
+    )
+    shots:     Optional[int]       = Field(None, ge=1, le=100_000)
+    mode:      str                 = Field("local", description="local | fake")
+    round_num: int                 = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
+    bars:      int                 = Field(4, ge=1, le=32, description="Sonnet-Score バー数")
+    offline:   bool                = Field(
+        True,
+        description="True = offline Gemini stub; False = live Gemini Flash (needs GEMINI_API_KEY)",
+    )
+    bmi_state: Optional[BmiStateModel] = Field(
+        None,
+        description="Cure-BMI state forwarded to Sonnet-Score layer",
+    )
+
+
+class QuantumSimGeminiResponse(BaseModel):
+    suggested_shapes: list[str]
+    suggested_shots:  int
+    suggested_theta:  str
+    retest_reason:    str
+    commentary:       str
+    model_used:       str
+
+
+class QuantumSimScoreResponse(BaseModel):
+    score_id:       str
+    born_at:        str
+    bpm:            int
+    bars:           int
+    era:            str
+    mente_total:    float
+    mente_achieved: bool
+    events:         list[ScoreEventResponse]
+    embellishments: list[str]
+    commentary:     str
+
+
+class QuantumSimResponse(BaseModel):
+    sim_id:          str
+    born_at:         str
+    era:             str
+    version:         str
+    input_shapes:    list[str]
+    fused_shapes:    list[str]
+    mente_total:     float
+    mente_achieved:  bool
+    fusion_note:     str
+    gemini:          QuantumSimGeminiResponse
+    score:           QuantumSimScoreResponse
+    observe_receipt: dict
+
+
+@router.post(
+    "/candy/quantum-sim",
+    response_model=QuantumSimResponse,
+    summary="Phase K — Gemini-Candy ⟷ Sonnet-Score auto-fusion loop",
+    tags=["quantum-sim"],
+)
+def candy_quantum_sim(
+    req: QuantumSimRequest,
+    role: Role = Depends(require_role(Role.OPERATOR)),
+) -> QuantumSimResponse:
+    """Unified quantum simulation: Gemini-Candy observation × Sonnet-Score music.
+
+    Stage 1 — Gemini-Candy-Flash: run VirtualAccelerator on *shapes*, obtain
+    AI-driven parameter recommendation (or heuristic stub when offline=True).
+
+    Stage 2 — Sonnet-Score: re-run on Gemini's *suggested_shapes*, producing a
+    MENTE-era-aware musical score fused with the observation result.
+
+    Returns a combined QuantumSimResponse with both layers and a sig-receipt/1.
+    """
+    audit = AuditLogger.get()
+    resource = f"candy/quantum-sim/{','.join(req.shapes)}/R{req.round_num}"
+
+    for s in req.shapes:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+    if req.mode not in ("local", "fake"):
+        raise HTTPException(422, "quantum-sim supports only local or fake mode")
+
+    bmi_dict = req.bmi_state.model_dump() if req.bmi_state else None
+
+    try:
+        result = run_quantum_sim(
+            shapes=req.shapes,
+            bmi_state=bmi_dict,
+            shots=req.shots,
+            mode=req.mode,
+            round_num=req.round_num,
+            bars=req.bars,
+            offline=req.offline,
+        )
+    except EnvironmentError as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, detail=sanitize_error(exc)) from exc
+    except Exception as exc:
+        audit.log(role.value, "candy.quantum_sim", resource, "failure",
+                  {"error_type": type(exc).__name__})
+        raise HTTPException(500, "internal server error") from exc
+
+    audit.log(role.value, "candy.quantum_sim", resource, "success", {
+        "era":            result.era,
+        "mente_total":    result.mente_total,
+        "mente_achieved": result.mente_achieved,
+        "fused_shapes":   result.fused_shapes,
+    })
+
+    g = result.gemini
+    sc = result.score
+    return QuantumSimResponse(
+        sim_id=result.sim_id,
+        born_at=result.born_at,
+        era=result.era,
+        version=result.version,
+        input_shapes=result.input_shapes,
+        fused_shapes=result.fused_shapes,
+        mente_total=result.mente_total,
+        mente_achieved=result.mente_achieved,
+        fusion_note=result.fusion_note,
+        gemini=QuantumSimGeminiResponse(
+            suggested_shapes=g.recommendation.suggested_shapes,
+            suggested_shots=g.recommendation.suggested_shots,
+            suggested_theta=g.recommendation.suggested_theta,
+            retest_reason=g.recommendation.retest_reason,
+            commentary=g.recommendation.commentary,
+            model_used=g.recommendation.model_used,
+        ),
+        score=QuantumSimScoreResponse(
+            score_id=sc.score_id,
+            born_at=sc.born_at,
+            bpm=sc.bpm,
+            bars=sc.bars,
+            era=sc.era,
+            mente_total=sc.mente_total,
+            mente_achieved=sc.mente_achieved,
+            events=[ScoreEventResponse(
+                beat=e.beat, duration=e.duration, register=e.register,
+                motif=e.motif, intensity=e.intensity, embellishment=e.embellishment,
+            ) for e in sc.events],
+            embellishments=sc.embellishments,
+            commentary=sc.commentary,
+        ),
+        observe_receipt=g.observe_receipt,
+    )
+
+
+# ── Phase L: quantum-sim SSE stream endpoint ──────────────────────────────────
+
+@router.get(
+    "/candy/quantum-sim/stream",
+    summary="Phase L — quantum-sim MIDI visualizer SSE stream (cure-{era}-r4)",
+    tags=["quantum-sim"],
+)
+async def candy_quantum_sim_stream(
+    shapes: str = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:  int = Query(1,   ge=1, le=9999, description="開始ラウンド番号"),
+    token:  str = Query(..., description="Bearer token (OPERATOR role required)"),
+    frames: int = Query(10,  ge=1, le=10,   description="フレーム数 (1–10, default 10)"),
+) -> StreamingResponse:
+    """Server-Sent Events stream — quantum-sim MIDI visualizer (B地点第七画面).
+
+    Runs run_quantum_sim() *frames* times and emits sim_update / sim_tick events.
+    Used by the MIDI_VIZ Flet screen (Phase L, cure-{era}-r4).
+
+    - ``?shapes=LINE,CUBE`` — キャンディ群（カンマ区切り）
+    - ``?round=N``          — 開始ラウンド番号
+    - ``?token=...``        — OPERATOR 権限のベアラートークン
+    - ``?frames=N``         — フレーム数 (1–10)
+    """
+    from cure_oracle.security import _validate_token
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    async def event_generator():
+        for i in range(frames):
+            current_round = round + i
+            try:
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=shape_list,
+                    round_num=current_round,
+                    bars=4,
+                    offline=True,
+                )
+                frame = build_midi_viz_frame(result)
+            except Exception:
+                break
+
+            sim_data = {
+                "frame_id":       frame.frame_id,
+                "born_at":        frame.born_at,
+                "era":            frame.era,
+                "version":        frame.version,
+                "bpm":            frame.bpm,
+                "bars":           frame.bars,
+                "mente_total":    frame.mente_total,
+                "mente_achieved": frame.mente_achieved,
+                "fusion_note":    frame.fusion_note,
+                "fused_shapes":   frame.fused_shapes,
+                "note_count":     len(frame.notes),
+                "ppqn":           frame.ppqn,
+                "channels": [
+                    {
+                        "index":        c.index,
+                        "name":         c.name,
+                        "note_count":   c.note_count,
+                        "avg_velocity": c.avg_velocity,
+                        "active":       c.active,
+                    }
+                    for c in frame.channels
+                ],
+            }
+            yield (
+                f"event: sim_update\n"
+                f"data: {_json.dumps({'type': 'sim_update', 'data': sim_data})}\n\n"
+            )
+
+            await asyncio.sleep(2.0)
+
+            tick_data = {
+                "type":           "sim_tick",
+                "frame_index":    i,
+                "era":            frame.era,
+                "bpm":            frame.bpm,
+                "mente_total":    frame.mente_total,
+                "mente_achieved": frame.mente_achieved,
+            }
+            yield f"event: sim_tick\ndata: {_json.dumps(tick_data)}\n\n"
+
+            await asyncio.sleep(2.0)
+
+        yield "event: stream_end\ndata: {\"type\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Phase M: resonance SSE stream endpoint ────────────────────────────────────
+
+@router.get(
+    "/candy/resonance/stream",
+    summary="Phase M — Resonance Max-Cut × MIDI fusion SSE stream (cure-{era}-r5)",
+    tags=["quantum-sim"],
+)
+async def candy_resonance_stream(
+    shapes: str = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:  int = Query(1,   ge=1, le=9999, description="開始ラウンド番号"),
+    token:  str = Query(..., description="Bearer token (OPERATOR role required)"),
+    frames: int = Query(10,  ge=1, le=10,   description="フレーム数 (1–10, default 10)"),
+) -> StreamingResponse:
+    """Server-Sent Events stream — Resonance Max-Cut × MIDI fusion (B地点第八画面).
+
+    Runs run_quantum_sim() + build_resonance_frame() *frames* times and emits
+    resonance_update / resonance_tick / stream_end events.
+    Used by the RESONANCE_VIZ Flet screen (Phase M, cure-{era}-r5).
+
+    - ``?shapes=LINE,CUBE`` — キャンディ群（カンマ区切り）
+    - ``?round=N``          — 開始ラウンド番号
+    - ``?token=...``        — OPERATOR 権限のベアラートークン
+    - ``?frames=N``         — フレーム数 (1–10)
+    """
+    from cure_oracle.security import _validate_token
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    async def event_generator():
+        for i in range(frames):
+            current_round = round + i
+            try:
+                result = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=shape_list,
+                    round_num=current_round,
+                    bars=4,
+                    offline=True,
+                )
+                frame = build_resonance_frame_(result)
+            except Exception:
+                break
+
+            resonance_data = {
+                "frame_id":       frame.frame_id,
+                "born_at":        frame.born_at,
+                "era":            frame.era,
+                "version":        frame.version,
+                "bpm":            frame.bpm,
+                "bars":           frame.bars,
+                "mente_total":    frame.mente_total,
+                "mente_achieved": frame.mente_achieved,
+                "fusion_note":    frame.fusion_note,
+                "fused_shapes":   frame.fused_shapes,
+                "cut_value":      frame.cut_value,
+                "partition_0":    frame.partition_0,
+                "partition_1":    frame.partition_1,
+                "note_count":     len(frame.notes),
+                "ppqn":           frame.ppqn,
+                "channels": [
+                    {
+                        "index":        c.index,
+                        "name":         c.name,
+                        "coin_labels":  c.coin_labels,
+                        "note_count":   c.note_count,
+                        "avg_velocity": c.avg_velocity,
+                        "cut_weight":   c.cut_weight,
+                        "active":       c.active,
+                    }
+                    for c in frame.channels
+                ],
+            }
+            yield (
+                f"event: resonance_update\n"
+                f"data: {_json.dumps({'type': 'resonance_update', 'data': resonance_data})}\n\n"
+            )
+
+            await asyncio.sleep(2.0)
+
+            tick_data = {
+                "type":           "resonance_tick",
+                "frame_index":    i,
+                "era":            frame.era,
+                "bpm":            frame.bpm,
+                "mente_total":    frame.mente_total,
+                "cut_value":      frame.cut_value,
+                "mente_achieved": frame.mente_achieved,
+            }
+            yield f"event: resonance_tick\ndata: {_json.dumps(tick_data)}\n\n"
+
+            await asyncio.sleep(2.0)
+
+        yield "event: stream_end\ndata: {\"type\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Phase N: MIDI Export endpoint ─────────────────────────────────────────────
+
+class MidiExportRequest(BaseModel):
+    shapes:    list[str] = Field(
+        ..., min_length=1, max_length=5,
+        description="入力キャンディ群 (1–5 shapes: CUBE/RING/TREE/LINE/STAR)",
+    )
+    round_num: int  = Field(1, ge=1, le=9999, description="蔓旋ラウンド番号")
+    bars:      int  = Field(4, ge=1, le=32,   description="Sonnet-Score バー数")
+    source:    str  = Field(
+        "midi_viz",
+        description="フレームソース: midi_viz (r4) または resonance (r5)",
+    )
+
+
+@router.post(
+    "/candy/export/midi",
+    summary="Phase N — MIDI Format 0 export (cure-{era}-r6)",
+    tags=["quantum-sim"],
+)
+async def candy_export_midi(
+    request: MidiExportRequest,
+    token: str = Query(..., description="Bearer token (OPERATOR role required)"),
+):
+    """Export quantum-sim fusion result as a MIDI Format 0 (.mid) binary.
+
+    Runs run_quantum_sim() + frame builder + MIDI writer and returns
+    the raw .mid bytes with Content-Type audio/midi (B地点第九画面).
+
+    source="midi_viz"  → build_midi_viz_frame()  → frame_to_midi()
+    source="resonance" → build_resonance_frame() → frame_to_midi(source="resonance")
+    """
+    from fastapi.responses import Response as _Response
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    for s in request.shapes:
+        s_up = s.strip().upper()
+        if s_up not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    shape_list = [s.strip().upper() for s in request.shapes]
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=request.round_num,
+            bars=request.bars,
+            offline=True,
+        )
+        if request.source == "resonance":
+            frame  = build_resonance_frame_(result)
+            export = _frame_to_midi(frame, source="resonance")
+        else:
+            frame  = build_midi_viz_frame(result)
+            export = _frame_to_midi(frame, source="midi_viz")
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    filename = f"cure-{export.era}-r6-{export.export_id[:8]}.mid"
+    return _Response(
+        content=export.midi_bytes,
+        media_type="audio/midi",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Export-Id":         export.export_id,
+            "X-Era":               export.era,
+            "X-Version":           export.version,
+            "X-Event-Count":       str(export.event_count),
+            "X-Duration-Seconds":  str(export.duration_seconds),
+        },
+    )
+
+
+# ── Phase O: Score Replay endpoint ────────────────────────────────────────────
+
+@router.get(
+    "/candy/score-replay/frames",
+    summary="Phase O — Score Replay & Piano-Roll frame (cure-{era}-r7)",
+    tags=["quantum-sim"],
+)
+async def candy_score_replay_frames(
+    shapes:    str = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:     int = Query(1,          ge=1, le=9999, description="蔓旋ラウンド番号"),
+    bars:      int = Query(4,          ge=1, le=32,   description="バー数"),
+    source:    str = Query("midi_viz", description="midi_viz | resonance"),
+    token:     str = Query(...,                        description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run export pipeline and return a ScoreReplayFrame as JSON (B地点第十画面).
+
+    GET /candy/score-replay/frames?shapes=LINE&round=1&token=…
+
+    Returns ScoreReplayFrame with piano_roll grid and note list.
+    No binary bytes in response — use /candy/export/midi for the .mid file.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        if source == "resonance":
+            frame  = build_resonance_frame_(result)
+            export = _frame_to_midi(frame, source="resonance")
+        else:
+            frame  = build_midi_viz_frame(result)
+            export = _frame_to_midi(frame, source="midi_viz")
+
+        replay = _build_score_replay_frame(export, history_index=0)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return {
+        "frame_id":         replay.frame_id,
+        "born_at":          replay.born_at,
+        "era":              replay.era,
+        "version":          replay.version,
+        "bpm":              replay.bpm,
+        "ppqn":             replay.ppqn,
+        "bars":             replay.bars,
+        "source":           replay.source,
+        "event_count":      replay.event_count,
+        "duration_ticks":   replay.duration_ticks,
+        "duration_seconds": replay.duration_seconds,
+        "history_index":    replay.history_index,
+        "notes": [
+            {
+                "tick":           n.tick,
+                "channel":        n.channel,
+                "note":           n.note,
+                "velocity":       n.velocity,
+                "duration_ticks": n.duration_ticks,
+                "label":          n.label,
+            }
+            for n in replay.notes
+        ],
+        "piano_roll": [
+            {
+                "bar":         c.bar,
+                "pitch_class": c.pitch_class,
+                "octave":      c.octave,
+                "channel":     c.channel,
+                "velocity":    c.velocity,
+            }
+            for c in replay.piano_roll
+        ],
+    }
+
+
+# ── Phase P: Punchcard Engine endpoint ───────────────────────────────────────
+
+@router.get(
+    "/candy/punchcard/frame",
+    summary="Phase P — 串刺し螺旋サイコロ × Punchcard Engine frame (cure-{era}-r8)",
+    tags=["quantum-sim"],
+)
+async def candy_punchcard_frame(
+    shapes:  str   = Query(..., description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:   int   = Query(1,     ge=1,  le=9999, description="蔓旋ラウンド番号"),
+    bars:    int   = Query(4,     ge=1,  le=32,   description="バー数"),
+    epsilon: float = Query(0.019, ge=0.0, le=1.0, description="ε_disp noise perturbation"),
+    token:   str   = Query(...,                   description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run quantum-sim and return a PunchcardFrame as JSON (B地点第十一画面).
+
+    GET /candy/punchcard/frame?shapes=LINE&round=1&token=…
+
+    Returns 4 punchcard grids: Dynamic A/B (8×16, quaternion-driven) and
+    Static A/B (50-byte claim record + selective disclosure mask).
+    No binary bytes in response — all grids are integer bit-arrays.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        pf = _build_punchcard_frame(result, epsilon=epsilon, t_steps=16)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    def _grid(g) -> dict:
+        return {"tracks": g.tracks, "steps": g.steps, "bits": g.bits,
+                "track_labels": g.track_labels, "pattern": g.pattern}
+
+    def _static(s) -> dict:
+        return {
+            "pattern":          s.pattern,
+            "claim_record":     s.claim_record,
+            "claim_record_hex": s.claim_record_hex,
+            "bits":             s.bits,
+            "track_labels":     s.track_labels,
+            "disclosure_mask":  s.disclosure_mask,
+            "merkle_root":      s.merkle_root,
+        }
+
+    return {
+        "frame_id":             pf.frame_id,
+        "born_at":              pf.born_at,
+        "era":                  pf.era,
+        "version":              pf.version,
+        "shape":                pf.shape,
+        "theta_q":              pf.theta_q,
+        "theta_disp":           pf.theta_disp,
+        "theta_disp_mode":      pf.theta_disp_mode,
+        "epsilon_perturbation": pf.epsilon_perturbation,
+        "mente_total":          pf.mente_total,
+        "helix_radius":         pf.helix_radius,
+        "t_steps":              pf.t_steps,
+        "dynamic_a":            _grid(pf.dynamic_a),
+        "dynamic_b":            _grid(pf.dynamic_b),
+        "static_a":             _static(pf.static_a),
+        "static_b":             _static(pf.static_b),
+    }
+
+
+# ── Phase Q: Knot Score Engine endpoint ──────────────────────────────────────
+
+@router.get(
+    "/candy/knot-score/frame",
+    summary="Phase Q — _Sonnet-Score-API × Knot Score Engine frame (cure-{era}-r9)",
+    tags=["quantum-sim"],
+)
+async def candy_knot_score_frame(
+    shapes:      str   = Query(...,    description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:       int   = Query(1,      ge=1, le=9999, description="蔓旋ラウンド番号"),
+    bars:        int   = Query(4,      ge=1, le=32,   description="バー数"),
+    knot:        str   = Query("もやい結び", description="結び目名 (knots3d.com 246種)"),
+    bow_pos:     float = Query(1.0,    ge=0.0, le=1.0, description="弓位置 0=normale 1=hinterm Steg(水中)"),
+    epsilon:     float = Query(0.019,  ge=0.0, le=1.0, description="ε_disp noise perturbation"),
+    token:       str   = Query(...,            description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run quantum-sim and return a KnotScoreFrame as JSON (B地点第十二画面).
+
+    GET /candy/knot-score/frame?shapes=LINE&knot=もやい結び&bow_pos=1.0&token=…
+
+    Returns 4 vertical strip voices (fig 13), Magic Circle ring 12×16 (fig 9/14),
+    and GarageBand 2×8 loop grid (fig 14).
+    bow_pos=1.0 → fully underwater (hinterm Steg, LPF 200 Hz).
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        kf = _build_knot_score_frame(result, knot_name=knot, bow_position=bow_pos, epsilon=epsilon)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    def _strip(s) -> dict:
+        return {
+            "voice_id":   s.voice_id,
+            "midi_ch":    s.midi_ch,
+            "technique":  s.technique,
+            "bow_pos":    s.bow_pos,
+            "filter_hz":  s.filter_hz,
+            "base_note":  s.base_note,
+            "velocity":   s.velocity,
+            "note_count": len(s.notes),
+            "gliss_arc":  s.gliss_arc,
+        }
+
+    return {
+        "frame_id":       kf.frame_id,
+        "born_at":        kf.born_at,
+        "era":            kf.era,
+        "version":        kf.version,
+        "knot_name":      kf.knot_name,
+        "knot_pitch":     kf.knot_pitch,
+        "pitch_name":     kf.pitch_name,
+        "knot_family":    kf.knot_family,
+        "theta_q":        kf.theta_q,
+        "bow_position":   kf.bow_position,
+        "filter_hz":      kf.filter_hz,
+        "technique":      kf.technique,
+        "mente_total":    kf.mente_total,
+        "duration_ticks": kf.duration_ticks,
+        "strips":         [_strip(s) for s in kf.strips],
+        "magic_circle": {
+            "positions":   kf.magic_circle.positions,
+            "t_steps":     kf.magic_circle.t_steps,
+            "placements":  kf.magic_circle.placements,
+            "pitch_names": kf.magic_circle.pitch_names,
+            "throw_arc":   kf.magic_circle.throw_arc,
+        },
+        "gb_grid": {
+            "rows":       kf.gb_grid.rows,
+            "cols":       kf.gb_grid.cols,
+            "cells":      kf.gb_grid.cells,
+            "row_labels": kf.gb_grid.row_labels,
+            "loop_a":     kf.gb_grid.loop_a,
+            "loop_b":     kf.gb_grid.loop_b,
+        },
+    }
+
+# ── Phase R: Cure-BMI × KnotScore endpoint ───────────────────────────────────
+
+@router.get(
+    "/candy/cure-bmi/session",
+    summary="Cure-BMI × KnotScore Integration Session (cure-{era}-r10)",
+    tags=["candy"],
+)
+async def candy_cure_bmi_session(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    knot:           str   = Query("もやい結び", description="Knot name from knots3d.com"),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    epsilon:        float = Query(1e-6,  ge=0.0),
+    scene:          str   = Query("trading",
+                                  description="trading|soccer|surfing|climbing|live"),
+    immersion:      float = Query(1.0,   ge=0.0, le=1.0),
+    token:          str   = Query(...,   description="API token"),
+) -> dict:
+    """Cure-BMI × KnotScore Integration — cure-{era}-r10.
+
+    GET /candy/cure-bmi/session?shapes=LINE&knot=もやい結び
+        &dominant_hz=10.0&coherence_q=0.75&impedance_kohm=4.0
+        &focus=0.5&calm=0.5&energy=0.5&bow_pos=1.0
+        &scene=trading&immersion=1.0&token=…
+
+    Maps EEG/BMI state onto KnotScoreFrame parameters and returns a unified
+    CureBmiFrame with FIKU/384candy RemixLayer for LIVE game/sports audio.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    _VALID_SCENES = {"trading", "soccer", "surfing", "climbing", "live"}
+    if scene not in _VALID_SCENES:
+        raise HTTPException(422, f"unknown scene {scene!r}; valid: {sorted(_VALID_SCENES)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        frame = _build_cure_bmi_frame(
+            result,
+            knot_name=knot,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            epsilon=epsilon,
+            scene=scene,
+            immersion=immersion,
+        )
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return frame.to_dict()
+
+# ── HDNA: Harmonia DNA Format endpoint ───────────────────────────────────────
+
+@router.get(
+    "/candy/hdna/pack",
+    summary="Pack a CureBmiFrame into a .hdna music DNA card (~2 KB)",
+    tags=["candy"],
+)
+async def candy_hdna_pack(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    knot:           str   = Query("もやい結び"),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading"),
+    region_code:    str   = Query("JP-00", max_length=12),
+    two_ago:        Optional[str] = Query(None, description="frame_id 前々回"),
+    previous:       Optional[str] = Query(None, description="frame_id 前回"),
+    next_hint:      Optional[str] = Query(None, description="frame_id 次回ヒント"),
+    token:          str   = Query(...),
+) -> dict:
+    """Build a CureBmiFrame and pack it into a .hdna binary card.
+
+    Returns:
+      hdna_b64:    base64-encoded .hdna binary (~2 KB)
+      size_bytes:  raw byte length
+      card:        human-readable card summary dict
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        bmi_frame = _build_cure_bmi_frame(
+            result,
+            knot_name=knot,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+        )
+        frame_dict = bmi_frame.to_dict()
+        card = _build_hdna_card(
+            frame_dict,
+            region_code=region_code,
+            two_ago=two_ago,
+            previous=previous,
+            next_hint=next_hint,
+        )
+        raw      = _hdna_encode(card)
+        b64_str  = _hdna_encode_b64(card)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return {
+        "hdna_b64":   b64_str,
+        "size_bytes": len(raw),
+        "card":       card.to_dict(),
+        "spec_rev":   "1.0",
+    }
+
+
+@router.get(
+    "/candy/famidancer/session",
+    summary="FAMIDANCER'S Kit: AnimHint → DanceMove session (cure-{era}-r12)",
+    tags=["candy"],
+)
+async def candy_famidancer_session(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading"),
+    immersion:      float = Query(1.0,   ge=0.0, le=1.0),
+    token:          str   = Query(...),
+) -> dict:
+    """Build a FamidancerFrame: Phase R (BMI) → Phase S (AnimHint) → Phase T (DanceMove).
+
+    Returns the full kinesthetic + audio control frame for FIKU / 384candy devices.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        fd_frame = _build_famidancer_frame(
+            result,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+            immersion=immersion,
+        )
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return fd_frame.to_dict()
+
+
+# ── Phase U: .hdna Music Simulation endpoint ──────────────────────────────────
+
+@router.get(
+    "/candy/hdna/sim",
+    summary=".hdna Music Simulation: HdnaCard → Tone.js + MIDI (cure-{era}-r13)",
+    tags=["candy"],
+)
+async def candy_hdna_sim(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    knot:           str   = Query("もやい結び"),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading",
+                                  description="trading|soccer|surfing|climbing|live"),
+    region_code:    str   = Query("JP-00", max_length=12),
+    token:          str   = Query(...,   description="API token"),
+) -> dict:
+    """Pack a CureBmiFrame into .hdna and simulate playback as Tone.js + MIDI.
+
+    GET /candy/hdna/sim?shapes=LINE&scene=soccer&token=…
+
+    Returns:
+      spec_rev:         .hdna spec revision ("1.0")
+      era:              musical era (baroque … inner_world)
+      bpm:              beats per minute from MDNA chunk
+      instrument:       era-mapped synthesizer type
+      reverb:           scene-mapped reverb preset
+      note_count:       number of note events in MDNA
+      tone_js_sequence: Tone.js Part-compatible JSON sequence
+      midi_b64:         base64-encoded Standard MIDI Type-0 file
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    _VALID_SCENES = {"trading", "soccer", "surfing", "climbing", "live"}
+    if scene not in _VALID_SCENES:
+        raise HTTPException(422, f"unknown scene {scene!r}; valid: {sorted(_VALID_SCENES)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        bmi_frame = _build_cure_bmi_frame(
+            result,
+            knot_name=knot,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+        )
+        frame_dict = bmi_frame.to_dict()
+        card = _build_hdna_card(frame_dict, region_code=region_code)
+        sim  = _hdna_simulate(card)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return sim.to_dict()
