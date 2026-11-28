@@ -82,6 +82,11 @@ try:
 except Exception:
     build_punchcard_frame = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.knot_score import build_knot_score_frame
+except Exception:
+    build_knot_score_frame = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -96,6 +101,7 @@ RESONANCE_VIZ  = "resonance_viz"  # Phase M — B地点第八画面
 EXPORT_VIZ     = "export_viz"     # Phase N — B地点第九画面
 SCORE_REPLAY   = "score_replay"   # Phase O — B地点第十画面
 PUNCHCARD      = "punchcard"      # Phase P — B地点第十一画面
+KNOT_SCORE     = "knot_score"     # Phase Q — B地点第十二画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -218,6 +224,18 @@ class PunchcardState:
 
 
 @dataclass
+class KnotScoreState:
+    """B地点第十二画面 — _Sonnet-Score-API × Knot Score Engine 状態 (Phase Q, cure-{era}-r9)."""
+    running:       bool           = False
+    current_frame: Optional[dict] = None   # serialised KnotScoreFrame
+    era:           str            = "baroque"
+    knot_name:     str            = "もやい結び"
+    pitch_name:    str            = "C#"
+    bow_position:  float          = 1.0
+    error:         Optional[str]  = None
+
+
+@dataclass
 class AppState:
     current_view:   str               = HOME
     benchmark:      BenchmarkState    = field(default_factory=BenchmarkState)
@@ -230,6 +248,7 @@ class AppState:
     export_viz:     ExportState       = field(default_factory=ExportState)
     score_replay:   ScoreReplayState  = field(default_factory=ScoreReplayState)
     punchcard:      PunchcardState    = field(default_factory=PunchcardState)
+    knot_score:     KnotScoreState    = field(default_factory=KnotScoreState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -775,6 +794,94 @@ class AppState:
                 self.punchcard.running = False
                 self._notify()
 
+    # ── Knot Score Engine (Phase Q) ───────────────────────────────────────────────────────────────────
+
+    async def run_knot_score(
+        self,
+        shapes:       Optional[list[str]] = None,
+        round_num:    int   = 1,
+        bars:         int   = 4,
+        knot_name:    str   = "もやい結び",
+        bow_position: float = 1.0,
+        epsilon:      float = 0.019,
+    ) -> None:
+        """Run quantum-sim + build_knot_score_frame and store result."""
+        async with self._lock:
+            self.knot_score.running = True
+            self.knot_score.error   = None
+            self._notify()
+            try:
+                _shapes = shapes or ["LINE"]
+                result  = await asyncio.to_thread(
+                    run_quantum_sim,
+                    shapes=_shapes,
+                    round_num=round_num,
+                    bars=bars,
+                    offline=True,
+                )
+                frame = build_knot_score_frame(
+                    result,
+                    knot_name=knot_name,
+                    bow_position=bow_position,
+                    epsilon=epsilon,
+                )
+
+                def _strip(s) -> dict:
+                    return {
+                        "voice_id":  s.voice_id,
+                        "midi_ch":   s.midi_ch,
+                        "technique": s.technique,
+                        "bow_pos":   s.bow_pos,
+                        "filter_hz": s.filter_hz,
+                        "base_note": s.base_note,
+                        "velocity":  s.velocity,
+                        "note_count": len(s.notes),
+                        "gliss_arc": s.gliss_arc,
+                    }
+
+                frame_dict: dict = {
+                    "frame_id":       frame.frame_id,
+                    "born_at":        frame.born_at,
+                    "era":            frame.era,
+                    "version":        frame.version,
+                    "knot_name":      frame.knot_name,
+                    "knot_pitch":     frame.knot_pitch,
+                    "pitch_name":     frame.pitch_name,
+                    "knot_family":    frame.knot_family,
+                    "theta_q":        frame.theta_q,
+                    "bow_position":   frame.bow_position,
+                    "filter_hz":      frame.filter_hz,
+                    "technique":      frame.technique,
+                    "mente_total":    frame.mente_total,
+                    "duration_ticks": frame.duration_ticks,
+                    "strips":         [_strip(s) for s in frame.strips],
+                    "magic_circle": {
+                        "positions":  frame.magic_circle.positions,
+                        "t_steps":    frame.magic_circle.t_steps,
+                        "placements": frame.magic_circle.placements,
+                        "pitch_names": frame.magic_circle.pitch_names,
+                        "throw_arc":  frame.magic_circle.throw_arc,
+                    },
+                    "gb_grid": {
+                        "rows":       frame.gb_grid.rows,
+                        "cols":       frame.gb_grid.cols,
+                        "cells":      frame.gb_grid.cells,
+                        "row_labels": frame.gb_grid.row_labels,
+                        "loop_a":     frame.gb_grid.loop_a,
+                        "loop_b":     frame.gb_grid.loop_b,
+                    },
+                }
+                self.knot_score.current_frame = frame_dict
+                self.knot_score.era           = frame.era
+                self.knot_score.knot_name     = frame.knot_name
+                self.knot_score.pitch_name    = frame.pitch_name
+                self.knot_score.bow_position  = frame.bow_position
+            except Exception as exc:
+                self.knot_score.error = str(exc)
+            finally:
+                self.knot_score.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -869,5 +976,13 @@ class AppState:
                 "theta_disp_mode": self.punchcard.theta_disp_mode,
                 "has_frame":       self.punchcard.current_frame is not None,
                 "error":           self.punchcard.error,
+            },
+            "knot_score": {
+                "era":          self.knot_score.era,
+                "knot_name":    self.knot_score.knot_name,
+                "pitch_name":   self.knot_score.pitch_name,
+                "bow_position": self.knot_score.bow_position,
+                "has_frame":    self.knot_score.current_frame is not None,
+                "error":        self.knot_score.error,
             },
         }

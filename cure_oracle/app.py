@@ -34,7 +34,7 @@ except ImportError:
 from cure_oracle.app_state import (
     AppState,
     HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD,
+    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def _status_dot(passed: bool | None) -> ft.Container:
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
     views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD]
+             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -164,6 +164,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.CASINO_OUTLINED,
                 selected_icon=ft.Icons.CASINO,
                 label="パンチカード",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.PIANO_OUTLINED,
+                selected_icon=ft.Icons.PIANO,
+                label="結び目スコア",
             ),
         ],
         on_change=on_change,
@@ -1666,6 +1671,263 @@ def _punchcard_view(state: AppState, page: ft.Page) -> ft.Column:
     ], spacing=16, scroll=ft.ScrollMode.AUTO)
 
 
+# ── KNOT_SCORE screen: B地点第十二画面 ───────────────────────────────────────
+
+_CIRCLE_ON  = "#f59e0b"   # diamond placement: gold (Magic Circle)
+_CIRCLE_OFF = "#1a1a3a"
+_GB_ON_A    = "#22c55e"   # GarageBand Loop A: green
+_GB_ON_B    = "#8b5cf6"   # GarageBand Loop B: purple
+_GB_OFF     = "#1a1a3a"
+
+_STRIP_COLORS = ["#38c8f0", "#8b5cf6", "#f59e0b", "#ef4444"]
+
+
+def _magic_circle_widget(mc: dict) -> ft.Control:
+    """12-position ring × 16 steps as dot grid (fig 9/14)."""
+    placements = mc.get("placements", [[0]*16]*12)
+    pitch_names = mc.get("pitch_names", [""]*12)
+    rows: list[ft.Control] = []
+    for pos in range(12):
+        cells: list[ft.Control] = []
+        label = ft.Container(
+            ft.Text(pitch_names[pos] if pos < len(pitch_names) else "",
+                    size=8, color=_DIM),
+            width=24,
+        )
+        cells.append(label)
+        for step in range(16):
+            bit = placements[pos][step] if pos < len(placements) and step < len(placements[pos]) else 0
+            cells.append(ft.Container(
+                bgcolor=_CIRCLE_ON if bit else _CIRCLE_OFF,
+                width=10, height=8, border_radius=5,
+                opacity=0.9 if bit else 0.25,
+            ))
+        rows.append(ft.Row(cells, spacing=2))
+    return _card(ft.Column([
+        _title("Magic Circle of Infinity  12×16", size=11, color=_DIM),
+        ft.Container(height=4),
+        ft.Column(rows, spacing=2),
+    ], spacing=4), padding=10)
+
+
+def _gb_grid_widget(gb: dict) -> ft.Control:
+    """2×8 GarageBand loop grid (ガレージバンドトラックループ AREA, fig 14)."""
+    cells    = gb.get("cells", [[0,0]]*8)
+    labels   = gb.get("row_labels", [""]*8)
+    loop_a   = gb.get("loop_a", [""]*8)
+    loop_b   = gb.get("loop_b", [""]*8)
+    rows: list[ft.Control] = [
+        ft.Row([
+            ft.Container(ft.Text("", size=8), width=90),
+            ft.Container(ft.Text("Loop A", size=9, color=_GB_ON_A), width=70),
+            ft.Container(ft.Text("Loop B", size=9, color=_GB_ON_B), width=70),
+        ], spacing=4),
+    ]
+    for r in range(8):
+        a_bit = cells[r][0] if r < len(cells) else 0
+        b_bit = cells[r][1] if r < len(cells) else 0
+        a_name = loop_a[r][:8] if r < len(loop_a) else ""
+        b_name = loop_b[r][:8] if r < len(loop_b) else ""
+        label  = labels[r] if r < len(labels) else ""
+        rows.append(ft.Row([
+            ft.Container(ft.Text(label, size=8, color=_DIM), width=90),
+            ft.Container(
+                bgcolor=_GB_ON_A if a_bit else _GB_OFF,
+                content=ft.Text(a_name, size=8, color=_WHITE if a_bit else _DIM),
+                width=70, height=20, border_radius=3, padding=2,
+                opacity=0.9 if a_bit else 0.3,
+            ),
+            ft.Container(
+                bgcolor=_GB_ON_B if b_bit else _GB_OFF,
+                content=ft.Text(b_name, size=8, color=_WHITE if b_bit else _DIM),
+                width=70, height=20, border_radius=3, padding=2,
+                opacity=0.9 if b_bit else 0.3,
+            ),
+        ], spacing=4))
+    return _card(ft.Column([
+        _title("ガレージバンドトラックループ AREA  2×8", size=11, color=_DIM),
+        ft.Container(height=4),
+        ft.Column(rows, spacing=3),
+    ], spacing=4), padding=10)
+
+
+def _strip_widget(s: dict, idx: int) -> ft.Control:
+    """Single vertical strip voice (fig 13)."""
+    color = _STRIP_COLORS[idx % 4]
+    voice_names = ["Vn ch.0", "Vl ch.1", "Vc ch.2", "Cb ch.3"]
+    gliss = s.get("gliss_arc", [])
+    gliss_row = ft.Row(
+        [ft.Container(
+            bgcolor=color,
+            width=max(2, int(sem * 4 + 2)),
+            height=8, border_radius=1,
+            opacity=0.5 + 0.5 * (sem / 12 if sem > 0 else 0),
+        ) for _, sem in gliss],
+        spacing=1, wrap=True,
+    ) if gliss else ft.Container()
+    return _card(ft.Column([
+        ft.Row([
+            ft.Container(bgcolor=color, width=10, height=10, border_radius=2),
+            _label(voice_names[idx]),
+            _value(s.get("technique",""), color=color, size=10),
+        ], spacing=6),
+        ft.Row([
+            _label("note"),  _value(str(s.get("note_count",0)), color=_WHITE),
+            ft.Container(width=8),
+            _label("vel"),   _value(str(s.get("velocity",0)), color=_WHITE),
+            ft.Container(width=8),
+            _label("LPF"),   _value(f"{s.get('filter_hz',0):.0f}Hz", color=_ACCENT),
+        ], spacing=4, wrap=True),
+        gliss_row,
+    ], spacing=4), padding=8)
+
+
+def _knot_score_view(state: AppState, page: ft.Page) -> ft.Column:
+    """Phase Q — cure-{era}-r9 _Sonnet-Score-API × Knot Score Engine (B地点第十二画面).
+
+    Controller fires diamond note icons into the Magic Circle of Infinity (fig 14).
+    4 vertical strip voices (fig 13) drive 4 MIDI channels.
+    GarageBand 2×8 loop grid is the output target.
+    246 knots × 12 pitch classes (knots3d.com).
+    """
+    ks = state.knot_score
+
+    knot_tf = ft.TextField(
+        value="もやい結び", label="結び目名 (日本語)",
+        width=200, bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    bow_tf = ft.TextField(
+        value="1.0", label="弓位置 bow_pos (0.0-1.0)",
+        width=120, keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+        hint_text="1.0=水中/0.0=通常",
+    )
+    epsilon_tf = ft.TextField(
+        value="0.019", label="ε_disp",
+        width=90, keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor=_SURFACE, color=_WHITE, border_color=_BORDER,
+    )
+    run_btn  = ft.FilledButton("▶ スコア生成", bgcolor=_PURPLE, color=_WHITE,
+                               disabled=ks.running)
+    progress = ft.ProgressRing(visible=ks.running, color=_ACCENT, width=24, height=24)
+
+    strips_row     = ft.Row(spacing=12, wrap=True)
+    circle_col     = ft.Column(spacing=8)
+    gb_col         = ft.Column(spacing=8)
+    result_col     = ft.Column(spacing=8)
+
+    def _refresh() -> None:
+        run_btn.disabled = ks.running
+        progress.visible = ks.running
+        strips_row.controls.clear()
+        circle_col.controls.clear()
+        gb_col.controls.clear()
+        result_col.controls.clear()
+
+        if ks.error:
+            result_col.controls.append(_value(f"エラー: {ks.error}", color=_RED))
+            page.update()
+            return
+
+        frame = ks.current_frame
+        if not frame:
+            page.update()
+            return
+
+        result_col.controls += [
+            ft.Divider(color=_BORDER),
+            ft.Row([
+                ft.Column([_label("結び目"),  _value(frame["knot_name"],  color=_GOLD)],  spacing=2),
+                ft.Column([_label("ピッチ"),  _value(f'{frame["pitch_name"]} ({frame["knot_pitch"]})', color=_ACCENT)], spacing=2),
+                ft.Column([_label("ファミリー"), _value(frame["knot_family"], color=_PURPLE)], spacing=2),
+                ft.Column([_label("θ_q"),    _value(f'{frame["theta_q"]:.4f}', color=_WHITE)], spacing=2),
+                ft.Column([_label("LPF"),    _value(f'{frame["filter_hz"]:.0f}Hz', color=_ACCENT)], spacing=2),
+                ft.Column([_label("ticks"),  _value(str(frame["duration_ticks"]), color=_WHITE)], spacing=2),
+                ft.Column([_label("era"),    _value(frame["era"], color=_GOLD)], spacing=2),
+            ], spacing=20, wrap=True),
+        ]
+
+        for i, s in enumerate(frame.get("strips", [])):
+            strips_row.controls.append(_strip_widget(s, i))
+
+        mc = frame.get("magic_circle")
+        if mc:
+            circle_col.controls.append(_magic_circle_widget(mc))
+
+        gb = frame.get("gb_grid")
+        if gb:
+            gb_col.controls.append(_gb_grid_widget(gb))
+
+        page.update()
+
+    state.add_listener(_refresh)
+
+    async def on_run(_: ft.ControlEvent) -> None:
+        try:
+            bow = float(bow_tf.value or "1.0")
+        except ValueError:
+            bow = 1.0
+        try:
+            eps = float(epsilon_tf.value or "0.019")
+        except ValueError:
+            eps = 0.019
+        await state.run_knot_score(
+            knot_name=knot_tf.value.strip() or "もやい結び",
+            bow_position=max(0.0, min(1.0, bow)),
+            epsilon=eps,
+        )
+
+    run_btn.on_click = on_run
+
+    obs     = _observer_info()
+    obs_banner = _card(ft.Row([
+        ft.Icon(ft.Icons.PIANO, color=_GOLD, size=16),
+        ft.Text(
+            f"B地点 _Sonnet-Score-API  cure-{{era}}-r9  246結び目×12音  Magic Circle  {obs['system']}",
+            size=11, color=_DIM,
+        ),
+    ], spacing=8))
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.PIANO, color=_GOLD, size=24),
+            _title("結び目スコア  cure-{era}-r9", size=20),
+        ], spacing=8),
+        ft.Divider(color=_BORDER),
+        obs_banner,
+
+        _card(ft.Column([
+            _title("スコア設定", size=14, color=_DIM),
+            ft.Container(height=4),
+            ft.Row([knot_tf, bow_tf, epsilon_tf], spacing=12, wrap=True),
+            ft.Text("bow_pos: 0.0=通常(4000Hz)  0.5=Stegfläche(800Hz)  1.0=水中/hinterm Steg(200Hz)",
+                    size=10, color=_DIM),
+            ft.Container(height=8),
+            ft.Row([run_btn, progress], spacing=12),
+        ], spacing=4)),
+
+        result_col,
+
+        _card(ft.Column([
+            _title("4 垂直ストリップ声部 (fig 13)", size=12, color=_DIM),
+            ft.Row([
+                ft.Container(bgcolor=_STRIP_COLORS[i], width=12, height=10, border_radius=1)
+                for i in range(4)
+            ] + [
+                _label(t) for t in ["Vn pppp", "Vl cluster", "Vc Pfiff", "Cb legno"]
+            ], spacing=6, wrap=True),
+            ft.Container(height=4),
+            strips_row,
+        ], spacing=4)),
+
+        ft.Row([
+            ft.Column([circle_col], expand=True),
+            ft.Column([gb_col], expand=True),
+        ], spacing=16, wrap=True),
+
+    ], spacing=16, scroll=ft.ScrollMode.AUTO)
+
+
 # ── root ──────────────────────────────────────────────────────────────────────
 
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
@@ -1690,6 +1952,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _score_replay_view(state, page)
     if view == PUNCHCARD:
         return _punchcard_view(state, page)
+    if view == KNOT_SCORE:
+        return _knot_score_view(state, page)
     return _home_view(state)
 
 

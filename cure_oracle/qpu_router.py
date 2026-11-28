@@ -50,6 +50,7 @@ from cure_oracle.resonance_score import build_resonance_frame as build_resonance
 from cure_oracle.midi_export import frame_to_midi as _frame_to_midi
 from cure_oracle.score_replay import build_score_replay_frame as _build_score_replay_frame
 from cure_oracle.punchcard import build_punchcard_frame as _build_punchcard_frame
+from cure_oracle.knot_score import build_knot_score_frame as _build_knot_score_frame
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1269,6 +1270,7 @@ def candy_sonnet_version(
             "export_midi":        "/api/v1/qpu/candy/export/midi",
             "score_replay":       "/api/v1/qpu/candy/score-replay/frames",
             "punchcard":          "/api/v1/qpu/candy/punchcard/frame",
+            "knot_score":         "/api/v1/qpu/candy/knot-score/frame",
         },
     }
 
@@ -1891,4 +1893,100 @@ async def candy_punchcard_frame(
         "dynamic_b":            _grid(pf.dynamic_b),
         "static_a":             _static(pf.static_a),
         "static_b":             _static(pf.static_b),
+    }
+
+
+# ── Phase Q: Knot Score Engine endpoint ──────────────────────────────────────
+
+@router.get(
+    "/candy/knot-score/frame",
+    summary="Phase Q — _Sonnet-Score-API × Knot Score Engine frame (cure-{era}-r9)",
+    tags=["quantum-sim"],
+)
+async def candy_knot_score_frame(
+    shapes:      str   = Query(...,    description="カンマ区切りキャンディ群 e.g. LINE,CUBE"),
+    round:       int   = Query(1,      ge=1, le=9999, description="蔓旋ラウンド番号"),
+    bars:        int   = Query(4,      ge=1, le=32,   description="バー数"),
+    knot:        str   = Query("もやい結び", description="結び目名 (knots3d.com 246種)"),
+    bow_pos:     float = Query(1.0,    ge=0.0, le=1.0, description="弓位置 0=normale 1=hinterm Steg(水中)"),
+    epsilon:     float = Query(0.019,  ge=0.0, le=1.0, description="ε_disp noise perturbation"),
+    token:       str   = Query(...,            description="Bearer token (OPERATOR)"),
+) -> dict:
+    """Run quantum-sim and return a KnotScoreFrame as JSON (B地点第十二画面).
+
+    GET /candy/knot-score/frame?shapes=LINE&knot=もやい結び&bow_pos=1.0&token=…
+
+    Returns 4 vertical strip voices (fig 13), Magic Circle ring 12×16 (fig 9/14),
+    and GarageBand 2×8 loop grid (fig 14).
+    bow_pos=1.0 → fully underwater (hinterm Steg, LPF 200 Hz).
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        kf = _build_knot_score_frame(result, knot_name=knot, bow_position=bow_pos, epsilon=epsilon)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    def _strip(s) -> dict:
+        return {
+            "voice_id":   s.voice_id,
+            "midi_ch":    s.midi_ch,
+            "technique":  s.technique,
+            "bow_pos":    s.bow_pos,
+            "filter_hz":  s.filter_hz,
+            "base_note":  s.base_note,
+            "velocity":   s.velocity,
+            "note_count": len(s.notes),
+            "gliss_arc":  s.gliss_arc,
+        }
+
+    return {
+        "frame_id":       kf.frame_id,
+        "born_at":        kf.born_at,
+        "era":            kf.era,
+        "version":        kf.version,
+        "knot_name":      kf.knot_name,
+        "knot_pitch":     kf.knot_pitch,
+        "pitch_name":     kf.pitch_name,
+        "knot_family":    kf.knot_family,
+        "theta_q":        kf.theta_q,
+        "bow_position":   kf.bow_position,
+        "filter_hz":      kf.filter_hz,
+        "technique":      kf.technique,
+        "mente_total":    kf.mente_total,
+        "duration_ticks": kf.duration_ticks,
+        "strips":         [_strip(s) for s in kf.strips],
+        "magic_circle": {
+            "positions":   kf.magic_circle.positions,
+            "t_steps":     kf.magic_circle.t_steps,
+            "placements":  kf.magic_circle.placements,
+            "pitch_names": kf.magic_circle.pitch_names,
+            "throw_arc":   kf.magic_circle.throw_arc,
+        },
+        "gb_grid": {
+            "rows":       kf.gb_grid.rows,
+            "cols":       kf.gb_grid.cols,
+            "cells":      kf.gb_grid.cells,
+            "row_labels": kf.gb_grid.row_labels,
+            "loop_a":     kf.gb_grid.loop_a,
+            "loop_b":     kf.gb_grid.loop_b,
+        },
     }
