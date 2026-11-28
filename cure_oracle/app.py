@@ -34,7 +34,7 @@ except ImportError:
 from cure_oracle.app_state import (
     AppState,
     HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE,
+    MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE, CURE_BMI,
 )
 
 # ── B地点: 観察者OS識別 ────────────────────────────────────────────────────────
@@ -98,7 +98,8 @@ def _status_dot(passed: bool | None) -> ft.Container:
 
 def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
     views = [HOME, BENCHMARK, ROUND, BIRTH_CERT, MENTE, VERIFY,
-             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE]
+             MIDI_VIZ, RESONANCE_VIZ, EXPORT_VIZ, SCORE_REPLAY, PUNCHCARD, KNOT_SCORE,
+             CURE_BMI]
     idx   = {v: i for i, v in enumerate(views)}
 
     def on_change(e: ft.ControlEvent) -> None:
@@ -169,6 +170,11 @@ def _nav_rail(state: AppState, page: ft.Page) -> ft.NavigationRail:
                 icon=ft.Icons.PIANO_OUTLINED,
                 selected_icon=ft.Icons.PIANO,
                 label="結び目スコア",
+            ),
+            ft.NavigationRailDestination(
+                icon=ft.Icons.PSYCHOLOGY_OUTLINED,
+                selected_icon=ft.Icons.PSYCHOLOGY,
+                label="Cure-BMI",
             ),
         ],
         on_change=on_change,
@@ -1930,6 +1936,166 @@ def _knot_score_view(state: AppState, page: ft.Page) -> ft.Column:
 
 # ── root ──────────────────────────────────────────────────────────────────────
 
+# ── CURE_BMI screen: B地点第十三画面 ─────────────────────────────────────────
+
+_SCENE_OPTIONS = ["trading", "soccer", "surfing", "climbing", "live"]
+_BAND_COLOR: dict[str, str] = {
+    "DELTA": "#6366f1",  # indigo
+    "THETA": "#8b5cf6",  # violet
+    "ALPHA": "#22c55e",  # green (default)
+    "BETA":  "#f59e0b",  # amber
+    "GAMMA": "#ef4444",  # red
+}
+
+
+def _bmi_band_chip(band: str) -> ft.Container:
+    color = _BAND_COLOR.get(band, _ACCENT)
+    return ft.Container(
+        ft.Text(band, size=11, weight=ft.FontWeight.BOLD, color=_WHITE),
+        bgcolor=color, border_radius=4, padding=ft.padding.symmetric(4, 8),
+    )
+
+
+def _cure_bmi_view(state: AppState, page: ft.Page) -> ft.Column:
+    """B地点第十三画面 — Cure-BMI × KnotScore Integration (Phase R, cure-{era}-r10)."""
+    cb = state.cure_bmi
+
+    # ── EEG inputs ───────────────────────────────────────────────────────────
+    knot_tf   = ft.TextField(label="結び目名", value=cb.knot_name,
+                             width=200, text_size=12, bgcolor=_SURFACE)
+    hz_tf     = ft.TextField(label="dominant Hz", value="10.0",
+                             width=100, text_size=12, bgcolor=_SURFACE)
+    coh_tf    = ft.TextField(label="coherence_q (0-1)", value="0.75",
+                             width=120, text_size=12, bgcolor=_SURFACE)
+    imp_tf    = ft.TextField(label="impedance kΩ", value="4.0",
+                             width=110, text_size=12, bgcolor=_SURFACE)
+    bow_tf    = ft.TextField(label="bow_pos (0-1)", value="1.0",
+                             width=110, text_size=12, bgcolor=_SURFACE)
+
+    focus_sl  = ft.Slider(min=0, max=1, value=cb.focus,  divisions=20, label="focus")
+    calm_sl   = ft.Slider(min=0, max=1, value=cb.calm,   divisions=20, label="calm")
+    energy_sl = ft.Slider(min=0, max=1, value=cb.energy, divisions=20, label="energy")
+    imm_sl    = ft.Slider(min=0, max=1, value=1.0,        divisions=20, label="immersion")
+
+    scene_dd = ft.Dropdown(
+        label="sport scene", value=cb.scene, width=140,
+        options=[ft.dropdown.Option(s) for s in _SCENE_OPTIONS],
+    )
+
+    # ── result display ───────────────────────────────────────────────────────
+    band_row   = ft.Row([_bmi_band_chip(cb.band)], spacing=4)
+    sig_text   = ft.Text(cb.band_sig, size=11, color=_DIM)
+    pitch_text = ft.Text(f"pitch: {cb.pitch_name}  knot: {cb.knot_name}",
+                         size=12, color=_GOLD)
+    infl_text  = ft.Text(cb.bmi_influence, size=11, color=_ACCENT,
+                         max_lines=3, overflow=ft.TextOverflow.ELLIPSIS)
+    effect_col = ft.Column([], spacing=4)
+    scene_col  = ft.Column([], spacing=4)
+    err_text   = ft.Text("", color="#ef4444", size=11)
+    status_txt = ft.Text("", size=11, color=_DIM)
+
+    def _refresh_result(frame_dict: dict) -> None:
+        be = frame_dict.get("bmi_effect", {})
+        ks = frame_dict.get("knot_score", {})
+        ss = frame_dict.get("sport_scene", {})
+        band_row.controls = [_bmi_band_chip(frame_dict.get("band", "ALPHA"))]
+        sig_text.value    = frame_dict.get("band_sig", "")
+        pitch_text.value  = (
+            f"pitch: {ks.get('pitch_name','')}  knot: {ks.get('knot_name','')}"
+            f"  bow: {ks.get('bow_position',0):.2f}  filter: {ks.get('filter_hz',0)}Hz"
+        )
+        infl_text.value   = frame_dict.get("bmi_influence", "")
+        effect_col.controls = [
+            _label(f"pitch offset: {be.get('knot_pitch_offset',0):+d}  "
+                   f"vel×{be.get('velocity_scale',1):.2f}  "
+                   f"arc_r={be.get('arc_radius',1):.2f}"),
+            _label(f"gb_density: {be.get('gb_density',0):.2f}  "
+                   f"eff_bow: {be.get('effective_bow',0):.2f}"),
+            _label(f"tempo_mod: {frame_dict.get('tempo_mod',1):.4f}  "
+                   f"pitch_st: {frame_dict.get('pitch_shift_st',0):+.2f}  "
+                   f"intensity: {frame_dict.get('layer_intensity',0):.2f}"),
+        ]
+        scene_col.controls = [
+            _label(f"scene: {ss.get('scene','')}  spatial: {ss.get('spatial_mode','')}"),
+            _label(f"reverb: {ss.get('reverb_size',0):.2f}  "
+                   f"crowd: {ss.get('crowd_mix',0):.2f}  "
+                   f"BPM: {ss.get('bpm_min',0)}–{ss.get('bpm_max',0)}"),
+            _label(f"immersion: {ss.get('immersion_level',0):.2f}  "
+                   f"anim_hint: {ss.get('audio_to_anim_hint','—') or '—'}"),
+        ]
+        page.update()
+
+    async def _run(_: ft.ControlEvent) -> None:
+        err_text.value  = ""
+        status_txt.value = "実行中…"
+        page.update()
+        try:
+            await state.run_cure_bmi(
+                knot_name=knot_tf.value or "もやい結び",
+                dominant_hz=float(hz_tf.value or 10.0),
+                coherence_q=float(coh_tf.value or 0.75),
+                impedance_kohm=float(imp_tf.value or 4.0),
+                focus=focus_sl.value,
+                calm=calm_sl.value,
+                energy=energy_sl.value,
+                bow_position=float(bow_tf.value or 1.0),
+                scene=scene_dd.value or "trading",
+                immersion=imm_sl.value,
+            )
+        except Exception as exc:
+            err_text.value = str(exc)
+        if state.cure_bmi.error:
+            err_text.value = state.cure_bmi.error
+        elif state.cure_bmi.current_frame:
+            _refresh_result(state.cure_bmi.current_frame)
+        status_txt.value = ""
+        page.update()
+
+    if cb.current_frame:
+        _refresh_result(cb.current_frame)
+
+    run_btn = ft.FilledButton("🧠 BMI × KnotScore 実行", bgcolor=_PURPLE, color=_WHITE,
+                              on_click=_run)
+
+    return ft.Column([
+        ft.Row([
+            ft.Icon(ft.Icons.PSYCHOLOGY, color=_GOLD, size=16),
+            _title("Cure-BMI  cure-{era}-r10", size=20),
+        ], spacing=6),
+        _label("B地点第十三画面 — EEG × KnotScore × FIKU/384candy Remix"),
+        ft.Divider(color=_BORDER),
+
+        # ── EEG / BMI inputs ─────────────────────────────────────────────────
+        _title("EEG入力", size=13, color=_ACCENT),
+        ft.Row([knot_tf, hz_tf, coh_tf, imp_tf, bow_tf], spacing=8, wrap=True),
+        ft.Row([scene_dd,
+                ft.Container(ft.Column([
+                    _label("focus"), focus_sl,
+                    _label("calm"),  calm_sl,
+                    _label("energy"), energy_sl,
+                    _label("immersion"), imm_sl,
+                ], spacing=0), expand=True)], spacing=12),
+
+        run_btn, err_text, status_txt,
+        ft.Divider(color=_BORDER),
+
+        # ── EEG band + signature ─────────────────────────────────────────────
+        _title("BMIシグネチャ", size=13, color=_ACCENT),
+        band_row, sig_text, pitch_text,
+        ft.Divider(color=_BORDER),
+
+        # ── BMI effects on KnotScore ─────────────────────────────────────────
+        _title("エフェクトパラメータ (FIKU / 384candy)", size=13, color=_ACCENT),
+        effect_col,
+        ft.Divider(color=_BORDER),
+
+        # ── Sport scene / game context ───────────────────────────────────────
+        _title("スポーツシーン / ゲームコンテキスト", size=13, color=_ACCENT),
+        scene_col,
+        infl_text,
+    ], scroll=ft.ScrollMode.AUTO, spacing=6, expand=True)
+
+
 def _build_body(state: AppState, page: ft.Page) -> ft.Control:
     view = state.current_view
     if view == BENCHMARK:
@@ -1954,6 +2120,8 @@ def _build_body(state: AppState, page: ft.Page) -> ft.Control:
         return _punchcard_view(state, page)
     if view == KNOT_SCORE:
         return _knot_score_view(state, page)
+    if view == CURE_BMI:
+        return _cure_bmi_view(state, page)
     return _home_view(state)
 
 

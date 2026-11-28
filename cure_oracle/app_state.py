@@ -87,6 +87,11 @@ try:
 except Exception:
     build_knot_score_frame = None  # type: ignore[assignment]
 
+try:
+    from cure_oracle.cure_bmi import build_cure_bmi_frame
+except Exception:
+    build_cure_bmi_frame = None  # type: ignore[assignment]
+
 
 # ── view names ────────────────────────────────────────────────────────────────────────────────
 
@@ -102,6 +107,7 @@ EXPORT_VIZ     = "export_viz"     # Phase N — B地点第九画面
 SCORE_REPLAY   = "score_replay"   # Phase O — B地点第十画面
 PUNCHCARD      = "punchcard"      # Phase P — B地点第十一画面
 KNOT_SCORE     = "knot_score"     # Phase Q — B地点第十二画面
+CURE_BMI       = "cure_bmi"       # Phase R — B地点第十三画面
 
 
 # ── data containers ────────────────────────────────────────────────────────────────────────────────
@@ -236,6 +242,24 @@ class KnotScoreState:
 
 
 @dataclass
+class CureBmiState:
+    """B地点第十三画面 — Cure-BMI × KnotScore Integration 状態 (Phase R, cure-{era}-r10)."""
+    running:        bool           = False
+    current_frame:  Optional[dict] = None
+    era:            str            = "baroque"
+    band:           str            = "ALPHA"
+    band_sig:       str            = "ALPHA-φ.618-ε.005"
+    knot_name:      str            = "もやい結び"
+    pitch_name:     str            = "C#"
+    focus:          float          = 0.5
+    calm:           float          = 0.5
+    energy:         float          = 0.5
+    scene:          str            = "trading"
+    bmi_influence:  str            = ""
+    error:          Optional[str]  = None
+
+
+@dataclass
 class AppState:
     current_view:   str               = HOME
     benchmark:      BenchmarkState    = field(default_factory=BenchmarkState)
@@ -249,6 +273,7 @@ class AppState:
     score_replay:   ScoreReplayState  = field(default_factory=ScoreReplayState)
     punchcard:      PunchcardState    = field(default_factory=PunchcardState)
     knot_score:     KnotScoreState    = field(default_factory=KnotScoreState)
+    cure_bmi:       CureBmiState      = field(default_factory=CureBmiState)
 
     _listeners: list[Callable[[], None]] = field(default_factory=list, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -882,6 +907,74 @@ class AppState:
                 self.knot_score.running = False
                 self._notify()
 
+    # ── Phase R: Cure-BMI × KnotScore ────────────────────────────────────────────────────────────────
+
+    async def run_cure_bmi(
+        self,
+        shapes: str                  = "LINE",
+        round_num: int               = 1,
+        bars: int                    = 4,
+        knot_name: str               = "もやい結び",
+        dominant_hz: float           = 10.0,
+        coherence_q: float           = 0.75,
+        impedance_kohm: float        = 4.0,
+        focus: float                 = 0.5,
+        calm: float                  = 0.5,
+        energy: float                = 0.5,
+        bow_position: float          = 1.0,
+        epsilon: float               = 1e-6,
+        scene: str                   = "trading",
+        immersion: float             = 1.0,
+    ) -> None:
+        """Run quantum-sim + build_cure_bmi_frame and store result."""
+        if build_cure_bmi_frame is None:
+            self.cure_bmi.error = "cure_bmi module unavailable"
+            return
+        async with self._lock:
+            self.cure_bmi.running = True
+            self.cure_bmi.error   = None
+            self._notify()
+        try:
+            from cure_oracle.accelerator import VirtualAccelerator
+            from cure_oracle.round_circuit import round_circuit
+            shape_list = [s.strip() for s in shapes.split(",") if s.strip()]
+            circ_result = round_circuit(shape_list, round_num=round_num, bars=bars)
+            acc    = VirtualAccelerator()
+            result = acc.run(shape_list, round_num=round_num, bars=bars, epsilon=epsilon)
+            frame = build_cure_bmi_frame(
+                result,
+                knot_name=knot_name,
+                dominant_hz=dominant_hz,
+                coherence_q=coherence_q,
+                impedance_kohm=impedance_kohm,
+                focus=focus,
+                calm=calm,
+                energy=energy,
+                bow_position=bow_position,
+                epsilon=epsilon,
+                scene=scene,
+                immersion=immersion,
+            )
+            async with self._lock:
+                self.cure_bmi.current_frame = frame.to_dict()
+                self.cure_bmi.era           = frame.era
+                self.cure_bmi.band          = frame.band
+                self.cure_bmi.band_sig      = frame.band_sig
+                self.cure_bmi.knot_name     = frame.knot_score.knot_name
+                self.cure_bmi.pitch_name    = frame.knot_score.pitch_name
+                self.cure_bmi.focus         = frame.focus
+                self.cure_bmi.calm          = frame.calm
+                self.cure_bmi.energy        = frame.energy
+                self.cure_bmi.scene         = frame.sport_scene.scene
+                self.cure_bmi.bmi_influence = frame.bmi_influence
+        except Exception as exc:
+            async with self._lock:
+                self.cure_bmi.error = str(exc)
+        finally:
+            async with self._lock:
+                self.cure_bmi.running = False
+                self._notify()
+
     # ── birth certificate ─────────────────────────────────────────────────────────────────────────────
 
     def load_cert(self, path: str = "cure_birth_certificate.json") -> None:
@@ -984,5 +1077,19 @@ class AppState:
                 "bow_position": self.knot_score.bow_position,
                 "has_frame":    self.knot_score.current_frame is not None,
                 "error":        self.knot_score.error,
+            },
+            "cure_bmi": {
+                "era":          self.cure_bmi.era,
+                "band":         self.cure_bmi.band,
+                "band_sig":     self.cure_bmi.band_sig,
+                "knot_name":    self.cure_bmi.knot_name,
+                "pitch_name":   self.cure_bmi.pitch_name,
+                "focus":        self.cure_bmi.focus,
+                "calm":         self.cure_bmi.calm,
+                "energy":       self.cure_bmi.energy,
+                "scene":        self.cure_bmi.scene,
+                "bmi_influence":self.cure_bmi.bmi_influence,
+                "has_frame":    self.cure_bmi.current_frame is not None,
+                "error":        self.cure_bmi.error,
             },
         }
