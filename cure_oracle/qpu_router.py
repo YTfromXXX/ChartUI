@@ -53,6 +53,7 @@ from cure_oracle.punchcard import build_punchcard_frame as _build_punchcard_fram
 from cure_oracle.knot_score import build_knot_score_frame as _build_knot_score_frame
 from cure_oracle.cure_bmi import build_cure_bmi_frame as _build_cure_bmi_frame
 from cure_oracle.hdna import build_hdna_card as _build_hdna_card, encode as _hdna_encode, encode_b64 as _hdna_encode_b64
+from cure_oracle.famidancer import build_famidancer_frame as _build_famidancer_frame
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1275,6 +1276,7 @@ def candy_sonnet_version(
             "knot_score":         "/api/v1/qpu/candy/knot-score/frame",
             "cure_bmi":           "/api/v1/qpu/candy/cure-bmi/session",
             "hdna":               "/api/v1/qpu/candy/hdna/pack",
+            "famidancer":         "/api/v1/qpu/candy/famidancer/session",
         },
     }
 
@@ -2159,3 +2161,66 @@ async def candy_hdna_pack(
         "card":       card.to_dict(),
         "spec_rev":   "1.0",
     }
+
+
+@router.get(
+    "/candy/famidancer/session",
+    summary="FAMIDANCER'S Kit: AnimHint → DanceMove session (cure-{era}-r12)",
+    tags=["candy"],
+)
+async def candy_famidancer_session(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading"),
+    immersion:      float = Query(1.0,   ge=0.0, le=1.0),
+    token:          str   = Query(...),
+) -> dict:
+    """Build a FamidancerFrame: Phase R (BMI) → Phase S (AnimHint) → Phase T (DanceMove).
+
+    Returns the full kinesthetic + audio control frame for FIKU / 384candy devices.
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        fd_frame = _build_famidancer_frame(
+            result,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+            immersion=immersion,
+        )
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return fd_frame.to_dict()
