@@ -52,6 +52,7 @@ from cure_oracle.score_replay import build_score_replay_frame as _build_score_re
 from cure_oracle.punchcard import build_punchcard_frame as _build_punchcard_frame
 from cure_oracle.knot_score import build_knot_score_frame as _build_knot_score_frame
 from cure_oracle.cure_bmi import build_cure_bmi_frame as _build_cure_bmi_frame
+from cure_oracle.hdna import build_hdna_card as _build_hdna_card, encode as _hdna_encode, encode_b64 as _hdna_encode_b64
 from cure_oracle.benchmark import (
     CAMPAIGN_SHAPES,
     CONFIRM,
@@ -1273,6 +1274,7 @@ def candy_sonnet_version(
             "punchcard":          "/api/v1/qpu/candy/punchcard/frame",
             "knot_score":         "/api/v1/qpu/candy/knot-score/frame",
             "cure_bmi":           "/api/v1/qpu/candy/cure-bmi/session",
+            "hdna":               "/api/v1/qpu/candy/hdna/pack",
         },
     }
 
@@ -2071,3 +2073,89 @@ async def candy_cure_bmi_session(
         raise HTTPException(500, detail=sanitize_error(exc))
 
     return frame.to_dict()
+
+# ── HDNA: Harmonia DNA Format endpoint ───────────────────────────────────────
+
+@router.get(
+    "/candy/hdna/pack",
+    summary="Pack a CureBmiFrame into a .hdna music DNA card (~2 KB)",
+    tags=["candy"],
+)
+async def candy_hdna_pack(
+    shapes:         str   = Query("LINE", description="Comma-separated shape names"),
+    round:          int   = Query(1,     ge=1, le=100),
+    bars:           int   = Query(4,     ge=1, le=64),
+    knot:           str   = Query("もやい結び"),
+    dominant_hz:    float = Query(10.0,  ge=0.5, le=200.0),
+    coherence_q:    float = Query(0.75,  ge=0.0, le=1.0),
+    impedance_kohm: float = Query(4.0,   ge=0.0, le=100.0),
+    focus:          float = Query(0.5,   ge=0.0, le=1.0),
+    calm:           float = Query(0.5,   ge=0.0, le=1.0),
+    energy:         float = Query(0.5,   ge=0.0, le=1.0),
+    bow_pos:        float = Query(1.0,   ge=0.0, le=1.0),
+    scene:          str   = Query("trading"),
+    region_code:    str   = Query("JP-00", max_length=12),
+    two_ago:        Optional[str] = Query(None, description="frame_id 前々回"),
+    previous:       Optional[str] = Query(None, description="frame_id 前回"),
+    next_hint:      Optional[str] = Query(None, description="frame_id 次回ヒント"),
+    token:          str   = Query(...),
+) -> dict:
+    """Build a CureBmiFrame and pack it into a .hdna binary card.
+
+    Returns:
+      hdna_b64:    base64-encoded .hdna binary (~2 KB)
+      size_bytes:  raw byte length
+      card:        human-readable card summary dict
+    """
+    from cure_oracle.security import _validate_token
+
+    role = _validate_token(token)
+    if role is None or not (role == Role.OPERATOR or role == Role.QPU_ADMIN):
+        raise HTTPException(status_code=401, detail="OPERATOR role required")
+
+    shape_list = [s.strip().upper() for s in shapes.split(",") if s.strip()]
+    if not shape_list:
+        raise HTTPException(422, "shapes must not be empty")
+    for s in shape_list:
+        if s not in SHAPE_CIRCUIT_MAP:
+            raise HTTPException(422, f"unknown shape {s!r}; valid: {sorted(SHAPE_CIRCUIT_MAP)}")
+
+    try:
+        result = await asyncio.to_thread(
+            run_quantum_sim,
+            shapes=shape_list,
+            round_num=round,
+            bars=bars,
+            offline=True,
+        )
+        bmi_frame = _build_cure_bmi_frame(
+            result,
+            knot_name=knot,
+            dominant_hz=dominant_hz,
+            coherence_q=coherence_q,
+            impedance_kohm=impedance_kohm,
+            focus=focus,
+            calm=calm,
+            energy=energy,
+            bow_position=bow_pos,
+            scene=scene,
+        )
+        frame_dict = bmi_frame.to_dict()
+        card = _build_hdna_card(
+            frame_dict,
+            region_code=region_code,
+            two_ago=two_ago,
+            previous=previous,
+            next_hint=next_hint,
+        )
+        raw      = _hdna_encode(card)
+        b64_str  = _hdna_encode_b64(card)
+    except Exception as exc:
+        raise HTTPException(500, detail=sanitize_error(exc))
+
+    return {
+        "hdna_b64":   b64_str,
+        "size_bytes": len(raw),
+        "card":       card.to_dict(),
+        "spec_rev":   "1.0",
+    }
