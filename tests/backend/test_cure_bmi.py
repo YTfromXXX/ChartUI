@@ -72,19 +72,19 @@ def _app():
 class TestCureBmiModule:
     """Unit tests for cure_oracle/cure_bmi.py (cure-{era}-r10)."""
 
-    def test_current_rev_is_10(self):
+    def test_current_rev_is_11(self):
         from cure_oracle.cure_bmi import CURRENT_REV
-        assert CURRENT_REV == 10
+        assert CURRENT_REV == 11
 
     def test_build_returns_cure_bmi_frame(self):
         from cure_oracle.cure_bmi import build_cure_bmi_frame, CureBmiFrame
         frame = build_cure_bmi_frame(_make_sim_result())
         assert isinstance(frame, CureBmiFrame)
 
-    def test_frame_version_contains_r10(self):
+    def test_frame_version_contains_r11(self):
         from cure_oracle.cure_bmi import build_cure_bmi_frame
         frame = build_cure_bmi_frame(_make_sim_result())
-        assert frame.version.endswith("-r10")
+        assert frame.version.endswith("-r11")
 
     def test_alpha_band_zero_offset(self):
         from cure_oracle.cure_bmi import build_cure_bmi_frame
@@ -195,14 +195,14 @@ class TestCureBmiEndpoint:
         assert resp.status_code == 200
         assert "frame_id" in resp.json()
 
-    def test_session_version_r10(self):
+    def test_session_version_r11(self):
         client = TestClient(_app(), raise_server_exceptions=False)
         resp = client.get(
             "/api/v1/qpu/candy/cure-bmi/session",
             params={"shapes": "LINE", "token": "testtoken123"},
         )
         assert resp.status_code == 200
-        assert resp.json()["version"].endswith("-r10")
+        assert resp.json()["version"].endswith("-r11")
 
     def test_session_has_bmi_effect(self):
         client = TestClient(_app(), raise_server_exceptions=False)

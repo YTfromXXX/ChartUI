@@ -1,6 +1,6 @@
 """cure_oracle/cure_bmi.py — Cure-BMI × KnotScore Integration Engine.
 
-CURRENT_REV = 10 — B地点第十三画面 (Phase R)
+CURRENT_REV = 11 — B地点第十四画面 (Phase S)
 
 Maps EEG/BMI state onto KnotScoreFrame parameters, producing a unified
 CureBmiFrame for underwater BTC/USD scalping live trading music experience.
@@ -16,12 +16,13 @@ BMI → KnotScore effect matrix
 Sound device context
 --------------------
   FIKU / 384candy devices receive the RemixLayer as effect-chain parameters.
-  Future: audio fingerprint → animation prediction (soccer / surfing / climbing).
+  Phase S: audio fingerprint → animation prediction (soccer / surfing / climbing / live / trading).
 
-Extended vision hooks (stubs for Phase S+)
--------------------------------------------
-  audio_to_anim_hint: str   — placeholder for sound→animation prediction label
-  sport_scene: str          — target sport context ("soccer", "surfing", "climbing", "live")
+Phase S — audio_to_anim_hint (sound_anim.py)
+----------------------------------------------
+  AnimHint.hint_str format:  "[scene:event_label:confidence_pct]"
+    "[soccer:goal_celebration:87]"  — GAMMA band + high energy during match
+    "[trading:breakout:62]"         — BETA band + momentum spike
   immersion_level: float    — 0.0=monitor 1.0=full spatial audio (drives binaural panner)
 """
 
@@ -40,11 +41,12 @@ from cure_oracle.knot_score import (
     KnotScoreFrame,
     build_knot_score_frame,
 )
+from cure_oracle.sound_anim import predict_anim_hint
 from cure_oracle.sonnet_remix import compute_remix
 
 # ── constants ────────────────────────────────────────────────────────────────
 
-CURRENT_REV: int = 10
+CURRENT_REV: int = 11
 
 PHI         = (1 + 5 ** 0.5) / 2
 MENTE_CONST = PHI * math.sqrt(2)   # ≈ 2.2882
@@ -278,9 +280,28 @@ def _apply_gb_density(gb_grid, density: float):
     gb_grid.cells = new_cells
 
 
-def _build_sport_scene(scene: str, immersion: float = 1.0) -> SportScene:
+def _build_sport_scene(
+    scene: str,
+    immersion: float = 1.0,
+    *,
+    band: str = "ALPHA",
+    energy: float = 0.5,
+    focus: float = 0.5,
+    calm: float = 0.5,
+    coherence_score: float = 1.0,
+    tempo_mod: float = 1.0,
+) -> SportScene:
     preset = _SCENE_PRESETS.get(scene, _SCENE_PRESETS["trading"])
     bmin, bmax = preset["bpm_range"]
+    hint = predict_anim_hint(
+        band=band,
+        energy=energy,
+        focus=focus,
+        calm=calm,
+        coherence_score=coherence_score,
+        scene=scene,
+        tempo_mod=tempo_mod,
+    )
     return SportScene(
         scene=scene,
         reverb_size=preset["reverb_size"],
@@ -288,7 +309,7 @@ def _build_sport_scene(scene: str, immersion: float = 1.0) -> SportScene:
         bpm_min=bmin,
         bpm_max=bmax,
         spatial_mode=preset["spatial_mode"],
-        audio_to_anim_hint="",   # Phase S+: filled by audio fingerprint classifier
+        audio_to_anim_hint=hint.hint_str,
         immersion_level=round(max(0.0, min(1.0, immersion)), 4),
     )
 
@@ -376,8 +397,16 @@ def build_cure_bmi_frame(
     # pitch shift = BMI pitch offset (semitones); remix has no pitch_shift field
     total_pitch_st = round(float(bmi_effect.knot_pitch_offset), 4)
 
-    # ── 9. Sport scene ───────────────────────────────────────────────────────
-    sport = _build_sport_scene(scene, immersion)
+    # ── 9. Sport scene + Phase S animation hint ──────────────────────────────
+    sport = _build_sport_scene(
+        scene, immersion,
+        band=band,
+        energy=energy,
+        focus=focus,
+        calm=calm,
+        coherence_score=coh_score,
+        tempo_mod=remix.tempo_modifier,
+    )
 
     return CureBmiFrame(
         frame_id        = str(uuid.uuid4()),
